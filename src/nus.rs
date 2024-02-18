@@ -1,10 +1,12 @@
+// SPDX-FileCopyrightText: 2024 Foundation Devices, Inc. <hello@foundationdevices.com>
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 //! Nordic Uart Service ([NUS]) implementation.
 //! [NUS]: https://developer.nordicsemi.com/nRF_Connect_SDK/doc/latest/nrf/libraries/bluetooth_services/services/nus.html
 
 use consts::ATT_MTU;
-use defmt::{debug, info, warn};
+use defmt::{debug, info};
 use heapless::Vec;
-use nrf_softdevice::ble::Connection;
 use nrf_softdevice::gatt_service;
 
 use crate::consts;
@@ -29,7 +31,6 @@ impl Nus {
             NusEvent::RxWrite(data) => {
                 debug!("Received: {} bytes {:?}", data.len(), data);
             }
-            _ => warn!("Unhandled event"),
         }
     }
 }

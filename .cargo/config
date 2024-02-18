@@ -1,11 +1,11 @@
+# SPDX-FileCopyrightText: 2024 Foundation Devices, Inc. <hello@foundationdevices.com>
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 [target.'cfg(all(target_arch = "arm", target_os = "none"))']
 runner = "probe-run --chip nrf52805_xxAA"
 
 [build]
-# Pick ONE of these compilation targets
-# target = "thumbv6m-none-eabi"    # Cortex-M0 and Cortex-M0+
-# target = "thumbv7m-none-eabi"    # Cortex-M3
 target = "thumbv7em-none-eabi"   # Cortex-M4 and Cortex-M7 (no FPU)
 
 [env]
-DEFMT_LOG = "trace"
+DEFMT_LOG = "debug"

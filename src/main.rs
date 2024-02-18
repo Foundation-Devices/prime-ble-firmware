@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2024 Foundation Devices, Inc. <hello@foundationdevices.com>
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 #![no_std]
 #![no_main]
 
@@ -11,17 +14,14 @@ use panic_probe as _;
 
 use core::mem;
 
-use crate::consts::{ATT_MTU, DEVICE_NAME};
-use crate::nus::NUS_UUID;
+use crate::consts::{ATT_MTU, DEVICE_NAME, SERVICES_LIST, SHORT_NAME};
 use crate::server::Server;
 use defmt::{info, *};
 use embassy_executor::Spawner;
 use nrf_softdevice::ble::advertisement_builder::{
-    AdvertisementBuilder, AdvertisementPayload, ExtendedAdvertisementBuilder,
-    ExtendedAdvertisementPayload, Flag, LegacyAdvertisementBuilder, LegacyAdvertisementPayload,
-    ServiceList, ServiceUuid16,
+    ExtendedAdvertisementBuilder, ExtendedAdvertisementPayload, Flag, ServiceList,
 };
-use nrf_softdevice::ble::{gatt_server, peripheral};
+use nrf_softdevice::ble::{peripheral};
 use nrf_softdevice::{raw, Softdevice};
 
 #[embassy_executor::task]
@@ -40,19 +40,16 @@ async fn main(spawner: Spawner) {
     let server = unwrap!(Server::new(sd));
     unwrap!(spawner.spawn(softdevice_task(sd)));
 
-    let mut config = peripheral::Config::default();
-    config.interval = 50;
+    let config = peripheral::Config { interval: 50, ..Default::default() };
 
     static ADV_DATA: ExtendedAdvertisementPayload = ExtendedAdvertisementBuilder::new()
         .flags(&[Flag::GeneralDiscovery, Flag::LE_Only])
-        .services_128(ServiceList::Complete, &[NUS_UUID.to_le_bytes()]) // if there were a lot of these there may not be room for the full name
-        .short_name("Prime")
+        .services_128(ServiceList::Complete, &SERVICES_LIST)
+        .short_name(SHORT_NAME)
         .build();
 
-    // but we can put it in the scan data
-    // so the full name is visible once connected
     static SCAN_DATA: ExtendedAdvertisementPayload = ExtendedAdvertisementBuilder::new()
-        .full_name("Hello from Prime!")
+        .full_name(DEVICE_NAME)
         .build();
 
     let adv = peripheral::ConnectableAdvertisement::ScannableUndirected {
@@ -61,11 +58,6 @@ async fn main(spawner: Spawner) {
     };
 
     loop {
-        let config = peripheral::Config::default();
-        let adv = peripheral::ConnectableAdvertisement::ScannableUndirected {
-            adv_data: &ADV_DATA,
-            scan_data: &SCAN_DATA,
-        };
         let conn = unwrap!(peripheral::advertise_connectable(sd, adv, &config).await);
 
         info!("advertising done!");
