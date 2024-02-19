@@ -21,5 +21,5 @@ Passport Prime BLE controller firmware.
    
 4. Flash and run the firmware:
    ```bash
-   cargo run --release -- --probe <PROBE>
+   cargo run --release --bin firmware -- --probe <PROBE>
    ```
