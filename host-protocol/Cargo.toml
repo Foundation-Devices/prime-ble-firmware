@@ -1,0 +1,15 @@
+# SPDX-FileCopyrightText: 2024 Foundation Devices, Inc. <hello@foundationdevices.com>
+# SPDX-License-Identifier: GPL-3.0-or-later
+
+[package]
+authors = ["Foundation Devices, Inc. <hello@foundationdevices.com>"]
+edition = "2021"
+name = "host-protocol"
+version = "0.1.0"
+publish = false
+
+[dependencies]
+defmt = { version = "0.3.5", optional = true }
+postcard = { version = "1.0.8", features = ["experimental-derive"] }
+serde = { version = "1.0.192", features = ["derive"], default-features = false }
+postcard-rpc = "0.3.1"
