@@ -114,8 +114,8 @@ dependencies = [
  "fixed",
  "futures",
  "heapless 0.8.0",
- "nrf-softdevice 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "nrf-softdevice-s112 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)",
+ "nrf-softdevice",
+ "nrf-softdevice-s112",
  "panic-probe",
  "static_cell",
 ]
@@ -560,8 +560,8 @@ dependencies = [
  "fixed",
  "futures",
  "heapless 0.8.0",
- "nrf-softdevice 0.1.0 (git+https://github.com/embassy-rs/nrf-softdevice.git)",
- "nrf-softdevice-s112 0.1.2 (git+https://github.com/embassy-rs/nrf-softdevice.git)",
+ "nrf-softdevice",
+ "nrf-softdevice-s112",
  "panic-probe",
  "static_cell",
 ]
@@ -788,29 +788,6 @@ checksum = "8d5439c4ad607c3c23abf66de8c8bf57ba8adcd1f129e699851a6e43935d339d"
 [[package]]
 name = "nrf-softdevice"
 version = "0.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "225a21d963b2382617dbbff5953dc8c6c43fe56db5c5155f4d20a30c50c2766d"
-dependencies = [
- "cortex-m",
- "cortex-m-rt",
- "critical-section",
- "defmt",
- "embassy-futures",
- "embassy-sync",
- "embedded-storage",
- "embedded-storage-async",
- "fixed",
- "futures",
- "heapless 0.8.0",
- "nrf-softdevice-macro 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "nrf-softdevice-s112 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)",
- "nrf52805-pac",
- "num_enum",
-]
-
-[[package]]
-name = "nrf-softdevice"
-version = "0.1.0"
 source = "git+https://github.com/embassy-rs/nrf-softdevice.git#bf464624161cfd800fceac98bf197210a074dc03"
 dependencies = [
  "cortex-m",
@@ -824,24 +801,10 @@ dependencies = [
  "fixed",
  "futures",
  "heapless 0.8.0",
- "nrf-softdevice-macro 0.1.0 (git+https://github.com/embassy-rs/nrf-softdevice.git)",
- "nrf-softdevice-s112 0.1.2 (git+https://github.com/embassy-rs/nrf-softdevice.git)",
+ "nrf-softdevice-macro",
+ "nrf-softdevice-s112",
  "nrf52805-pac",
  "num_enum",
-]
-
-[[package]]
-name = "nrf-softdevice-macro"
-version = "0.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3af0752f2f12e202fa29f5a8d2f6dcc8a421c7a7e368d9dab7feb6bfe24ff0e9"
-dependencies = [
- "Inflector",
- "darling 0.13.4",
- "proc-macro2",
- "quote",
- "syn 1.0.109",
- "uuid",
 ]
 
 [[package]]
@@ -856,12 +819,6 @@ dependencies = [
  "syn 1.0.109",
  "uuid",
 ]
-
-[[package]]
-name = "nrf-softdevice-s112"
-version = "0.1.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "115defd955aae68bd34adf90411402be260dbfa01951606a5ca2ab0715fd4eb9"
 
 [[package]]
 name = "nrf-softdevice-s112"
