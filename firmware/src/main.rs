@@ -8,21 +8,32 @@ mod consts;
 mod nus;
 mod server;
 
-use defmt_rtt as _; // global logger
-use embassy_nrf as _; // time driver
+use cortex_m::peripheral::cpuid;
+use defmt_rtt as _; use embassy_nrf::peripherals::UARTE0;
+use embassy_nrf::uarte::Uarte;
+// global logger
+use embassy_nrf as _; 
+use embassy_time::{Duration, Ticker, Timer};
+// time driver
 use panic_probe as _;
 
 use core::mem;
 
-use crate::consts::{ATT_MTU, DEVICE_NAME, SERVICES_LIST, SHORT_NAME};
+use crate::consts::{ATT_MTU, DEVICE_NAME, SERVICES_LIST, SHORT_NAME, MAX_IRQ};
 use crate::server::Server;
 use defmt::{info, *};
+use embassy_nrf::{bind_interrupts, peripherals, uarte};
+use embassy_nrf::interrupt::{self,Interrupt, InterruptExt};
 use embassy_executor::Spawner;
 use nrf_softdevice::ble::advertisement_builder::{
     ExtendedAdvertisementBuilder, ExtendedAdvertisementPayload, Flag, ServiceList,
 };
 use nrf_softdevice::ble::{peripheral};
 use nrf_softdevice::{raw, Softdevice};
+
+bind_interrupts!(struct Irqs {
+    UARTE0_UART0 => uarte::InterruptHandler<peripherals::UARTE0>;
+});
 
 #[embassy_executor::task]
 async fn softdevice_task(sd: &'static Softdevice) -> ! {
@@ -31,16 +42,64 @@ async fn softdevice_task(sd: &'static Softdevice) -> ! {
     sd.run().await
 }
 
+#[embassy_executor::task]
+async fn timer1() {
+    loop {
+        info!("Heartbeat - 5s");
+        Timer::after_secs(5).await;
+    }
+}
+
+#[embassy_executor::task]
+async fn uart_test(mut uart: Uarte<'static, UARTE0>){
+    let mut buf1 = [0; 8];
+
+    loop {
+        info!("reading...");
+        unwrap!(uart.read(&mut buf1).await);
+        info!("writing...");
+        unwrap!(uart.write(&buf1).await);
+    }
+}
+
 #[embassy_executor::main]
 async fn main(spawner: Spawner) {
     info!("Hello World!");
+
+    let config = peripheral::Config { interval: 50, ..Default::default() };
+    let p = embassy_nrf::init(Default::default());
+
+    let mut config_uart = uarte::Config::default();
+    config_uart.parity = uarte::Parity::EXCLUDED;
+    config_uart.baudrate = uarte::Baudrate::BAUD115200;
+    let uart = uarte::Uarte::new(p.UARTE0, Irqs, p.P0_16, p.P0_18, config_uart);
+
+    // set priority to avoid collisions with softdevice
+    interrupt::UARTE0_UART0.set_priority(interrupt::Priority::P2);
+
 
     let sd = initialize_sd();
 
     let server = unwrap!(Server::new(sd));
     unwrap!(spawner.spawn(softdevice_task(sd)));
 
-    let config = peripheral::Config { interval: 50, ..Default::default() };
+
+    for num in 0..= MAX_IRQ {
+        let interrupt = unsafe { core::mem::transmute::<u16, Interrupt>(num) };
+        let is_enabled = InterruptExt::is_enabled(interrupt);
+        let priority = InterruptExt::get_priority(interrupt);
+
+        defmt::println!("Interrupt {}: Enabled = {}, Priority = {}", num, is_enabled, priority);
+    }
+
+    // Message must be in SRAM
+    let mut buf = [0; 8];
+    buf.copy_from_slice(b"Hello!\r\n");
+
+    unwrap!(spawner.spawn(timer1()));
+    unwrap!(spawner.spawn(uart_test(uart)));
+
+ 
 
     static ADV_DATA: ExtendedAdvertisementPayload = ExtendedAdvertisementBuilder::new()
         .flags(&[Flag::GeneralDiscovery, Flag::LE_Only])
@@ -57,10 +116,9 @@ async fn main(spawner: Spawner) {
         scan_data: &SCAN_DATA,
     };
 
+
     loop {
         let conn = unwrap!(peripheral::advertise_connectable(sd, adv, &config).await);
-
-        info!("advertising done!");
 
         // Run the GATT server on the connection. This returns when the connection gets disconnected.
         server.run(&conn, &config).await;

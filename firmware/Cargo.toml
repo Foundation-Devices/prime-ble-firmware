@@ -45,3 +45,4 @@ heapless = { version = "0.8.0", features = ["defmt-03"] }
 atomic-pool = "1.0.1"
 static_cell = "2.0.0"
 nrf-softdevice-s112 = { git = "https://github.com/embassy-rs/nrf-softdevice.git" }
+postcard = "1.0.8"
