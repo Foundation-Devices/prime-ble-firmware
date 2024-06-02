@@ -6,6 +6,7 @@ use embassy_sync::blocking_mutex::raw::ThreadModeRawMutex;
 use embassy_sync::mutex::Mutex;
 use embassy_time::Timer;
 use embassy_nrf::peripherals::UARTE0;
+use embassy_nrf::uarte::Uarte;
 
 use host_protocol::{
     sleep::{Sleep, SleepDone, SleepEndpoint},
@@ -21,7 +22,6 @@ use static_cell::StaticCell;
 
 
 struct SendContents {
-    tx: Sender<'static, OtgDriver>,
     scratch: [u8; 128],
 }
 
@@ -63,7 +63,6 @@ pub async fn comms_task(class: Uarte<'static, UARTE0>) {
     let (tx, mut rx) = class.split();
     let mut in_buf = [0u8; 128];
     let send = SENDER.init(Mutex::new(SendContents {
-        tx,
         scratch: [0u8; 128],
     }));
 
