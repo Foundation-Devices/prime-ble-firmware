@@ -547,6 +547,7 @@ name = "firmware"
 version = "0.1.0"
 dependencies = [
  "atomic-pool",
+ "cobs",
  "cortex-m",
  "cortex-m-rt",
  "defmt",
@@ -560,9 +561,13 @@ dependencies = [
  "fixed",
  "futures",
  "heapless 0.8.0",
+ "host-protocol",
  "nrf-softdevice",
  "nrf-softdevice-s112",
  "panic-probe",
+ "postcard",
+ "postcard-rpc",
+ "serde",
  "static_cell",
 ]
 
@@ -1018,11 +1023,12 @@ dependencies = [
 
 [[package]]
 name = "postcard-rpc"
-version = "0.3.1"
+version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e522ff4e5bc062d460c609e44fe0f124554dee99a3a19914eb67c8bca01b34db"
+checksum = "23a83ecfc4bb043272d1f884a2f03b87d1be7ed33c3c49f43d10f298c605bded"
 dependencies = [
  "cobs",
+ "defmt",
  "heapless 0.8.0",
  "postcard",
  "serde",
@@ -1152,18 +1158,18 @@ checksum = "388a1df253eca08550bef6c72392cfe7c30914bf41df5269b68cbd6ff8f570a3"
 
 [[package]]
 name = "serde"
-version = "1.0.196"
+version = "1.0.203"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "870026e60fa08c69f064aa766c10f10b1d62db9ccd4d0abb206472bee0ce3b32"
+checksum = "7253ab4de971e72fb7be983802300c30b5a7f0c2e56fab8abfc6a214307c0094"
 dependencies = [
  "serde_derive",
 ]
 
 [[package]]
 name = "serde_derive"
-version = "1.0.196"
+version = "1.0.203"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "33c85360c95e7d137454dc81d9a4ed2b8efd8fbe19cee57357b32b9771fccb67"
+checksum = "500cbc0ebeb6f46627f50f3f5811ccf6bf00643be300b4c3eabc0ef55dc5b5ba"
 dependencies = [
  "proc-macro2",
  "quote",

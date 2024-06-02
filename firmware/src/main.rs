@@ -4,16 +4,16 @@
 #![no_std]
 #![no_main]
 
+
 mod consts;
 mod nus;
 mod server;
+mod comms;
 
-use cortex_m::peripheral::cpuid;
-use defmt_rtt as _; use embassy_nrf::peripherals::UARTE0;
-use embassy_nrf::uarte::Uarte;
+use defmt_rtt as _; 
 // global logger
 use embassy_nrf as _; 
-use embassy_time::{Duration, Ticker, Timer};
+use embassy_time::Timer;
 // time driver
 use panic_probe as _;
 
@@ -30,6 +30,7 @@ use nrf_softdevice::ble::advertisement_builder::{
 };
 use nrf_softdevice::ble::{peripheral};
 use nrf_softdevice::{raw, Softdevice};
+use comms::comms_task;
 
 bind_interrupts!(struct Irqs {
     UARTE0_UART0 => uarte::InterruptHandler<peripherals::UARTE0>;
@@ -50,24 +51,31 @@ async fn timer1() {
     }
 }
 
-#[embassy_executor::task]
-async fn uart_test(mut uart: Uarte<'static, UARTE0>){
-    let mut buf1 = [0; 8];
+// #[embassy_executor::task]
+// async fn uart_test(mut uart: Uarte<'static, UARTE0>){
+//     let mut buf1 = [0; 8];
 
-    loop {
-        info!("reading...");
-        unwrap!(uart.read(&mut buf1).await);
-        info!("writing...");
-        unwrap!(uart.write(&buf1).await);
-    }
-}
+//     loop {
+//         info!("reading...");
+//         unwrap!(uart.read(&mut buf1).await);
+//         info!("writing...");
+//         unwrap!(uart.write(&buf1).await);
+//         buf1.fill(0);
+//     }
+// }
+
 
 #[embassy_executor::main]
 async fn main(spawner: Spawner) {
     info!("Hello World!");
 
     let config = peripheral::Config { interval: 50, ..Default::default() };
-    let p = embassy_nrf::init(Default::default());
+
+    let mut conf = embassy_nrf::config::Config::default();//embassy_nrf::init(Default::default());
+    conf.gpiote_interrupt_priority = interrupt::Priority::P2;
+    conf.time_interrupt_priority = interrupt::Priority::P2;
+
+    let p = embassy_nrf::init(conf);
 
     let mut config_uart = uarte::Config::default();
     config_uart.parity = uarte::Parity::EXCLUDED;
@@ -75,13 +83,17 @@ async fn main(spawner: Spawner) {
     let uart = uarte::Uarte::new(p.UARTE0, Irqs, p.P0_16, p.P0_18, config_uart);
 
     // set priority to avoid collisions with softdevice
-    interrupt::UARTE0_UART0.set_priority(interrupt::Priority::P2);
-
+    interrupt::UARTE0_UART0.set_priority(interrupt::Priority::P3);
 
     let sd = initialize_sd();
 
     let server = unwrap!(Server::new(sd));
     unwrap!(spawner.spawn(softdevice_task(sd)));
+
+    info!("Hello World!111");
+
+    // let dispatch = Dispatcher::new()
+
 
 
     for num in 0..= MAX_IRQ {
@@ -92,12 +104,17 @@ async fn main(spawner: Spawner) {
         defmt::println!("Interrupt {}: Enabled = {}, Priority = {}", num, is_enabled, priority);
     }
 
+
+
+
+
     // Message must be in SRAM
     let mut buf = [0; 8];
     buf.copy_from_slice(b"Hello!\r\n");
 
     unwrap!(spawner.spawn(timer1()));
-    unwrap!(spawner.spawn(uart_test(uart)));
+    // unwrap!(spawner.spawn(uart_test(uart)));
+    unwrap!(spawner.spawn(comms_task(uart)));
 
  
 
@@ -118,6 +135,7 @@ async fn main(spawner: Spawner) {
 
 
     loop {
+        
         let conn = unwrap!(peripheral::advertise_connectable(sd, adv, &config).await);
 
         // Run the GATT server on the connection. This returns when the connection gets disconnected.

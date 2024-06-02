@@ -4,10 +4,14 @@
 [workspace]
 resolver = "2"
 
+
 members = [
     "firmware",
     "bootloader",
     "host-protocol",
+]
+exclude = [
+   "host-client"
 ]
 
 [profile.release]

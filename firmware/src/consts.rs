@@ -11,4 +11,4 @@ pub const SERVICES_LIST: [[u8; 16]; 1] = [
 ];
 
 // NB! MAX_IRQ depends on chip used, for example: nRF52840 has 48 IRQs, nRF52832 has 38.
-pub const MAX_IRQ: u16 = 30;
+pub const MAX_IRQ: u16 = 10;
