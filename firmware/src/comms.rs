@@ -51,7 +51,7 @@ pub async fn comms_task( mut uart: BufferedUarte<'static, UARTE0, TIMER0>) {
 
                     match data.msg_type {
                         MsgKind::BtData => todo!(),
-                        MsgKind::SystemStatus => todo!(),
+                        MsgKind::SystemStatus => sys_status_parser(&data),
                         MsgKind::FwUpdate => todo!(),
                         MsgKind::BtDeviceNearby => todo!(),
                     }
