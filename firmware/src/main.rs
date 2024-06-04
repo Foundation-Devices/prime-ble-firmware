@@ -25,15 +25,18 @@ use defmt::{info, *};
 use embassy_nrf::{bind_interrupts, peripherals, uarte};
 use embassy_nrf::interrupt::{self,Interrupt, InterruptExt};
 use embassy_executor::Spawner;
+use embassy_nrf::buffered_uarte::{self, BufferedUarte};
 use nrf_softdevice::ble::advertisement_builder::{
     ExtendedAdvertisementBuilder, ExtendedAdvertisementPayload, Flag, ServiceList,
 };
+use comms::comms_task;
 use nrf_softdevice::ble::{peripheral};
 use nrf_softdevice::{raw, Softdevice};
-use comms::comms_task;
+use static_cell::StaticCell;
+
 
 bind_interrupts!(struct Irqs {
-    UARTE0_UART0 => uarte::InterruptHandler<peripherals::UARTE0>;
+    UARTE0_UART0 => buffered_uarte::InterruptHandler<peripherals::UARTE0>;
 });
 
 #[embassy_executor::task]
@@ -80,7 +83,26 @@ async fn main(spawner: Spawner) {
     let mut config_uart = uarte::Config::default();
     config_uart.parity = uarte::Parity::EXCLUDED;
     config_uart.baudrate = uarte::Baudrate::BAUD115200;
-    let uart = uarte::Uarte::new(p.UARTE0, Irqs, p.P0_16, p.P0_18, config_uart);
+
+    static TX_BUFFER: StaticCell<[u8; 1024]> = StaticCell::new();
+    static RX_BUFFER: StaticCell<[u8; 1024]> = StaticCell::new();
+    
+
+    //let uart = uarte::Uarte::new(p.UARTE0, Irqs, p.P0_16, p.P0_18, config_uart);
+    let uart = BufferedUarte::new(
+        p.UARTE0,
+        p.TIMER0,
+        p.PPI_CH0,
+        p.PPI_CH1,
+        p.PPI_GROUP0,
+        Irqs,
+        p.P0_08,
+        p.P0_06,
+        config_uart,
+        &mut TX_BUFFER.init([0; 1024])[..],
+        &mut RX_BUFFER.init([0; 1024])[..],
+    );
+
 
     // set priority to avoid collisions with softdevice
     interrupt::UARTE0_UART0.set_priority(interrupt::Priority::P3);
@@ -92,10 +114,6 @@ async fn main(spawner: Spawner) {
 
     info!("Hello World!111");
 
-    // let dispatch = Dispatcher::new()
-
-
-
     for num in 0..= MAX_IRQ {
         let interrupt = unsafe { core::mem::transmute::<u16, Interrupt>(num) };
         let is_enabled = InterruptExt::is_enabled(interrupt);
@@ -104,19 +122,12 @@ async fn main(spawner: Spawner) {
         defmt::println!("Interrupt {}: Enabled = {}, Priority = {}", num, is_enabled, priority);
     }
 
-
-
-
-
     // Message must be in SRAM
     let mut buf = [0; 8];
     buf.copy_from_slice(b"Hello!\r\n");
 
     unwrap!(spawner.spawn(timer1()));
-    // unwrap!(spawner.spawn(uart_test(uart)));
     unwrap!(spawner.spawn(comms_task(uart)));
-
- 
 
     static ADV_DATA: ExtendedAdvertisementPayload = ExtendedAdvertisementBuilder::new()
         .flags(&[Flag::GeneralDiscovery, Flag::LE_Only])

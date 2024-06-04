@@ -1,157 +1,85 @@
-use embassy_time::Duration;
+use embassy_nrf::{buffered_uarte::BufferedUarte, peripherals::{TIMER0, UARTE0}};
+use serde::{Deserialize, Serialize};
+use postcard::accumulator::{FeedResult, CobsAccumulator};
+use nrf_softdevice_s112::{sd_ble_enable, sd_softdevice_disable, sd_softdevice_enable};
+use defmt::info;
+use num_enum::{IntoPrimitive, TryFromPrimitive};
 
-use defmt::{info, warn};
-use embassy_executor::Spawner;
-use embassy_sync::blocking_mutex::raw::ThreadModeRawMutex;
-use embassy_sync::mutex::Mutex;
-use embassy_time::Timer;
-use embassy_nrf::peripherals::UARTE0;
-use embassy_nrf::uarte::Uarte;
-
-use host_protocol::{
-    sleep::{Sleep, SleepDone, SleepEndpoint},
-    wire_error::{FatalError, ERROR_KEY},
-};
-use postcard::experimental::schema::Schema;
-use postcard_rpc::{
-    accumulator::dispatch::{CobsDispatch, FeedError},
-    Endpoint, Key, WireHeader,
-};
-use serde::Serialize;
-use static_cell::StaticCell;
-
-
-struct SendContents {
-    scratch: [u8; 128],
+#[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq)]
+pub enum MsgKind {
+    BtData = 0x01,
+    SystemStatus,
+    FwUpdate,
+    BtDeviceNearby,
 }
 
-#[derive(Clone)]
-struct Context {
-    send: &'static Mutex<ThreadModeRawMutex, SendContents>,
-    spawner: Spawner,
+#[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq)]
+pub struct Message {
+    pub msg_type : MsgKind,
+    pub msg  :  [u8; 32],
 }
 
-impl Context {
-    async fn respond_keyed<T: Serialize + Schema>(&mut self, key: Key, seq_no: u32, msg: &T) {
-        // Lock the sender mutex to get access to the outgoing serial port
-        // as well as the shared scratch buffer.
-        let SendContents {
-            ref mut tx,
-            ref mut scratch,
-        } = &mut *self.send.lock().await;
 
-        if let Ok(used) = postcard_rpc::headered::to_slice_cobs_keyed(seq_no, key, &msg, scratch) {
-            let max: usize = tx.max_packet_size().into();
-            for ch in used.chunks(max - 1) {
-                if tx.write_packet(ch).await.is_err() {
-                    break;
-                }
-            }
-        }
-    }
-}
-
-enum CommsError {
-    PoolFull(u32),
-    Postcard,
-}
-
-static SENDER: StaticCell<Mutex<ThreadModeRawMutex, SendContents>> = StaticCell::new();
- 
 #[embassy_executor::task]
-pub async fn comms_task(class: Uarte<'static, UARTE0>) {
-    let (tx, mut rx) = class.split();
-    let mut in_buf = [0u8; 128];
-    let send = SENDER.init(Mutex::new(SendContents {
-        scratch: [0u8; 128],
-    }));
+pub async fn comms_task( mut uart: BufferedUarte<'static, UARTE0, TIMER0>) {
+    
+    // Raw buffer - 32 bytes for the accumulator of cobs
+    let mut raw_buf = [0u8; 256];
+    // Create a cobs accumulator for data incoming
+    let mut cobs_buf: CobsAccumulator<256> = CobsAccumulator::new();
 
-    let mut cobs_dispatch = CobsDispatch::<Context, CommsError, 8, 128>::new(Context {
-        send,
-        spawner: Spawner::for_current_executor().await,
-    });
-    cobs_dispatch
-        .dispatcher()
-        .add_handler::<SleepEndpoint>(sleep_handler)
-        .unwrap();
+    // Getting chars from Uart in a while loop
+    while let Ok(n) = uart.read(&mut raw_buf).await{
+        // Finished reading input
+        if n == 0 {
+            break;
+        }
 
-    loop {
-        rx.wait_connection().await;
+        //let mut output : Message = None;
 
-        info!("Connected");
-        let _ = incoming(&mut rx, &mut in_buf, &mut cobs_dispatch).await;
-        info!("Disconnected");
-    }
-}
+        let buf = &raw_buf[..n];
+        let mut window = buf;
 
-async fn incoming(
-    rx: &mut Receiver<'static, OtgDriver>,
-    buf: &mut [u8],
-    cobs_dispatch: &mut CobsDispatch<Context, CommsError, 8, 128>,
-) -> Result<(), Disconnected> {
-    loop {
-        let ct = rx.read_packet(buf).await?;
-        info!("got frame");
+        'cobs: while !window.is_empty() {
+            window = match cobs_buf.feed::<Message>(window) {
+                FeedResult::Consumed => break 'cobs,
+                FeedResult::OverFull(new_wind) => new_wind,
+                FeedResult::DeserError(new_wind) => new_wind,
+                FeedResult::Success { data, remaining } => {
 
-        let mut window = &buf[..ct];
-        while let Err(FeedError { err, remainder }) = cobs_dispatch.feed(window) {
-            let (seq_no, resp) = match err {
-                postcard_rpc::Error::NoMatchingHandler { key: _, seq_no } => {
-                    info!("NMH");
-                    (seq_no, FatalError::UnknownEndpoint)
+                    info!("Remaining {} bytes",remaining.len());
+
+                    match data.msg_type {
+                        MsgKind::BtData => todo!(),
+                        MsgKind::SystemStatus => todo!(),
+                        MsgKind::FwUpdate => todo!(),
+                        MsgKind::BtDeviceNearby => todo!(),
+                    }
+
                 }
-                postcard_rpc::Error::DispatchFailure(CommsError::PoolFull(seq)) => {
-                    info!("DFPF");
-                    (seq, FatalError::NotEnoughSenders)
-                }
-                postcard_rpc::Error::DispatchFailure(CommsError::Postcard) => {
-                    info!("PFPo");
-                    (0, FatalError::WireFailure)
-                }
-                postcard_rpc::Error::Postcard(_) => (0, FatalError::WireFailure),
             };
-            let context = cobs_dispatch.dispatcher().context();
-            context.respond_keyed(ERROR_KEY, seq_no, &resp).await;
-            window = remainder;
         }
-        info!("done frame");
     }
 }
 
-fn sleep_handler(hdr: &WireHeader, c: &mut Context, bytes: &[u8]) -> Result<(), CommsError> {
-    info!("dispatching sleep...");
-    let new_c = c.clone();
-    if let Ok(msg) = postcard::from_bytes::<Sleep>(bytes) {
-        if c.spawner.spawn(sleep_task(hdr.seq_no, new_c, msg)).is_ok() {
-            Ok(())
-        } else {
-            Err(CommsError::PoolFull(hdr.seq_no))
-        }
-    } else {
-        warn!("Out of senders!");
-        Err(CommsError::Postcard)
+#[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq, TryFromPrimitive)]
+#[repr(u8)]
+pub enum SysStatusCommands {
+    BtEnable = 1,
+    BtDisable,
+    SystemReset,
+    BTSignalStrength,
+}
+
+pub fn sys_status_parser( msg_recv: &Message ) {
+    // Match of type of msg
+    let cmd : Result<SysStatusCommands, _> = msg_recv.msg[0].try_into();
+
+    match cmd.unwrap()  {
+        SysStatusCommands::BtEnable => todo!(),//sd_softdevice_enable(p_clock_lf_cfg, fault_handler),
+        SysStatusCommands::BtDisable => todo!(),//sd_softdevice_disable(),
+        SysStatusCommands::SystemReset => todo!(),
+        SysStatusCommands::BTSignalStrength => todo!(),
     }
 }
 
-#[embassy_executor::task(pool_size = 3)]
-async fn sleep_task(seq_no: u32, c: Context, s: Sleep) {
-    info!("Sleep spawned");
-    Timer::after(Duration::from_secs(s.seconds.into())).await;
-    Timer::after(Duration::from_micros(s.micros.into())).await;
-    info!("Sleep complete");
-    let SendContents {
-        ref mut tx,
-        ref mut scratch,
-    } = &mut *c.send.lock().await;
-    let msg = SleepDone { slept_for: s };
-    if let Ok(used) =
-        postcard_rpc::headered::to_slice_cobs_keyed(seq_no, SleepEndpoint::RESP_KEY, &msg, scratch)
-    {
-        let max: usize = tx.max_packet_size().into();
-        for ch in used.chunks(max - 1) {
-            if tx.write_packet(ch).await.is_err() {
-                break;
-            }
-        }
-    }
-}
