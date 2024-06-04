@@ -54,7 +54,9 @@ pub async fn comms_task( mut uart: BufferedUarte<'static, UARTE0, TIMER0>) {
                         MsgKind::SystemStatus => sys_status_parser(&data),
                         MsgKind::FwUpdate => todo!(),
                         MsgKind::BtDeviceNearby => todo!(),
-                    }
+                    };
+
+                    remaining
 
                 }
             };
