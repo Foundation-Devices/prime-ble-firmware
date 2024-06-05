@@ -564,9 +564,9 @@ dependencies = [
  "host-protocol",
  "nrf-softdevice",
  "nrf-softdevice-s112",
+ "num_enum",
  "panic-probe",
  "postcard",
- "postcard-rpc",
  "serde",
  "static_cell",
 ]
@@ -1027,8 +1027,6 @@ version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "23a83ecfc4bb043272d1f884a2f03b87d1be7ed33c3c49f43d10f298c605bded"
 dependencies = [
- "cobs",
- "defmt",
  "heapless 0.8.0",
  "postcard",
  "serde",

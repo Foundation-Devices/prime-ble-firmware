@@ -14,6 +14,7 @@ pub struct Server {
 
 impl Server {
     pub(crate) async fn run(&self, conn: &Connection, _config: &Config) -> DisconnectedError {
+        let _ = conn.start_rssi();
         let e = gatt_server::run(conn, self, |e| self.handle_event(e)).await;
         info!("gatt_server run exited with error: {:?}", e);
         e

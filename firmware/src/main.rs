@@ -4,36 +4,34 @@
 #![no_std]
 #![no_main]
 
-
+mod comms;
 mod consts;
 mod nus;
 mod server;
-mod comms;
 
-use defmt_rtt as _; 
+use defmt_rtt as _;
 // global logger
-use embassy_nrf as _; 
+use embassy_nrf as _;
 use embassy_time::Timer;
 // time driver
 use panic_probe as _;
 
 use core::mem;
 
-use crate::consts::{ATT_MTU, DEVICE_NAME, SERVICES_LIST, SHORT_NAME, MAX_IRQ};
+use crate::consts::{ATT_MTU, DEVICE_NAME, MAX_IRQ, SERVICES_LIST, SHORT_NAME};
 use crate::server::Server;
+use comms::comms_task;
 use defmt::{info, *};
-use embassy_nrf::{bind_interrupts, peripherals, uarte};
-use embassy_nrf::interrupt::{self,Interrupt, InterruptExt};
 use embassy_executor::Spawner;
 use embassy_nrf::buffered_uarte::{self, BufferedUarte};
+use embassy_nrf::interrupt::{self, Interrupt, InterruptExt};
+use embassy_nrf::{bind_interrupts, peripherals, uarte};
 use nrf_softdevice::ble::advertisement_builder::{
     ExtendedAdvertisementBuilder, ExtendedAdvertisementPayload, Flag, ServiceList,
 };
-use comms::comms_task;
-use nrf_softdevice::ble::{peripheral};
+use nrf_softdevice::ble::peripheral;
 use nrf_softdevice::{raw, Softdevice};
 use static_cell::StaticCell;
-
 
 bind_interrupts!(struct Irqs {
     UARTE0_UART0 => buffered_uarte::InterruptHandler<peripherals::UARTE0>;
@@ -47,34 +45,23 @@ async fn softdevice_task(sd: &'static Softdevice) -> ! {
 }
 
 #[embassy_executor::task]
-async fn timer1() {
+async fn heatbeat() {
     loop {
         info!("Heartbeat - 5s");
         Timer::after_secs(5).await;
     }
 }
 
-// #[embassy_executor::task]
-// async fn uart_test(mut uart: Uarte<'static, UARTE0>){
-//     let mut buf1 = [0; 8];
-
-//     loop {
-//         info!("reading...");
-//         unwrap!(uart.read(&mut buf1).await);
-//         info!("writing...");
-//         unwrap!(uart.write(&buf1).await);
-//         buf1.fill(0);
-//     }
-// }
-
-
 #[embassy_executor::main]
 async fn main(spawner: Spawner) {
     info!("Hello World!");
 
-    let config = peripheral::Config { interval: 50, ..Default::default() };
+    let config = peripheral::Config {
+        interval: 50,
+        ..Default::default()
+    };
 
-    let mut conf = embassy_nrf::config::Config::default();//embassy_nrf::init(Default::default());
+    let mut conf = embassy_nrf::config::Config::default(); //embassy_nrf::init(Default::default());
     conf.gpiote_interrupt_priority = interrupt::Priority::P2;
     conf.time_interrupt_priority = interrupt::Priority::P2;
 
@@ -84,25 +71,23 @@ async fn main(spawner: Spawner) {
     config_uart.parity = uarte::Parity::EXCLUDED;
     config_uart.baudrate = uarte::Baudrate::BAUD115200;
 
-    static TX_BUFFER: StaticCell<[u8; 1024]> = StaticCell::new();
-    static RX_BUFFER: StaticCell<[u8; 1024]> = StaticCell::new();
-    
+    static TX_BUFFER: StaticCell<[u8; 64]> = StaticCell::new();
+    static RX_BUFFER: StaticCell<[u8; 64]> = StaticCell::new();
 
     //let uart = uarte::Uarte::new(p.UARTE0, Irqs, p.P0_16, p.P0_18, config_uart);
     let uart = BufferedUarte::new(
         p.UARTE0,
-        p.TIMER0,
+        p.TIMER1,
         p.PPI_CH0,
         p.PPI_CH1,
         p.PPI_GROUP0,
         Irqs,
-        p.P0_08,
-        p.P0_06,
+        p.P0_16,
+        p.P0_18,
         config_uart,
-        &mut TX_BUFFER.init([0; 1024])[..],
-        &mut RX_BUFFER.init([0; 1024])[..],
+        &mut TX_BUFFER.init([0; 64])[..],
+        &mut RX_BUFFER.init([0; 64])[..],
     );
-
 
     // set priority to avoid collisions with softdevice
     interrupt::UARTE0_UART0.set_priority(interrupt::Priority::P3);
@@ -112,21 +97,24 @@ async fn main(spawner: Spawner) {
     let server = unwrap!(Server::new(sd));
     unwrap!(spawner.spawn(softdevice_task(sd)));
 
-    info!("Hello World!111");
+    info!("Hello World!");
 
-    for num in 0..= MAX_IRQ {
+    for num in 0..=MAX_IRQ {
         let interrupt = unsafe { core::mem::transmute::<u16, Interrupt>(num) };
         let is_enabled = InterruptExt::is_enabled(interrupt);
         let priority = InterruptExt::get_priority(interrupt);
 
-        defmt::println!("Interrupt {}: Enabled = {}, Priority = {}", num, is_enabled, priority);
+        defmt::println!(
+            "Interrupt {}: Enabled = {}, Priority = {}",
+            num,
+            is_enabled,
+            priority
+        );
     }
 
-    // Message must be in SRAM
-    let mut buf = [0; 8];
-    buf.copy_from_slice(b"Hello!\r\n");
-
-    unwrap!(spawner.spawn(timer1()));
+    // heartbeat small task to check activity
+    unwrap!(spawner.spawn(heatbeat()));
+    // Uart task
     unwrap!(spawner.spawn(comms_task(uart)));
 
     static ADV_DATA: ExtendedAdvertisementPayload = ExtendedAdvertisementBuilder::new()
@@ -145,8 +133,9 @@ async fn main(spawner: Spawner) {
     };
 
 
+   
+
     loop {
-        
         let conn = unwrap!(peripheral::advertise_connectable(sd, adv, &config).await);
 
         // Run the GATT server on the connection. This returns when the connection gets disconnected.
