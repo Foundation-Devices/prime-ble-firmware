@@ -1,3 +1,4 @@
+use crate::BLE_STATE;
 use defmt::info;
 use embassy_nrf::{
     buffered_uarte::BufferedUarte,
@@ -59,7 +60,7 @@ pub async fn comms_task(mut uart: BufferedUarte<'static, UARTE0, TIMER1>) {
 
                     match data.msg_type {
                         MsgKind::BtData => info!("BT data rx"),
-                        MsgKind::SystemStatus => sys_status_parser(&data),
+                        MsgKind::SystemStatus => sys_status_parser(&data).await,
                         MsgKind::FwUpdate => info!("Fw Update rx"),
                         MsgKind::BtDeviceNearby => info!("Nearby rx"),
                     };
@@ -80,14 +81,20 @@ pub enum SysStatusCommands {
     BTSignalStrength,
 }
 
-pub fn sys_status_parser(msg_recv: &Message) {
+pub async fn sys_status_parser(msg_recv: &Message) {
     // Match of type of msg
     let cmd_as_u8: Result<SysStatusCommands, _> = msg_recv.msg[0].try_into();
 
     if let Ok(cmd) = cmd_as_u8 {
         match cmd {
-            SysStatusCommands::BtEnable => info!("BT ON"), //sd_softdevice_enable(p_clock_lf_cfg, fault_handler),
-            SysStatusCommands::BtDisable => info!("BT OFF"),
+            SysStatusCommands::BtEnable => {
+                let mut btstate = BLE_STATE.lock().await;
+                btstate.state = true
+            }
+            SysStatusCommands::BtDisable => {
+                let mut btstate = BLE_STATE.lock().await;
+                btstate.state = false
+            }
             SysStatusCommands::SystemReset => info!("NRF RESET"),
             SysStatusCommands::BTSignalStrength => info!("RSSI"),
         }
