@@ -1,4 +1,4 @@
-use crate::BLE_STATE;
+use crate::BT_STATE;
 use defmt::info;
 use embassy_nrf::{
     buffered_uarte::BufferedUarte,
@@ -83,17 +83,19 @@ pub enum SysStatusCommands {
 
 pub async fn sys_status_parser(msg_recv: &Message) {
     // Match of type of msg
+    info!("parsed {}", msg_recv.msg[0]);
+
     let cmd_as_u8: Result<SysStatusCommands, _> = msg_recv.msg[0].try_into();
 
     if let Ok(cmd) = cmd_as_u8 {
         match cmd {
             SysStatusCommands::BtEnable => {
-                let mut btstate = BLE_STATE.lock().await;
-                btstate.state = true
+                BT_STATE.signal(true);
+                info!("new bt state true");
             }
             SysStatusCommands::BtDisable => {
-                let mut btstate = BLE_STATE.lock().await;
-                btstate.state = false
+                BT_STATE.signal(false);
+                info!("new bt state false");
             }
             SysStatusCommands::SystemReset => info!("NRF RESET"),
             SysStatusCommands::BTSignalStrength => info!("RSSI"),

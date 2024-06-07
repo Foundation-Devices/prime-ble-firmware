@@ -23,7 +23,8 @@ fn main() {
     // Buffer for cobs
     let mut buf = [0u8; 64];
     // Set some byte here to get the desided cob
-    let message = [0u8; 16];
+    let mut message = [0u8; 16];
+    //message[0]=2;
 
     let used = to_slice_cobs(&Message { msg_type: MsgKind::SystemStatus, msg: message }, &mut buf).unwrap();
     println!("{:02X?}",used);

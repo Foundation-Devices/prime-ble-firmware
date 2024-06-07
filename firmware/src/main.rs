@@ -24,7 +24,7 @@ use embassy_nrf::buffered_uarte::{self, BufferedUarte};
 use embassy_nrf::interrupt::{self, Interrupt, InterruptExt};
 use embassy_nrf::{bind_interrupts, peripherals, uarte};
 use embassy_sync::blocking_mutex::raw::ThreadModeRawMutex;
-use embassy_sync::mutex::Mutex;
+use embassy_sync::signal::Signal;
 use futures::pin_mut;
 use nrf_softdevice::Softdevice;
 use server::{initialize_sd, run_bluetooth, stop_bluetooth, Server};
@@ -33,17 +33,15 @@ use static_cell::StaticCell;
 bind_interrupts!(struct Irqs {
     UARTE0_UART0 => buffered_uarte::InterruptHandler<peripherals::UARTE0>;
 });
+#[allow(dead_code)]
 #[derive(Default)]
 pub struct BleState {
     state: bool,
     rssi: Option<i8>,
 }
 
-// Global shared variable for BT low energy chip state
-static BLE_STATE: Mutex<ThreadModeRawMutex, BleState> = Mutex::new(BleState {
-    state: false,
-    rssi: None,
-});
+// Signal for BT state
+static BT_STATE: Signal<ThreadModeRawMutex, bool> = Signal::new();
 
 #[embassy_executor::task]
 async fn softdevice_task(sd: &'static Softdevice) -> ! {
@@ -102,7 +100,7 @@ async fn main(spawner: Spawner) {
 
     info!("Hello World!");
 
-      // heartbeat small task to check activity
+    // heartbeat small task to check activity
     unwrap!(spawner.spawn(heatbeat()));
     // Uart task
     unwrap!(spawner.spawn(comms_task(uart)));
@@ -122,16 +120,27 @@ async fn main(spawner: Spawner) {
         );
     }
 
-  
-
     loop {
-        let run_bluetooth_fut = run_bluetooth(sd, &server);
-        let stop_bluetooth_fut = stop_bluetooth();
-        // info!("Init loopp");
-        // pin_mut!(run_bluetooth_fut);
-        // pin_mut!(stop_bluetooth_fut);
+        Timer::after_millis(100).await;
+        let state = BT_STATE.wait().await;
+        if state {
+            info!("BT state ON");
+        }
+        if !state {
+            info!("BT state OFF");
+        }
 
-        // // source of this idea https://github.com/embassy-rs/nrf-softdevice/blob/master/examples/src/bin/ble_peripheral_onoff.rs
-        // futures::future::select(run_bluetooth_fut, stop_bluetooth_fut).await;
+        if state {
+            let run_bluetooth_fut = run_bluetooth(sd, &server);
+            let stop_bluetooth_fut = stop_bluetooth();
+            // info!("Init loopp");
+            pin_mut!(run_bluetooth_fut);
+            pin_mut!(stop_bluetooth_fut);
+
+            info!("Starting BLE advertisment");
+            // source of this idea https://github.com/embassy-rs/nrf-softdevice/blob/master/examples/src/bin/ble_peripheral_onoff.rs
+            futures::future::select(run_bluetooth_fut, stop_bluetooth_fut).await;
+            info!("Off Future Consumed");
+        }
     }
 }
