@@ -65,7 +65,6 @@ pub fn initialize_sd() -> &'static mut Softdevice {
 }
 
 pub async fn run_bluetooth(sd: &'static Softdevice, server: &Server) {
-    info!("1");
 
     static ADV_DATA: ExtendedAdvertisementPayload = ExtendedAdvertisementBuilder::new()
         .flags(&[Flag::GeneralDiscovery, Flag::LE_Only])
@@ -81,7 +80,6 @@ pub async fn run_bluetooth(sd: &'static Softdevice, server: &Server) {
         adv_data: &ADV_DATA,
         scan_data: &SCAN_DATA,
     };
-    info!("2");
 
     loop {
         let config = peripheral::Config {
@@ -89,11 +87,7 @@ pub async fn run_bluetooth(sd: &'static Softdevice, server: &Server) {
             ..Default::default()
         };
 
-        info!("3");
-
         let conn = unwrap!(peripheral::advertise_connectable(sd, adv, &config).await);
-
-        info!("4");
 
         info!("advertising done!");
 
