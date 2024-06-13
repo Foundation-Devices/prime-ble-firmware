@@ -24,8 +24,10 @@ use embassy_nrf::buffered_uarte::{self, BufferedUarte};
 use embassy_nrf::interrupt::{self, Interrupt, InterruptExt};
 use embassy_nrf::{bind_interrupts, peripherals, uarte};
 use embassy_sync::blocking_mutex::raw::ThreadModeRawMutex;
+use embassy_sync::mutex::Mutex;
 use embassy_sync::signal::Signal;
 use futures::pin_mut;
+use heapless::Vec;
 use nrf_softdevice::Softdevice;
 use server::{initialize_sd, run_bluetooth, stop_bluetooth, Server};
 use static_cell::StaticCell;
@@ -42,6 +44,8 @@ pub struct BleState {
 
 // Signal for BT state
 static BT_STATE: Signal<ThreadModeRawMutex, bool> = Signal::new();
+static TX_BT_VEC: Mutex<ThreadModeRawMutex, Vec<u8, 512>> = Mutex::new(Vec::new());
+static RSSI_VALUE: Mutex<ThreadModeRawMutex, u8> = Mutex::new(0);
 
 #[embassy_executor::task]
 async fn softdevice_task(sd: &'static Softdevice) -> ! {

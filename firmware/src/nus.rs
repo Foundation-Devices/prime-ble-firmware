@@ -7,7 +7,8 @@
 use consts::ATT_MTU;
 use defmt::{debug, info};
 use heapless::Vec;
-use nrf_softdevice::gatt_service;
+use nrf_softdevice::ble::Connection;
+use nrf_softdevice::{ble::gatt_server::notify_value, gatt_service};
 
 use crate::consts;
 
@@ -32,5 +33,9 @@ impl Nus {
                 debug!("Received: {} bytes {:?}", data.len(), data);
             }
         }
+    }
+
+    pub(crate) fn get_handle(&self) -> u16 {
+        self.tx_value_handle
     }
 }
