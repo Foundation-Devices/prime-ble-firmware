@@ -3,23 +3,19 @@
 
 use crate::consts::{ATT_MTU, DEVICE_NAME, SERVICES_LIST, SHORT_NAME};
 use crate::nus::{self, *};
-// use crate::BLE_STATE;
 use crate::TX_BT_VEC;
 use crate::{BT_STATE, RSSI_VALUE};
 use core::mem;
 use defmt::{info, *};
 use embassy_time::{Duration, Timer};
-use fixed::traits::LossyInto;
 use futures::future::{select, Either};
 use futures::pin_mut;
-use heapless::String;
 use nrf_softdevice::ble::advertisement_builder::{
     ExtendedAdvertisementBuilder, ExtendedAdvertisementPayload, Flag, ServiceList,
 };
 use nrf_softdevice::ble::gatt_server::{notify_value, Service};
-use nrf_softdevice::ble::peripheral::Config;
-use nrf_softdevice::ble::{gatt_server, Connection, DisconnectedError};
 use nrf_softdevice::ble::peripheral;
+use nrf_softdevice::ble::{gatt_server, Connection, DisconnectedError};
 use nrf_softdevice::gatt_server;
 use nrf_softdevice::{raw, Softdevice};
 
@@ -74,8 +70,8 @@ pub fn initialize_sd() -> &'static mut Softdevice {
 /// Reads the current ADC value every second and notifies the connected client.
 async fn notify_data_tx<'a>(server: &'a Server, connection: &'a Connection) {
     loop {
-        info!("Getting RSSI - tick 1S");
-        info!("RSSI {}db", connection.rssi());
+       // info!("Getting RSSI - tick 1S");
+       // info!("RSSI {}db", connection.rssi());
         if connection.rssi().is_some() {
             // Get as u8 rssi - receiver side will take care of cast to i8
             let rssi_as_u8 = connection.rssi().unwrap() as u8;
@@ -84,7 +80,13 @@ async fn notify_data_tx<'a>(server: &'a Server, connection: &'a Connection) {
         }
 
         // This is the way we can notify data when NUS service is up
-        notify_value(&connection, server.nus.get_handle(), "ciao".as_bytes());
+        {
+            let mut buffer = TX_BT_VEC.lock().await;
+            if buffer.len() > 0 {
+                notify_value(&connection, server.nus.get_handle(), &buffer[0]);
+                buffer.swap_remove(0);
+            }
+        }
 
         // Sleep for one second.
         Timer::after(Duration::from_secs(1)).await

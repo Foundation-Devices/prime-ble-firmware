@@ -10,13 +10,14 @@ mod nus;
 mod server;
 
 use defmt_rtt as _;
+use embassy_nrf::peripherals::{TIMER1, UARTE0};
 // global logger
 use embassy_nrf as _;
 use embassy_time::Timer;
 // time driver
 use panic_probe as _;
 
-use comms::comms_task;
+use comms::{comms_task, send_bt_uart};
 use consts::MAX_IRQ;
 use defmt::{info, *};
 use embassy_executor::Spawner;
@@ -44,7 +45,12 @@ pub struct BleState {
 
 // Signal for BT state
 static BT_STATE: Signal<ThreadModeRawMutex, bool> = Signal::new();
-static TX_BT_VEC: Mutex<ThreadModeRawMutex, Vec<u8, 512>> = Mutex::new(Vec::new());
+static BT_DATA_RX: Signal<ThreadModeRawMutex, Vec<u8,256>> = Signal::new();
+static TX_BT_VEC: Mutex<ThreadModeRawMutex, Vec<Vec<u8, 256>, 4>> = Mutex::new(Vec::new());
+// static RX_BT_VEC: Channel<ThreadModeRawMutex, Vec<u8, 256>, 4> = Channel::new();
+static BUFFERED_UART: Mutex<ThreadModeRawMutex, Option<BufferedUarte<UARTE0, TIMER1>>> =
+    Mutex::new(None);
+
 static RSSI_VALUE: Mutex<ThreadModeRawMutex, u8> = Mutex::new(0);
 
 #[embassy_executor::task]
@@ -57,8 +63,8 @@ async fn softdevice_task(sd: &'static Softdevice) -> ! {
 #[embassy_executor::task]
 async fn heatbeat() {
     loop {
-        info!("Heartbeat - 5s");
-        Timer::after_secs(5).await;
+        info!("Heartbeat - 30s");
+        Timer::after_secs(30).await;
     }
 }
 
@@ -76,8 +82,8 @@ async fn main(spawner: Spawner) {
     config_uart.parity = uarte::Parity::EXCLUDED;
     config_uart.baudrate = uarte::Baudrate::BAUD115200;
 
-    static TX_BUFFER: StaticCell<[u8; 64]> = StaticCell::new();
-    static RX_BUFFER: StaticCell<[u8; 64]> = StaticCell::new();
+    static TX_BUFFER: StaticCell<[u8; 256]> = StaticCell::new();
+    static RX_BUFFER: StaticCell<[u8; 256]> = StaticCell::new();
 
     //let uart = uarte::Uarte::new(p.UARTE0, Irqs, p.P0_16, p.P0_18, config_uart);
     let uart = BufferedUarte::new(
@@ -90,9 +96,14 @@ async fn main(spawner: Spawner) {
         p.P0_16,
         p.P0_18,
         config_uart,
-        &mut TX_BUFFER.init([0; 64])[..],
-        &mut RX_BUFFER.init([0; 64])[..],
+        &mut TX_BUFFER.init([0; 256])[..],
+        &mut RX_BUFFER.init([0; 256])[..],
     );
+
+    // Mutex is released
+    {
+        *(BUFFERED_UART.lock().await) = Some(uart);
+    }
 
     // set priority to avoid collisions with softdevice
     interrupt::UARTE0_UART0.set_priority(interrupt::Priority::P3);
@@ -107,7 +118,8 @@ async fn main(spawner: Spawner) {
     // heartbeat small task to check activity
     unwrap!(spawner.spawn(heatbeat()));
     // Uart task
-    unwrap!(spawner.spawn(comms_task(uart)));
+    unwrap!(spawner.spawn(comms_task()));
+    unwrap!(spawner.spawn(send_bt_uart()));
 
     info!("Init tasks");
 
