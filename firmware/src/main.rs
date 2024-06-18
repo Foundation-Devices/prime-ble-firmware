@@ -45,7 +45,7 @@ pub struct BleState {
 
 // Signal for BT state
 static BT_STATE: Signal<ThreadModeRawMutex, bool> = Signal::new();
-static BT_DATA_RX: Signal<ThreadModeRawMutex, Vec<u8,256>> = Signal::new();
+static BT_DATA_RX: Signal<ThreadModeRawMutex, Vec<u8, 256>> = Signal::new();
 static TX_BT_VEC: Mutex<ThreadModeRawMutex, Vec<Vec<u8, 256>, 4>> = Mutex::new(Vec::new());
 // static RX_BT_VEC: Channel<ThreadModeRawMutex, Vec<u8, 256>, 4> = Channel::new();
 static BUFFERED_UART: Mutex<ThreadModeRawMutex, Option<BufferedUarte<UARTE0, TIMER1>>> =

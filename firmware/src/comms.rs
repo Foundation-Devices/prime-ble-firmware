@@ -1,20 +1,18 @@
 use crate::consts::{BT_BUFF_MAX_PKT_LEN, BT_MAX_NUM_PKT};
-use crate::{BT_STATE, BUFFERED_UART, RSSI_VALUE, BT_DATA_RX};
 use crate::TX_BT_VEC;
+use crate::{BT_DATA_RX, BT_STATE, BUFFERED_UART, RSSI_VALUE};
 use defmt::info;
-use embassy_time::with_timeout;
 use embassy_nrf::{
     buffered_uarte::BufferedUarte,
     peripherals::{TIMER1, UARTE0},
 };
+use embassy_time::with_timeout;
 use embassy_time::Duration;
-use embedded_io_async::{BufRead, Write};
+use embedded_io_async::Write;
 use heapless::Vec;
-use host_protocol::{Message,MsgKind, SysStatusCommands};
+use host_protocol::{Message, MsgKind, SysStatusCommands};
 use postcard::accumulator::{CobsAccumulator, FeedResult};
 use postcard::to_slice_cobs;
-use serde::{Deserialize, Serialize};
-
 
 #[embassy_executor::task]
 pub async fn comms_task() {
@@ -22,60 +20,59 @@ pub async fn comms_task() {
     let mut raw_buf = [0u8; 32];
     // Create a cobs accumulator for data incoming
     let mut cobs_buf: CobsAccumulator<32> = CobsAccumulator::new();
-    loop
-    {
+    loop {
         {
-        // Getting chars from Uart in a while loop
-        let mut uart_in = BUFFERED_UART.lock().await;
-        if let Some(uart) = uart_in.as_mut() {
-        if let Ok(n) = with_timeout(Duration::from_millis(500),  uart.read(&mut raw_buf)).await{
-                // Finished reading input
-                let n= n.unwrap();
-                if n == 0 {
-                    info!("overfull");
-                    break;
-                }
-                info!("Data incoming {}", n);
+            // Getting chars from Uart in a while loop
+            let mut uart_in = BUFFERED_UART.lock().await;
+            if let Some(uart) = uart_in.as_mut() {
+                if let Ok(n) =
+                    with_timeout(Duration::from_millis(500), uart.read(&mut raw_buf)).await
+                {
+                    // Finished reading input
+                    let n = n.unwrap();
+                    if n == 0 {
+                        info!("overfull");
+                        break;
+                    }
+                    info!("Data incoming {}", n);
 
-                let buf = &raw_buf[..n];
-                let mut window = buf;
+                    let buf = &raw_buf[..n];
+                    let mut window = buf;
 
-                'cobs: while !window.is_empty() {
-                    window = match cobs_buf.feed::<Message>(window) {
-                        FeedResult::Consumed => {
-                            info!("consumed");
-                            break 'cobs;
-                        }
-                        FeedResult::OverFull(new_wind) => {
-                            info!("overfull");
-                            new_wind
-                        }
-                        FeedResult::DeserError(new_wind) => {
-                            info!("DeserError");
-                            new_wind
-                        }
-                        FeedResult::Success { data, remaining } => {
-                            info!("Remaining {} bytes", remaining.len());
+                    'cobs: while !window.is_empty() {
+                        window = match cobs_buf.feed::<Message>(window) {
+                            FeedResult::Consumed => {
+                                info!("consumed");
+                                break 'cobs;
+                            }
+                            FeedResult::OverFull(new_wind) => {
+                                info!("overfull");
+                                new_wind
+                            }
+                            FeedResult::DeserError(new_wind) => {
+                                info!("DeserError");
+                                new_wind
+                            }
+                            FeedResult::Success { data, remaining } => {
+                                info!("Remaining {} bytes", remaining.len());
 
-                            match data.msg_type {
-                                MsgKind::BtData => {
-                                    info!("BT data rx");
-                                    let empty : &[u8] = &[];
-                                    let mut remaining = remaining;
-                                    packet_accumulator(&data, uart, remaining).await;                                    
-                                    remaining = empty;
-                                }
-                                MsgKind::SystemStatus => sys_status_parser(&data, uart).await,
-                                MsgKind::FwUpdate => info!("Fw Update rx"),
-                                MsgKind::BtDeviceNearby => info!("Nearby rx"),
-                            };
+                                match data.msg_type {
+                                    MsgKind::BtData => {
+                                        info!("BT data rx");
+                                        packet_accumulator(uart, remaining).await;
+                                        break 'cobs;
+                                    }
+                                    MsgKind::SystemStatus => sys_status_parser(&data, uart).await,
+                                    MsgKind::FwUpdate => info!("Fw Update rx"),
+                                    MsgKind::BtDeviceNearby => info!("Nearby rx"),
+                                };
 
-                            remaining
-                        }
-                    };
+                                remaining
+                            }
+                        };
+                    }
                 }
             }
-        }
         }
         embassy_time::Timer::after_millis(1).await;
     }
@@ -83,7 +80,6 @@ pub async fn comms_task() {
 
 ///Accumulate packet coming from MCU to send via BT
 pub async fn packet_accumulator(
-    msg_recv: &Message,
     uart: &mut BufferedUarte<'static, UARTE0, TIMER1>,
     remaining: &[u8],
 ) {
@@ -94,27 +90,24 @@ pub async fn packet_accumulator(
     // Starting index of accumulator
     let mut idx: usize = 0;
 
-    if remaining.len() > 0{
+    if remaining.len() > 0 {
         idx = remaining.len();
-        vector.extend_from_slice(remaining);
+        let _ =vector.extend_from_slice(remaining);
     }
-
 
     // Getting chars from Uart in a while loop
     while let Ok(n) = uart.read(&mut raw_buf).await {
         // Finished reading input
-         if n == 0 {
-             break;
-         }
+        if n == 0 {
+            break;
+        }
         info!("Data for BT tx incoming {}", n);
-
-        let buf = &raw_buf[..n];
 
         let zero_pos = raw_buf.iter().position(|&i| i == 0);
         info!("Zero pos {}", zero_pos);
 
         if let Some(end) = zero_pos {
-            vector.extend_from_slice(&raw_buf[..end]);
+            let _ =vector.extend_from_slice(&raw_buf[..end]);
             let mut buffer_tx_bt = TX_BT_VEC.lock().await;
             if buffer_tx_bt.len() < BT_MAX_NUM_PKT {
                 let _ = buffer_tx_bt.push(vector);
@@ -136,7 +129,6 @@ pub async fn packet_accumulator(
         }
     }
 }
-
 
 pub async fn sys_status_parser(
     msg_recv: &Message,
@@ -180,7 +172,7 @@ pub async fn sys_status_parser(
         let cobs_tx = to_slice_cobs(&raw_buf, &mut send_buf).unwrap();
         info!("{}", cobs_tx);
 
-        uart.write_all(cobs_tx).await;
+        let _ = uart.write_all(cobs_tx).await;
     }
 }
 
@@ -190,14 +182,13 @@ pub async fn send_bt_uart() {
         let data = BT_DATA_RX.wait().await;
         {
             info!("Data rx from BT --> UART");
-             // Getting chars from Uart in a while loop
+            // Getting chars from Uart in a while loop
             let mut uart = BUFFERED_UART.lock().await;
             if let Some(uart_tx) = uart.as_mut() {
-                uart_tx.write_all(data.as_slice()).await;
-                info!("{}",*data);
+                let _ = uart_tx.write_all(data.as_slice()).await;
+                info!("{}", *data);
             }
         }
         embassy_time::Timer::after_millis(10).await;
     }
-
 }

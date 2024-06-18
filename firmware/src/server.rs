@@ -13,7 +13,7 @@ use futures::pin_mut;
 use nrf_softdevice::ble::advertisement_builder::{
     ExtendedAdvertisementBuilder, ExtendedAdvertisementPayload, Flag, ServiceList,
 };
-use nrf_softdevice::ble::gatt_server::{notify_value, Service};
+use nrf_softdevice::ble::gatt_server::notify_value;
 use nrf_softdevice::ble::peripheral;
 use nrf_softdevice::ble::{gatt_server, Connection, DisconnectedError};
 use nrf_softdevice::gatt_server;
@@ -70,8 +70,8 @@ pub fn initialize_sd() -> &'static mut Softdevice {
 /// Reads the current ADC value every second and notifies the connected client.
 async fn notify_data_tx<'a>(server: &'a Server, connection: &'a Connection) {
     loop {
-       // info!("Getting RSSI - tick 1S");
-       // info!("RSSI {}db", connection.rssi());
+        // info!("Getting RSSI - tick 1S");
+        // info!("RSSI {}db", connection.rssi());
         if connection.rssi().is_some() {
             // Get as u8 rssi - receiver side will take care of cast to i8
             let rssi_as_u8 = connection.rssi().unwrap() as u8;
@@ -83,7 +83,7 @@ async fn notify_data_tx<'a>(server: &'a Server, connection: &'a Connection) {
         {
             let mut buffer = TX_BT_VEC.lock().await;
             if buffer.len() > 0 {
-                notify_value(&connection, server.nus.get_handle(), &buffer[0]);
+                let _ = notify_value(&connection, server.nus.get_handle(), &buffer[0]);
                 buffer.swap_remove(0);
             }
         }
