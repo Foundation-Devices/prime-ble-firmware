@@ -4,14 +4,10 @@
 [workspace]
 resolver = "2"
 
-
 members = [
     "firmware",
     "bootloader",
     "host-protocol",
-]
-exclude = [
-   "cobs-gen"
 ]
 
 [profile.release]

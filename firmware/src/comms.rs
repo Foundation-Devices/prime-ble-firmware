@@ -10,37 +10,11 @@ use embassy_nrf::{
 use embassy_time::Duration;
 use embedded_io_async::{BufRead, Write};
 use heapless::Vec;
-use num_enum::TryFromPrimitive;
+use host_protocol::{Message,MsgKind, SysStatusCommands};
 use postcard::accumulator::{CobsAccumulator, FeedResult};
 use postcard::to_slice_cobs;
 use serde::{Deserialize, Serialize};
 
-const FILL_PKT_MARKER: u8 = 0xFF;
-const PKT1_START: u16 = 0;
-const PKT2_START: u16 = 0x100;
-
-#[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq)]
-pub enum MsgKind {
-    BtData = 0x01,
-    SystemStatus,
-    FwUpdate,
-    BtDeviceNearby,
-}
-
-#[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq)]
-pub struct Message {
-    pub msg_type: MsgKind,
-    pub msg: [u8; 16],
-}
-
-impl Message {
-    pub fn new() -> Self {
-        Self {
-            msg_type: MsgKind::SystemStatus,
-            msg: [0; 16],
-        }
-    }
-}
 
 #[embassy_executor::task]
 pub async fn comms_task() {
@@ -163,14 +137,6 @@ pub async fn packet_accumulator(
     }
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq, TryFromPrimitive)]
-#[repr(u8)]
-pub enum SysStatusCommands {
-    BtDisable,
-    BtEnable,
-    SystemReset,
-    BTSignalStrength,
-}
 
 pub async fn sys_status_parser(
     msg_recv: &Message,

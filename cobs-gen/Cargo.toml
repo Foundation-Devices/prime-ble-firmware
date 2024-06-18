@@ -1,9 +1,0 @@
-[package]
-name = "cobs-printer"
-version = "0.1.0"
-edition = "2021"
-
-[dependencies]
-postcard = { version = "1.0.8" , default-features = false }
-serde = { version = "1.0.200", default-features = false }
-cobs = { version = "0.2.3", default-features = false }
