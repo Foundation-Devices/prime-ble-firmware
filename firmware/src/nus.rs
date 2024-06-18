@@ -4,8 +4,9 @@
 //! Nordic Uart Service ([NUS]) implementation.
 //! [NUS]: https://developer.nordicsemi.com/nRF_Connect_SDK/doc/latest/nrf/libraries/bluetooth_services/services/nus.html
 
+use crate::BT_DATA_RX;
 use consts::ATT_MTU;
-use defmt::{debug, info};
+use defmt::info;
 use heapless::Vec;
 use nrf_softdevice::gatt_service;
 
@@ -29,8 +30,13 @@ impl Nus {
                 info!("Enable UART: {}", notifications);
             }
             NusEvent::RxWrite(data) => {
-                debug!("Received: {} bytes {:?}", data.len(), data);
+                info!("Received: {} bytes {:?}", data.len(), data);
+                BT_DATA_RX.signal(data);
             }
         }
+    }
+
+    pub(crate) fn get_handle(&self) -> u16 {
+        self.tx_value_handle
     }
 }

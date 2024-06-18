@@ -3,25 +3,36 @@
 
 //! MPU to BLE MCU communication protocol.
 //! The MPU running keyOS is the host and nRF52x BLE is the target MCU.
+//! WIll move here simpler struct for postcard messages!!
 
 #![no_std]
-
-use postcard::experimental::schema::Schema;
+use num_enum::TryFromPrimitive;
 use serde::{Deserialize, Serialize};
 
-/// Disables BLE and puts the MCU into low power mode until the host asserts the IRQ line.
-pub mod sleep_until_irq {
-    use postcard_rpc::endpoint;
+/// Command kinds ( TBD )
+#[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq)]
+pub enum MsgKind {
+    BtData = 0x01,
+    SystemStatus,
+    FwUpdate,
+    BtDeviceNearby,
+}
 
-    use super::*;
+/// Command for specific actions requested to Bluetooth MCU
+#[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq, TryFromPrimitive)]
+#[repr(u8)]
+pub enum SysStatusCommands {
+    BtDisable,
+    BtEnable,
+    SystemReset,
+    BTSignalStrength,
+}
 
-    endpoint!(SleepUntilIrqEndpoint, SleepUntilIrq, SleepingNow, "done");
-
-    #[derive(Debug, PartialEq, Serialize, Deserialize, Schema)]
-    pub struct SleepUntilIrq;
-
-    #[derive(Debug, PartialEq, Serialize, Deserialize, Schema)]
-    pub struct SleepingNow;
+///Generic format data to communicate between MCUs
+#[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq)]
+pub struct Message {
+    pub msg_type: MsgKind,
+    pub msg: [u8; 16],
 }
 
 // TODO: status       - read status info (status maks, num NUS packets received, num. connections, etc.)
