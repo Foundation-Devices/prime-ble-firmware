@@ -9,30 +9,32 @@
 use num_enum::TryFromPrimitive;
 use serde::{Deserialize, Serialize};
 
-/// Command kinds ( TBD )
+/// Bluetooth-specific messages.
 #[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq)]
-pub enum MsgKind {
-    BtData = 0x01,
-    SystemStatus,
-    FwUpdate,
-    BtDeviceNearby,
+pub enum Bluetooth<'a> {
+    Enable,
+    Disable,
+
+    GetSignalStrength,
+    SignalStrength(u8),
+
+    SendData(&'a [u8]),
+    ReceivedData(&'a [u8]),
 }
 
-/// Command for specific actions requested to Bluetooth MCU
-#[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq, TryFromPrimitive)]
-#[repr(u8)]
-pub enum SysStatusCommands {
-    BtDisable,
-    BtEnable,
-    SystemReset,
-    BTSignalStrength,
+/// Bootloader-specific messages.
+#[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq)]
+pub enum Bootloader<'a> {
+    EraseFirmware,
+    WriteFirmwareBlock { block_idx: usize, block_data: &'a [u8] },
 }
 
-///Generic format data to communicate between MCUs
+/// Host protocol messages.
 #[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq)]
-pub struct Message {
-    pub msg_type: MsgKind,
-    pub msg: [u8; 16],
+pub enum HostProtocolMessage<'a> {
+    Bluetooth(#[serde(borrow)] Bluetooth<'a>),
+    Bootloader(#[serde(borrow)] Bootloader<'a>),
+    Reset,
 }
 
 // TODO: status       - read status info (status maks, num NUS packets received, num. connections, etc.)
