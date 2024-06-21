@@ -60,7 +60,7 @@ pub async fn comms_task() {
                                     HostProtocolMessage::Bluetooth(bluetooth_msg) => {
                                         bluetooth_handler(uart, bluetooth_msg).await
                                     }
-                                    HostProtocolMessage::Bootloader(bootloader_msg) => (), // no-op, handled in the bootloader
+                                    HostProtocolMessage::Bootloader(_) => (), // no-op, handled in the bootloader
                                     HostProtocolMessage::Reset => {
                                         info!("Resetting");
                                         // TODO: reset
