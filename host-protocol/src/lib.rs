@@ -26,7 +26,10 @@ pub enum Bluetooth<'a> {
 #[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq)]
 pub enum Bootloader<'a> {
     EraseFirmware,
-    WriteFirmwareBlock { block_idx: usize, block_data: &'a [u8] },
+    WriteFirmwareBlock {
+        block_idx: usize,
+        block_data: &'a [u8],
+    },
 }
 
 /// Host protocol messages.

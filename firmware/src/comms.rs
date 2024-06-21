@@ -10,7 +10,7 @@ use embassy_time::with_timeout;
 use embassy_time::Duration;
 use embedded_io_async::Write;
 use heapless::Vec;
-use host_protocol::{HostProtocolMessage, Bluetooth, Bootloader};
+use host_protocol::{Bluetooth, Bootloader, HostProtocolMessage};
 use postcard::accumulator::{CobsAccumulator, FeedResult};
 use postcard::to_slice_cobs;
 
@@ -57,8 +57,9 @@ pub async fn comms_task() {
                                 info!("Remaining {} bytes", remaining.len());
 
                                 match data {
-                                    HostProtocolMessage::Bluetooth(bluetooth_msg) =>
-                                        bluetooth_handler(uart, bluetooth_msg).await,
+                                    HostProtocolMessage::Bluetooth(bluetooth_msg) => {
+                                        bluetooth_handler(uart, bluetooth_msg).await
+                                    }
                                     HostProtocolMessage::Bootloader(bootloader_msg) => (), // no-op, handled in the bootloader
                                     HostProtocolMessage::Reset => {
                                         info!("Resetting");
@@ -77,9 +78,7 @@ pub async fn comms_task() {
     }
 }
 
-async fn bluetooth_handler(uart: &mut BufferedUarte<'static, UARTE0, TIMER1>,
-                           msg: Bluetooth<'_>
-) {
+async fn bluetooth_handler(uart: &mut BufferedUarte<'static, UARTE0, TIMER1>, msg: Bluetooth<'_>) {
     match msg {
         Bluetooth::Enable => {
             info!("Bluetooth enabled");
