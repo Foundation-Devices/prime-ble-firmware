@@ -67,7 +67,7 @@ pub fn initialize_sd() -> &'static mut Softdevice {
     Softdevice::enable(&config)
 }
 
-/// Reads the current ADC value every second and notifies the connected client.
+/// Notifies the connected client about new data.
 async fn notify_data_tx<'a>(server: &'a Server, connection: &'a Connection) {
     loop {
         // info!("Getting RSSI - tick 1S");

@@ -61,7 +61,7 @@ async fn softdevice_task(sd: &'static Softdevice) -> ! {
 }
 
 #[embassy_executor::task]
-async fn heatbeat() {
+async fn heartbeat() {
     loop {
         info!("Heartbeat - 30s");
         Timer::after_secs(30).await;
@@ -116,7 +116,7 @@ async fn main(spawner: Spawner) {
     info!("Hello World!");
 
     // heartbeat small task to check activity
-    unwrap!(spawner.spawn(heatbeat()));
+    unwrap!(spawner.spawn(heartbeat()));
     // Uart task
     unwrap!(spawner.spawn(comms_task()));
     unwrap!(spawner.spawn(send_bt_uart()));
