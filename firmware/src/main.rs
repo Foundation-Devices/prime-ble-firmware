@@ -61,7 +61,7 @@ async fn softdevice_task(sd: &'static Softdevice) -> ! {
 }
 
 #[embassy_executor::task]
-async fn heatbeat() {
+async fn heartbeat() {
     loop {
         info!("Heartbeat - 30s");
         Timer::after_secs(30).await;
