@@ -116,7 +116,7 @@ async fn main(spawner: Spawner) {
     info!("Hello World!");
 
     // heartbeat small task to check activity
-    unwrap!(spawner.spawn(heatbeat()));
+    unwrap!(spawner.spawn(heartbeat()));
     // Uart task
     unwrap!(spawner.spawn(comms_task()));
     unwrap!(spawner.spawn(send_bt_uart()));
