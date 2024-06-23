@@ -15,6 +15,7 @@ use embassy_nrf::peripherals::{P0_20, TIMER1, UARTE0};
 // global logger
 use embassy_nrf as _;
 use embassy_time::Timer;
+use embedded_io_async::Write;
 // time driver
 use panic_probe as _;
 
@@ -116,6 +117,8 @@ async fn main(spawner: Spawner) {
         &mut TX_BUFFER.init([0; COBS_MAX_MSG_SIZE])[..],
         &mut RX_BUFFER.init([0; COBS_MAX_MSG_SIZE])[..],
     );
+
+    uart.write_all(b"Hi from app!").await;
 
     // Mutex is released
     {

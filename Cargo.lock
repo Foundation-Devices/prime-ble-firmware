@@ -109,12 +109,14 @@ dependencies = [
  "embassy-nrf",
  "embassy-sync",
  "embassy-time",
+ "embedded-io-async",
  "embedded-storage",
  "embedded-storage-async",
  "fixed",
  "futures",
  "heapless 0.8.0",
  "nrf-softdevice",
+ "nrf-softdevice-mbr",
  "nrf-softdevice-s112",
  "panic-probe",
  "static_cell",
@@ -828,6 +830,12 @@ dependencies = [
  "syn 1.0.109",
  "uuid",
 ]
+
+[[package]]
+name = "nrf-softdevice-mbr"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f47431e7b1c13851c48a77211fac2b7b648b43a9a622f9c40debc76320b93217"
 
 [[package]]
 name = "nrf-softdevice-s112"
