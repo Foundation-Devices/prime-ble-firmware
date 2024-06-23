@@ -115,10 +115,13 @@ dependencies = [
  "fixed",
  "futures",
  "heapless 0.8.0",
+ "host-protocol",
  "nrf-softdevice",
  "nrf-softdevice-mbr",
  "nrf-softdevice-s112",
  "panic-probe",
+ "postcard",
+ "serde",
  "static_cell",
 ]
 

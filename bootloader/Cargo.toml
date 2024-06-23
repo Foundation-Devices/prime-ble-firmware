@@ -49,3 +49,7 @@ atomic-pool = "1.0.1"
 static_cell = "2.0.0"
 nrf-softdevice-s112 = { git = "https://github.com/embassy-rs/nrf-softdevice.git" }
 nrf-softdevice-mbr = { version = "0.2.0"}
+postcard = { version = "1.0.8", features = ["experimental-derive"] }
+serde = { version = "1.0.192", features = ["derive"], default-features = false }
+[dependencies.host-protocol]
+path = "../host-protocol"

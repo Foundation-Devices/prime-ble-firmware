@@ -15,9 +15,14 @@ use panic_probe as _;
 
 use defmt::{info, *};
 use embassy_executor::Spawner;
+use embassy_time::{Duration,with_timeout};
 use embassy_nrf::interrupt;
 use embassy_nrf::{bind_interrupts, uarte};
 use embassy_nrf::gpio::{Input, Pull};
+use postcard::accumulator::{CobsAccumulator, FeedResult};
+use postcard::to_slice_cobs;
+use host_protocol::HostProtocolMessage;
+
 
 
 bind_interrupts!(struct Irqs {
@@ -78,38 +83,33 @@ pub unsafe fn jump_to_app() -> ! {
 
 #[used]
 #[link_section = ".uicr_bootloader_start_address"]
-pub static  BOOTLOADER_ADDR : i32 = 0x28000;
+pub static  BOOTLOADER_ADDR : i32 = 0x2A000;
 
 #[embassy_executor::main]
 async fn main(_spawner: Spawner) {
     
-   
-    let mut conf = embassy_nrf::config::Config::default(); 
-    conf.gpiote_interrupt_priority = interrupt::Priority::P2;
-    conf.time_interrupt_priority = interrupt::Priority::P2;
-
-    let p = embassy_nrf::init(conf);
-    Timer::after_millis(1000).await;
+    let p = embassy_nrf::init(Default::default());
+    Timer::after_millis(5000).await;
 
     let mut config_uart = uarte::Config::default();
     config_uart.parity = uarte::Parity::EXCLUDED;
     config_uart.baudrate = uarte::Baudrate::BAUD115200;
 
-    let mut uart = uarte::Uarte::new(p.UARTE0, Irqs, p.P0_16, p.P0_18, config_uart);
+    let uart = uarte::Uarte::new(p.UARTE0, Irqs, p.P0_16, p.P0_18, config_uart);
+    let (mut tx, mut rx) = uart.split_with_idle(p.TIMER0, p.PPI_CH0, p.PPI_CH1);
+
 
     let _boot_gpio = Input::new(p.P0_11, Pull::Up);
 
     // // Message must be in SRAM
     let mut buf = [0; 22];
     buf.copy_from_slice(b"Hello from bootloader!");
-
-    unwrap!(uart.write(&buf).await);
-
+    let _ = tx.write(&buf).await;
     
     let mut countdown_boot : u8 = 10;
 
     loop{
-    // while btn1.is_low() {
+    // while boot_gpio.is_low() {
         Timer::after_millis(1000).await;
         info!("Going to app in {} seconds..", countdown_boot);
         countdown_boot -= 1;
@@ -117,8 +117,60 @@ async fn main(_spawner: Spawner) {
         if countdown_boot == 0{
             break;
         }
-    }
-    info!("going to app");
-    unsafe {jump_to_app();}
 
+        // Raw buffer - 32 bytes for the accumulator of cobs
+        let mut raw_buf = [0u8; 32];
+        // Create a cobs accumulator for data incoming
+        let mut cobs_buf: CobsAccumulator<32> = CobsAccumulator::new();
+            // Getting chars from Uart in a while loop
+            if let Ok(n) = with_timeout(Duration::from_millis(100), rx.read_until_idle(&mut raw_buf)).await{
+                let n = n.unwrap();
+                // Finished reading input
+                if n == 0 {
+                    info!("Read 0 bytes");
+                    break;
+                }
+                info!("Data incoming {}", n);
+
+                let buf = &raw_buf[..n];
+                let mut window = buf;
+
+                'cobs: while !window.is_empty() {
+                    window = match cobs_buf.feed_ref::<HostProtocolMessage>(window) {
+                        FeedResult::Consumed => {
+                            info!("consumed");
+                            break 'cobs;
+                        }
+                        FeedResult::OverFull(new_wind) => {
+                            info!("overfull");
+                            new_wind
+                        }
+                        FeedResult::DeserError(new_wind) => {
+                            info!("DeserError");
+                            new_wind
+                        }
+                        FeedResult::Success { data, remaining } => {
+                            info!("Remaining {} bytes", remaining.len());
+
+                            match data {
+                                HostProtocolMessage::Bluetooth(_) => (),
+                                HostProtocolMessage::Bootloader(_BootMsg) => {
+                                    info!("Bootloader pkt recv")
+                                }, // no-op, handled in the bootloader
+                                HostProtocolMessage::Reset => {
+                                    info!("Resetting");
+                                    // TODO: reset
+                                }
+                            };
+
+                            remaining
+                        }
+                    };
+                }
+            embassy_time::Timer::after_millis(1).await;
+        }
+    }
+    info!("going to app...");
+    // Jump to application
+    unsafe {jump_to_app();}
 }
