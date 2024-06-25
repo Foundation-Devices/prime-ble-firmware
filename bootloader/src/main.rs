@@ -4,6 +4,7 @@
 #![no_std]
 #![no_main]
 
+use cortex_m::prelude::_embedded_hal_blocking_serial_Write;
 use defmt_rtt as _;
 use embassy_nrf::peripherals;
 // global logger
@@ -16,18 +17,35 @@ use panic_probe as _;
 use defmt::{info, *};
 use embassy_executor::Spawner;
 use embassy_time::{Duration,with_timeout};
-use embassy_nrf::interrupt;
 use embassy_nrf::{bind_interrupts, uarte};
 use embassy_nrf::gpio::{Input, Pull};
 use postcard::accumulator::{CobsAccumulator, FeedResult};
 use postcard::to_slice_cobs;
 use host_protocol::HostProtocolMessage;
-
+use host_protocol::Bootloader::{AckWithIdx, AckWithIdxCrc};
+use serde::{Deserialize, Serialize};
 
 
 bind_interrupts!(struct Irqs {
     UARTE0_UART0 => uarte::InterruptHandler<peripherals::UARTE0>;
 });
+
+
+#[used]
+#[link_section = ".uicr_bootloader_start_address"]
+pub static  BOOTLOADER_ADDR : i32 = 0x2A000;
+
+const BASE_ADDRESS_APP : u32 = 0x19000;
+const FLASH_PAGE : usize = 4096;
+
+#[derive(Debug,Serialize,Deserialize,Default)]
+pub struct BootState{
+    pub offset        : usize,
+    pub actual_sector : usize,
+    pub last_sector   : usize,
+    pub end_sector    : usize,
+    pub start_sector  : usize,
+}
 
 
 /// Boots the application assuming softdevice is present.
@@ -81,9 +99,6 @@ pub unsafe fn jump_to_app() -> ! {
     );
 }
 
-#[used]
-#[link_section = ".uicr_bootloader_start_address"]
-pub static  BOOTLOADER_ADDR : i32 = 0x2A000;
 
 #[embassy_executor::main]
 async fn main(_spawner: Spawner) {
@@ -106,17 +121,18 @@ async fn main(_spawner: Spawner) {
     buf.copy_from_slice(b"Hello from bootloader!");
     let _ = tx.write(&buf).await;
     
-    let mut countdown_boot : u8 = 10;
+    // Keep track of update of flash Application
+    let mut boot_status : BootState = Default::default();
 
     loop{
-    // while boot_gpio.is_low() {
-        Timer::after_millis(1000).await;
-        info!("Going to app in {} seconds..", countdown_boot);
-        countdown_boot -= 1;
+    // while boot_gpio.is_high() {
+        // Timer::after_millis(1000).await;
+        // info!("Going to app in {} seconds..", countdown_boot);
+        // countdown_boot -= 1;
 
-        if countdown_boot == 0{
-            break;
-        }
+        // if countdown_boot == 0{
+        //     break;
+        // }
 
         // Raw buffer - 32 bytes for the accumulator of cobs
         let mut raw_buf = [0u8; 32];
@@ -154,8 +170,23 @@ async fn main(_spawner: Spawner) {
 
                             match data {
                                 HostProtocolMessage::Bluetooth(_) => (),
-                                HostProtocolMessage::Bootloader(_BootMsg) => {
-                                    info!("Bootloader pkt recv")
+                                HostProtocolMessage::Bootloader(boot_msg) => {
+                                    info!("Bootloader pkt recv");
+                                    let buf_cobs : &mut [u8] = &mut[];
+                                    // Check what sector we are in now
+                                    if let Some(boot_data) = boot_msg.get_data(){
+                                        // Increase offset with data len
+                                        boot_status.offset = boot_data.len();
+                                    }
+                                    boot_status.actual_sector = boot_status.offset / FLASH_PAGE;
+                                    if boot_status.last_sector != boot_status.actual_sector
+                                    {
+                                        boot_status.last_sector = boot_status.last_sector;
+                                        // Do erase of page in flash
+                                    }
+                                    // If write chunck is ok ack
+                                    let cobs_ack = to_slice_cobs(&HostProtocolMessage::Bootloader(AckWithIdx { block_idx: boot_msg.get_idx().unwrap() }), buf_cobs);
+                                    let _ = tx.blocking_write(cobs_ack.unwrap());
                                 }, // no-op, handled in the bootloader
                                 HostProtocolMessage::Reset => {
                                     info!("Resetting");

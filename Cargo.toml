@@ -7,8 +7,9 @@ resolver = "2"
 members = [
     "firmware",
     "bootloader",
-    "host-protocol",
+    "host-protocol", "cobs-file-chuncker",
 ]
+exclude = ["cobs-file-chunker"]
 
 [profile.release]
 debug = 2
