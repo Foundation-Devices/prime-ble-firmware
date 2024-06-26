@@ -1,6 +1,6 @@
 use crate::nus::NUS_UUID;
 
-pub const MTU: usize = 253;
+pub const MTU: usize = 256;
 pub const ATT_MTU: usize = MTU + 3;
 
 pub const DEVICE_NAME: &str = "Passport Prime";
