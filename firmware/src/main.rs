@@ -18,7 +18,7 @@ use embassy_time::Timer;
 use panic_probe as _;
 
 use comms::{comms_task, send_bt_uart};
-use consts::MAX_IRQ;
+use consts::{ATT_MTU, MAX_IRQ};
 use defmt::{info, *};
 use embassy_executor::Spawner;
 use embassy_nrf::buffered_uarte::{self, BufferedUarte};
@@ -51,9 +51,8 @@ pub struct BleState {
 
 // Signal for BT state
 static BT_STATE: Signal<ThreadModeRawMutex, bool> = Signal::new();
-static BT_DATA_RX: Signal<ThreadModeRawMutex, Vec<u8, 256>> = Signal::new();
-static TX_BT_VEC: Mutex<ThreadModeRawMutex, Vec<Vec<u8, 256>, 4>> = Mutex::new(Vec::new());
-// static RX_BT_VEC: Channel<ThreadModeRawMutex, Vec<u8, 256>, 4> = Channel::new();
+static BT_DATA_RX: Signal<ThreadModeRawMutex, Vec<u8, ATT_MTU>> = Signal::new();
+static TX_BT_VEC: Mutex<ThreadModeRawMutex, Vec<Vec<u8, ATT_MTU>, 4>> = Mutex::new(Vec::new());
 static BUFFERED_UART: Mutex<ThreadModeRawMutex, Option<BufferedUarte<UARTE0, TIMER1>>> =
     Mutex::new(None);
 
