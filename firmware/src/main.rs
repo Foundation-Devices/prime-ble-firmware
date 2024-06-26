@@ -9,6 +9,7 @@ mod consts;
 mod nus;
 mod server;
 
+use core::cell::RefCell;
 use defmt_rtt as _;
 use embassy_nrf::peripherals::{P0_20, TIMER1, UARTE0};
 // global logger
@@ -174,11 +175,10 @@ async fn main(spawner: Spawner) {
         if state {
             let run_bluetooth_fut = run_bluetooth(sd, &server);
             let stop_bluetooth_fut = stop_bluetooth();
-            // info!("Init loopp");
             pin_mut!(run_bluetooth_fut);
             pin_mut!(stop_bluetooth_fut);
 
-            info!("Starting BLE advertisment");
+            info!("Starting BLE advertisement");
             // source of this idea https://github.com/embassy-rs/nrf-softdevice/blob/master/examples/src/bin/ble_peripheral_onoff.rs
             futures::future::select(run_bluetooth_fut, stop_bluetooth_fut).await;
             info!("Off Future Consumed");

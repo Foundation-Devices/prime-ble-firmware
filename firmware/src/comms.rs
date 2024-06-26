@@ -34,7 +34,7 @@ pub async fn comms_task() {
                         info!("overfull");
                         break;
                     }
-                    info!("Data incoming {}", n);
+                    info!("Data incoming {} bytes", n);
 
                     let buf = &raw_buf[..n];
                     let mut window = buf;
@@ -58,6 +58,7 @@ pub async fn comms_task() {
 
                                 match data {
                                     HostProtocolMessage::Bluetooth(bluetooth_msg) => {
+                                        info!("Received HostProtocolMessage::Bluetooth");
                                         bluetooth_handler(uart, bluetooth_msg).await
                                     }
                                     HostProtocolMessage::Bootloader(_) => (), // no-op, handled in the bootloader
