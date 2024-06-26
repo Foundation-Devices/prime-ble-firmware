@@ -25,6 +25,11 @@ fn main() {
         println!("COM opened!")
     }
 
+    let mut stdout = stdout();
+    stdout.write(b"Press Enter to start...").unwrap();
+    stdout.flush().unwrap();
+    stdin().read(&mut [0]).unwrap();
+
     // Cycle until application binary is over
     for app_chunk in APPLICATION.chunks(CHUNK_SIZE).enumerate(){
         // Prepare cobs packet to send to bootloader

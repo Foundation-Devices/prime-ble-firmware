@@ -109,6 +109,7 @@ dependencies = [
  "atomic-pool",
  "cortex-m",
  "cortex-m-rt",
+ "crc",
  "defmt",
  "defmt-rtt",
  "embassy-executor",

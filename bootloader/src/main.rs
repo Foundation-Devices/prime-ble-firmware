@@ -4,7 +4,6 @@
 #![no_std]
 #![no_main]
 
-use cortex_m::prelude::_embedded_hal_blocking_serial_Write;
 use defmt_rtt as _;
 use embassy_nrf::peripherals;
 // global logger
@@ -13,60 +12,61 @@ use embassy_time::Timer;
 // time driver
 use panic_probe as _;
 
-
+use crc::{Crc, CRC_32_ISCSI};
 use defmt::{info, *};
 use embassy_executor::Spawner;
-use embassy_time::{Duration,with_timeout};
-use embassy_nrf::{bind_interrupts, uarte};
 use embassy_nrf::gpio::{Input, Pull};
+use embassy_nrf::nvmc::Nvmc;
+use embassy_nrf::{bind_interrupts, uarte};
+use embassy_time::{with_timeout, Duration};
+use embedded_storage::nor_flash::NorFlash;
+use host_protocol::Bootloader::{self, AckWithIdx, AckWithIdxCrc, NackWithIdx};
+use host_protocol::HostProtocolMessage;
 use postcard::accumulator::{CobsAccumulator, FeedResult};
 use postcard::to_slice_cobs;
-use host_protocol::HostProtocolMessage;
-use host_protocol::Bootloader::{AckWithIdx, AckWithIdxCrc};
 use serde::{Deserialize, Serialize};
-
 
 bind_interrupts!(struct Irqs {
     UARTE0_UART0 => uarte::InterruptHandler<peripherals::UARTE0>;
 });
 
-
 #[used]
 #[link_section = ".uicr_bootloader_start_address"]
-pub static  BOOTLOADER_ADDR : i32 = 0x2A000;
+pub static BOOTLOADER_ADDR: i32 = 0x2A000;
 
-const BASE_ADDRESS_APP : u32 = 0x19000;
-const FLASH_PAGE : usize = 4096;
+const BASE_ADDRESS_APP: u32 = 0x19000;
+const FLASH_PAGE: u32 = 4096;
 
-#[derive(Debug,Serialize,Deserialize,Default)]
-pub struct BootState{
-    pub offset        : usize,
-    pub actual_sector : usize,
-    pub last_sector   : usize,
-    pub end_sector    : usize,
-    pub start_sector  : usize,
+#[derive(Debug, Serialize, Deserialize, Default)]
+pub struct BootState {
+    pub offset: u32,
+    pub actual_sector: u32,
+    pub actual_pkt_idx: u32,
+    pub end_sector: u32,
+    pub start_sector: u32,
 }
 
-
 /// Boots the application assuming softdevice is present.
-    ///
-    /// # Safety
-    ///
-    /// This modifies the stack pointer and reset vector and will run code placed in the active partition.
+///
+/// # Safety
+///
+/// This modifies the stack pointer and reset vector and will run code placed in the active partition.
 pub unsafe fn jump_to_app() -> ! {
-    use nrf_softdevice_mbr as mbr;
     use nrf_softdevice::Softdevice;
+    use nrf_softdevice_mbr as mbr;
 
     // Address of softdevice which we'll forward interrupts to
     let addr = 0x1000;
     let mut cmd = mbr::sd_mbr_command_t {
         command: mbr::NRF_MBR_COMMANDS_SD_MBR_COMMAND_IRQ_FORWARD_ADDRESS_SET,
         params: mbr::sd_mbr_command_t__bindgen_ty_1 {
-            irq_forward_address_set: mbr::sd_mbr_command_irq_forward_address_set_t { address: addr },
+            irq_forward_address_set: mbr::sd_mbr_command_irq_forward_address_set_t {
+                address: addr,
+            },
         },
     };
     let ret = mbr::sd_mbr_command(&mut cmd);
-    info!("ret val {}",ret);
+    info!("ret val {}", ret);
 
     let msp = *(addr as *const u32);
     let rv = *((addr + 4) as *const u32);
@@ -99,10 +99,54 @@ pub unsafe fn jump_to_app() -> ! {
     );
 }
 
+fn update_chunk<'a>(
+    boot_status: &'a mut BootState,
+    idx: usize,
+    data: &'a [u8],
+    flash: &'a mut Nvmc,
+) -> &'a mut [u8] {
+    // cobs buffer for acks
+    let buf_cobs: &mut [u8] = &mut [];
+    // Check what sector we are in now
+    info!("Actual_sector : {}", boot_status.actual_sector);
+    if boot_status.actual_sector != boot_status.offset / FLASH_PAGE {
+        boot_status.actual_sector = boot_status.offset / FLASH_PAGE;
+        boot_status.offset = 0;
+    }
+
+    // Increase offset with data len
+    let cursor = BASE_ADDRESS_APP + (boot_status.offset + boot_status.actual_sector * FLASH_PAGE);
+
+    let cobs_ack = match flash.write(cursor, data) {
+        Ok(()) => {
+            boot_status.offset += data.len() as u32;
+            info!("New offset : {}", boot_status.offset);
+            let crc = Crc::<u32>::new(&CRC_32_ISCSI);
+            let crc_pkt = crc.checksum(&data);
+            // Align packet index to avoid double send of yet flashed packet
+            boot_status.actual_pkt_idx = idx as u32;
+
+            // If write chunck is ok ack
+            to_slice_cobs(
+                &HostProtocolMessage::Bootloader(AckWithIdxCrc {
+                    block_idx: idx,
+                    crc: crc_pkt,
+                }),
+                buf_cobs,
+            )
+            .unwrap()
+        }
+        Err(_) => to_slice_cobs(
+            &HostProtocolMessage::Bootloader(NackWithIdx { block_idx: idx }),
+            buf_cobs,
+        )
+        .unwrap(),
+    };
+    cobs_ack
+}
 
 #[embassy_executor::main]
 async fn main(_spawner: Spawner) {
-    
     let p = embassy_nrf::init(Default::default());
     Timer::after_millis(5000).await;
 
@@ -113,19 +157,22 @@ async fn main(_spawner: Spawner) {
     let uart = uarte::Uarte::new(p.UARTE0, Irqs, p.P0_16, p.P0_18, config_uart);
     let (mut tx, mut rx) = uart.split_with_idle(p.TIMER0, p.PPI_CH0, p.PPI_CH1);
 
+    // FLASH
+    let mut flash = Nvmc::new(p.NVMC);
 
+    // Init a GPIO to use as bootloader trigger
     let _boot_gpio = Input::new(p.P0_11, Pull::Up);
 
     // // Message must be in SRAM
     let mut buf = [0; 22];
     buf.copy_from_slice(b"Hello from bootloader!");
     let _ = tx.write(&buf).await;
-    
-    // Keep track of update of flash Application
-    let mut boot_status : BootState = Default::default();
 
-    loop{
-    // while boot_gpio.is_high() {
+    // Keep track of update of flash Application
+    let mut boot_status: BootState = Default::default();
+
+    loop {
+        // while boot_gpio.is_high() {
         // Timer::after_millis(1000).await;
         // info!("Going to app in {} seconds..", countdown_boot);
         // countdown_boot -= 1;
@@ -138,70 +185,68 @@ async fn main(_spawner: Spawner) {
         let mut raw_buf = [0u8; 32];
         // Create a cobs accumulator for data incoming
         let mut cobs_buf: CobsAccumulator<32> = CobsAccumulator::new();
-            // Getting chars from Uart in a while loop
-            if let Ok(n) = with_timeout(Duration::from_millis(100), rx.read_until_idle(&mut raw_buf)).await{
-                let n = n.unwrap();
-                // Finished reading input
-                if n == 0 {
-                    info!("Read 0 bytes");
-                    break;
-                }
-                info!("Data incoming {}", n);
+        // Getting chars from Uart in a while loop
+        if let Ok(n) =
+            with_timeout(Duration::from_millis(100), rx.read_until_idle(&mut raw_buf)).await
+        {
+            let n = n.unwrap();
+            // Finished reading input
+            if n == 0 {
+                info!("Read 0 bytes");
+                break;
+            }
+            info!("Data incoming {}", n);
 
-                let buf = &raw_buf[..n];
-                let mut window = buf;
+            let buf = &raw_buf[..n];
+            let mut window: &[u8] = buf;
 
-                'cobs: while !window.is_empty() {
-                    window = match cobs_buf.feed_ref::<HostProtocolMessage>(window) {
-                        FeedResult::Consumed => {
-                            info!("consumed");
-                            break 'cobs;
-                        }
-                        FeedResult::OverFull(new_wind) => {
-                            info!("overfull");
-                            new_wind
-                        }
-                        FeedResult::DeserError(new_wind) => {
-                            info!("DeserError");
-                            new_wind
-                        }
-                        FeedResult::Success { data, remaining } => {
-                            info!("Remaining {} bytes", remaining.len());
+            'cobs: while !window.is_empty() {
+                window = match cobs_buf.feed_ref::<HostProtocolMessage>(window) {
+                    FeedResult::Consumed => {
+                        info!("consumed");
+                        break 'cobs;
+                    }
+                    FeedResult::OverFull(new_wind) => {
+                        info!("overfull");
+                        new_wind
+                    }
+                    FeedResult::DeserError(new_wind) => {
+                        info!("DeserError");
+                        new_wind
+                    }
+                    FeedResult::Success { data, remaining } => {
+                        info!("Remaining {} bytes", remaining.len());
 
-                            match data {
-                                HostProtocolMessage::Bluetooth(_) => (),
-                                HostProtocolMessage::Bootloader(boot_msg) => {
+                        match data {
+                            HostProtocolMessage::Bluetooth(_) => (),
+                            HostProtocolMessage::Bootloader(boot_msg) => match boot_msg {
+                                Bootloader::EraseFirmware => info!("Erase firmware"),
+                                Bootloader::WriteFirmwareBlock {
+                                    block_idx: idx,
+                                    block_data: data,
+                                } => {
                                     info!("Bootloader pkt recv");
-                                    let buf_cobs : &mut [u8] = &mut[];
-                                    // Check what sector we are in now
-                                    if let Some(boot_data) = boot_msg.get_data(){
-                                        // Increase offset with data len
-                                        boot_status.offset = boot_data.len();
-                                    }
-                                    boot_status.actual_sector = boot_status.offset / FLASH_PAGE;
-                                    if boot_status.last_sector != boot_status.actual_sector
-                                    {
-                                        boot_status.last_sector = boot_status.last_sector;
-                                        // Do erase of page in flash
-                                    }
-                                    // If write chunck is ok ack
-                                    let cobs_ack = to_slice_cobs(&HostProtocolMessage::Bootloader(AckWithIdx { block_idx: boot_msg.get_idx().unwrap() }), buf_cobs);
-                                    let _ = tx.blocking_write(cobs_ack.unwrap());
-                                }, // no-op, handled in the bootloader
-                                HostProtocolMessage::Reset => {
-                                    info!("Resetting");
-                                    // TODO: reset
+                                    let ack_cobs =
+                                        update_chunk(&mut boot_status, idx, data, &mut flash);
+                                    let _ = tx.blocking_write(ack_cobs);
                                 }
-                            };
-
-                            remaining
-                        }
-                    };
-                }
+                                _ => (),
+                            }, // no-op, handled in the bootloader
+                            HostProtocolMessage::Reset => {
+                                info!("Resetting");
+                                cortex_m::peripheral::SCB::sys_reset();
+                            }
+                        };
+                        remaining
+                    }
+                };
+            }
             embassy_time::Timer::after_millis(1).await;
         }
     }
     info!("going to app...");
     // Jump to application
-    unsafe {jump_to_app();}
+    unsafe {
+        jump_to_app();
+    }
 }
