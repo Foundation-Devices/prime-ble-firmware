@@ -10,7 +10,7 @@ use embassy_time::with_timeout;
 use embassy_time::Duration;
 use embedded_io_async::Write;
 use heapless::Vec;
-use host_protocol::{Bluetooth, Bootloader, HostProtocolMessage};
+use host_protocol::{Bluetooth, HostProtocolMessage, COBS_MAX_MSG_SIZE};
 use postcard::accumulator::{CobsAccumulator, FeedResult};
 use postcard::to_slice_cobs;
 
@@ -19,7 +19,7 @@ pub async fn comms_task() {
     // Raw buffer - 32 bytes for the accumulator of cobs
     let mut raw_buf = [0u8; 32];
     // Create a cobs accumulator for data incoming
-    let mut cobs_buf: CobsAccumulator<32> = CobsAccumulator::new();
+    let mut cobs_buf: CobsAccumulator<COBS_MAX_MSG_SIZE> = CobsAccumulator::new();
     loop {
         {
             // Getting chars from Uart in a while loop
@@ -161,8 +161,15 @@ pub async fn sys_status_parser(
 
 #[embassy_executor::task]
 pub async fn send_bt_uart() {
+    let mut send_buf = [0u8; COBS_MAX_MSG_SIZE];
+
     loop {
         let data = BT_DATA_RX.wait().await;
+        let msg = HostProtocolMessage::Bluetooth(Bluetooth::ReceivedData(data.as_slice()));
+
+        send_buf.fill(0); // Clear the buffer from any previous data
+        let cobs_tx = to_slice_cobs(&msg, &mut send_buf).expect("to_slice_cobs");
+
         {
             info!("Data rx from BT --> UART");
             // Getting chars from Uart in a while loop

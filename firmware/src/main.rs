@@ -29,6 +29,7 @@ use embassy_sync::mutex::Mutex;
 use embassy_sync::signal::Signal;
 use futures::pin_mut;
 use heapless::Vec;
+use host_protocol::COBS_MAX_MSG_SIZE;
 use nrf_softdevice::Softdevice;
 use server::{initialize_sd, run_bluetooth, stop_bluetooth, Server};
 use static_cell::StaticCell;
@@ -85,7 +86,10 @@ async fn main(spawner: Spawner) {
 
     let mut config_uart = uarte::Config::default();
     config_uart.parity = uarte::Parity::EXCLUDED;
-    config_uart.baudrate = uarte::Baudrate::BAUD115200;
+    config_uart.baudrate = uarte::Baudrate::BAUD460800;
+
+    static TX_BUFFER: StaticCell<[u8; COBS_MAX_MSG_SIZE]> = StaticCell::new();
+    static RX_BUFFER: StaticCell<[u8; COBS_MAX_MSG_SIZE]> = StaticCell::new();
 
     #[cfg(feature = "uart-pins-mpu")]
     let (rxd, txd) = (p.P0_14, p.P0_12);
@@ -103,8 +107,8 @@ async fn main(spawner: Spawner) {
         rxd,
         txd,
         config_uart,
-        &mut TX_BUFFER.init([0; 256])[..],
-        &mut RX_BUFFER.init([0; 256])[..],
+        &mut TX_BUFFER.init([0; COBS_MAX_MSG_SIZE])[..],
+        &mut RX_BUFFER.init([0; COBS_MAX_MSG_SIZE])[..],
     );
 
     // Mutex is released
