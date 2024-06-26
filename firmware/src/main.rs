@@ -33,6 +33,12 @@ use nrf_softdevice::Softdevice;
 use server::{initialize_sd, run_bluetooth, stop_bluetooth, Server};
 use static_cell::StaticCell;
 
+#[cfg(all(feature = "uart-pins-console", feature = "uart-pins-mpu"))]
+compile_error!("Only one of the features `uart-pins-console` or `uart-pins-mpu` can be enabled.");
+
+#[cfg(not(any(feature = "uart-pins-console", feature = "uart-pins-mpu")))]
+compile_error!("One of the features `uart-pins-console` or `uart-pins-mpu` must be enabled.");
+
 bind_interrupts!(struct Irqs {
     UARTE0_UART0 => buffered_uarte::InterruptHandler<peripherals::UARTE0>;
 });
@@ -82,10 +88,12 @@ async fn main(spawner: Spawner) {
     config_uart.parity = uarte::Parity::EXCLUDED;
     config_uart.baudrate = uarte::Baudrate::BAUD115200;
 
-    static TX_BUFFER: StaticCell<[u8; 256]> = StaticCell::new();
-    static RX_BUFFER: StaticCell<[u8; 256]> = StaticCell::new();
+    #[cfg(feature = "uart-pins-mpu")]
+    let (rxd, txd) = (p.P0_14, p.P0_12);
 
-    //let uart = uarte::Uarte::new(p.UARTE0, Irqs, p.P0_16, p.P0_18, config_uart);
+    #[cfg(feature = "uart-pins-console")]
+    let (rxd, txd) = (p.P0_16, p.P0_18);
+
     let uart = BufferedUarte::new(
         p.UARTE0,
         p.TIMER1,
@@ -93,8 +101,8 @@ async fn main(spawner: Spawner) {
         p.PPI_CH1,
         p.PPI_GROUP0,
         Irqs,
-        p.P0_16,
-        p.P0_18,
+        rxd,
+        txd,
         config_uart,
         &mut TX_BUFFER.init([0; 256])[..],
         &mut RX_BUFFER.init([0; 256])[..],
