@@ -10,7 +10,7 @@ mod nus;
 mod server;
 
 use defmt_rtt as _;
-use embassy_nrf::peripherals::{TIMER1, UARTE0};
+use embassy_nrf::peripherals::{P0_20, TIMER1, UARTE0};
 // global logger
 use embassy_nrf as _;
 use embassy_time::Timer;
@@ -22,6 +22,7 @@ use consts::{ATT_MTU, MAX_IRQ};
 use defmt::{info, *};
 use embassy_executor::Spawner;
 use embassy_nrf::buffered_uarte::{self, BufferedUarte};
+use embassy_nrf::gpio::{Level, Output, OutputDrive};
 use embassy_nrf::interrupt::{self, Interrupt, InterruptExt};
 use embassy_nrf::{bind_interrupts, peripherals, uarte};
 use embassy_sync::blocking_mutex::raw::ThreadModeRawMutex;
@@ -58,6 +59,10 @@ static BUFFERED_UART: Mutex<ThreadModeRawMutex, Option<BufferedUarte<UARTE0, TIM
     Mutex::new(None);
 
 static RSSI_VALUE: Mutex<ThreadModeRawMutex, u8> = Mutex::new(0);
+
+/// nRF -> MPU IRQ output pin
+static IRQ_OUT_PIN: Mutex<ThreadModeRawMutex, RefCell<Option<Output<'static, P0_20>>>> =
+    Mutex::new(RefCell::new(None));
 
 #[embassy_executor::task]
 async fn softdevice_task(sd: &'static Softdevice) -> ! {
@@ -114,6 +119,15 @@ async fn main(spawner: Spawner) {
     // Mutex is released
     {
         *(BUFFERED_UART.lock().await) = Some(uart);
+    }
+
+    // Configure the OUT IRQ pin
+    {
+        IRQ_OUT_PIN.lock().await.borrow_mut().replace(Output::new(
+            p.P0_20,
+            Level::High,
+            OutputDrive::Standard,
+        ));
     }
 
     // set priority to avoid collisions with softdevice

@@ -1,6 +1,6 @@
-use crate::consts::{BT_BUFF_MAX_PKT_LEN, BT_MAX_NUM_PKT};
-use crate::TX_BT_VEC;
+use crate::consts::BT_MAX_NUM_PKT;
 use crate::{BT_DATA_RX, BT_STATE, BUFFERED_UART, RSSI_VALUE};
+use crate::{IRQ_OUT_PIN, TX_BT_VEC};
 use defmt::info;
 use embassy_nrf::{
     buffered_uarte::BufferedUarte,
@@ -99,6 +99,7 @@ async fn bluetooth_handler(uart: &mut BufferedUarte<'static, UARTE0, TIMER1>, ms
             info!("{}", cobs_tx);
 
             let _ = uart.write_all(cobs_tx).await;
+            assert_out_irq().await; // Ask the MPU to process a new packet we just sent
         }
         Bluetooth::SignalStrength(_) => (), // no-op, host-side packet
         Bluetooth::SendData(data) => {
@@ -112,53 +113,7 @@ async fn bluetooth_handler(uart: &mut BufferedUarte<'static, UARTE0, TIMER1>, ms
     }
 }
 
-/*
-pub async fn sys_status_parser(
-    msg_recv: &HostProtocolMessage<'_>,
-    uart: &mut BufferedUarte<'static, UARTE0, TIMER1>,
-) {
-    // Match of type of msg
-    info!("parsed {}", msg_recv.msg[0]);
-    // Raw buffer - 32 bytes for the accumulator of cobs
-    let mut raw_buf = [0u8; 16];
-    let mut send_buf = [0u8; 32];
-
-    let cmd_as_u8: Result<SysStatusCommands, _> = msg_recv.msg[0].try_into();
-
-    if let Ok(cmd) = cmd_as_u8 {
-        match cmd {
-            SysStatusCommands::BtEnable => {
-                BT_STATE.signal(true);
-                info!("new bt state true");
-                raw_buf[0] = MsgKind::SystemStatus as u8;
-                raw_buf[1] = SysStatusCommands::BtEnable as u8;
-                raw_buf[2] = 0x01;
-            }
-            SysStatusCommands::BtDisable => {
-                BT_STATE.signal(false);
-                info!("new bt state false");
-                raw_buf[0] = MsgKind::SystemStatus as u8;
-                raw_buf[1] = SysStatusCommands::BtDisable as u8;
-                raw_buf[2] = 0x00;
-            }
-            SysStatusCommands::SystemReset => info!("NRF RESET"),
-            SysStatusCommands::BTSignalStrength => {
-                let rssi = *RSSI_VALUE.lock().await;
-                info!("Get RSSI {}", rssi);
-                raw_buf[0] = MsgKind::SystemStatus as u8;
-                raw_buf[1] = SysStatusCommands::BTSignalStrength as u8;
-                raw_buf[2] = rssi;
-            }
-        }
-        info!("sending data");
-        // Create cobs slice and send
-        let cobs_tx = to_slice_cobs(&raw_buf, &mut send_buf).unwrap();
-        info!("{}", cobs_tx);
-
-        let _ = uart.write_all(cobs_tx).await;
-    }
-}*/
-
+/// Sends the data received from the BLE NUS as `host-protocol` encoded data message.
 #[embassy_executor::task]
 pub async fn send_bt_uart() {
     let mut send_buf = [0u8; COBS_MAX_MSG_SIZE];
@@ -175,10 +130,27 @@ pub async fn send_bt_uart() {
             // Getting chars from Uart in a while loop
             let mut uart = BUFFERED_UART.lock().await;
             if let Some(uart_tx) = uart.as_mut() {
-                let _ = uart_tx.write_all(data.as_slice()).await;
-                info!("{}", *data);
+                let _ = uart_tx.write_all(cobs_tx).await;
+
+                info!("{}", *cobs_tx);
+                assert_out_irq().await; // Ask the MPU to process a new packet we just sent
             }
         }
         embassy_time::Timer::after_millis(10).await;
+    }
+}
+
+/// Sends a single pulse on the nRF -> MPU IRQ line, signaling the MPU to process the data.
+async fn assert_out_irq() {
+    let irq_out = IRQ_OUT_PIN.lock().await;
+
+    {
+        let mut button = irq_out.borrow_mut();
+        // The pin should be HIGH by default, and we need a falling edge, so put it in HIGH just in case
+        button.as_mut().unwrap().set_high();
+
+        // Send the pulse
+        button.as_mut().unwrap().set_low();
+        button.as_mut().unwrap().set_high();
     }
 }
