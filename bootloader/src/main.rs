@@ -35,6 +35,7 @@ bind_interrupts!(struct Irqs {
 pub static BOOTLOADER_ADDR: i32 = 0x2A000;
 
 const BASE_ADDRESS_APP: u32 = 0x19000;
+const BASE_BOOTLOADE_APP: u32 = 0x2A000;
 const FLASH_PAGE: u32 = 4096;
 
 #[derive(Debug, Serialize, Deserialize, Default)]
@@ -182,14 +183,12 @@ async fn main(_spawner: Spawner) {
         // }
 
         // Raw buffer - 32 bytes for the accumulator of cobs
-        let mut raw_buf = [0u8; 32];
+        let mut raw_buf = [0u8; 512];
         // Create a cobs accumulator for data incoming
-        let mut cobs_buf: CobsAccumulator<32> = CobsAccumulator::new();
+        let mut cobs_buf: CobsAccumulator<512> = CobsAccumulator::new();
         // Getting chars from Uart in a while loop
-        if let Ok(n) =
-            with_timeout(Duration::from_millis(100), rx.read_until_idle(&mut raw_buf)).await
+        while let Ok(n) = rx.read_until_idle(&mut raw_buf).await
         {
-            let n = n.unwrap();
             // Finished reading input
             if n == 0 {
                 info!("Read 0 bytes");
@@ -220,7 +219,10 @@ async fn main(_spawner: Spawner) {
                         match data {
                             HostProtocolMessage::Bluetooth(_) => (),
                             HostProtocolMessage::Bootloader(boot_msg) => match boot_msg {
-                                Bootloader::EraseFirmware => info!("Erase firmware"),
+                                Bootloader::EraseFirmware => {
+                                    info!("Erase firmware");
+                                    let _ = flash.erase(BASE_ADDRESS_APP, BASE_BOOTLOADE_APP);
+                                }
                                 Bootloader::WriteFirmwareBlock {
                                     block_idx: idx,
                                     block_data: data,
@@ -234,7 +236,11 @@ async fn main(_spawner: Spawner) {
                             }, // no-op, handled in the bootloader
                             HostProtocolMessage::Reset => {
                                 info!("Resetting");
-                                cortex_m::peripheral::SCB::sys_reset();
+                                info!("going to app...");
+                                // Jump to application
+                                unsafe {
+                                    jump_to_app();
+                                }
                             }
                         };
                         remaining
@@ -244,9 +250,5 @@ async fn main(_spawner: Spawner) {
             embassy_time::Timer::after_millis(1).await;
         }
     }
-    info!("going to app...");
-    // Jump to application
-    unsafe {
-        jump_to_app();
-    }
+    
 }
