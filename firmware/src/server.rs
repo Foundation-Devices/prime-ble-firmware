@@ -26,7 +26,7 @@ pub struct Server {
 
 pub async fn stop_bluetooth() {
     info!("Waiting off");
-    let _state = BT_STATE.wait().await;
+    while BT_STATE.wait().await {}
     info!("off");
 }
 
