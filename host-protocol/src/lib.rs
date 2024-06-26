@@ -6,8 +6,10 @@
 //! WIll move here simpler struct for postcard messages!!
 
 #![no_std]
-use num_enum::TryFromPrimitive;
 use serde::{Deserialize, Serialize};
+
+/// Maximum supported message size to be serialized or deserialized by `postcard`.
+pub const COBS_MAX_MSG_SIZE: usize = 512;
 
 /// Bluetooth-specific messages.
 #[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq)]
@@ -39,7 +41,3 @@ pub enum HostProtocolMessage<'a> {
     Bootloader(#[serde(borrow)] Bootloader<'a>),
     Reset,
 }
-
-// TODO: status       - read status info (status maks, num NUS packets received, num. connections, etc.)
-// TODO: ble_nus_send - send a packet via BLE NUS (Nordic UART emulation over BLE)
-// TODO: ble_nus_recv - read last received packet from BLE NUS
