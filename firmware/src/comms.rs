@@ -99,6 +99,7 @@ async fn bluetooth_handler(uart: &mut BufferedUarte<'static, UARTE0, TIMER1>, ms
             info!("{}", cobs_tx);
 
             let _ = uart.write_all(cobs_tx).await;
+            let _ = uart.flush().await;
             assert_out_irq().await; // Ask the MPU to process a new packet we just sent
         }
         Bluetooth::SignalStrength(_) => (), // no-op, host-side packet
@@ -131,6 +132,7 @@ pub async fn send_bt_uart() {
             let mut uart = BUFFERED_UART.lock().await;
             if let Some(uart_tx) = uart.as_mut() {
                 let _ = uart_tx.write_all(cobs_tx).await;
+                let _ = uart_tx.flush().await;
 
                 info!("{}", *cobs_tx);
                 assert_out_irq().await; // Ask the MPU to process a new packet we just sent
