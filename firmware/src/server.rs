@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 use crate::consts::{ATT_MTU, DEVICE_NAME, SERVICES_LIST, SHORT_NAME};
-use crate::nus::{self, *};
+use crate::nus::*;
 use crate::TX_BT_VEC;
 use crate::{BT_STATE, RSSI_VALUE};
 use core::mem;
@@ -15,7 +15,7 @@ use nrf_softdevice::ble::advertisement_builder::{
 };
 use nrf_softdevice::ble::gatt_server::notify_value;
 use nrf_softdevice::ble::peripheral;
-use nrf_softdevice::ble::{gatt_server, Connection, DisconnectedError};
+use nrf_softdevice::ble::{gatt_server, Connection};
 use nrf_softdevice::gatt_server;
 use nrf_softdevice::{raw, Softdevice};
 
@@ -26,7 +26,7 @@ pub struct Server {
 
 pub async fn stop_bluetooth() {
     info!("Waiting off");
-    let _state = BT_STATE.wait().await;
+    while BT_STATE.wait().await {}
     info!("off");
 }
 
@@ -83,7 +83,7 @@ async fn notify_data_tx<'a>(server: &'a Server, connection: &'a Connection) {
         {
             let mut buffer = TX_BT_VEC.lock().await;
             if buffer.len() > 0 {
-                let _ = notify_value(&connection, server.nus.get_handle(), &buffer[0]);
+                let _ = notify_value(connection, server.nus.get_handle(), &buffer[0]);
                 buffer.swap_remove(0);
             }
         }
@@ -119,14 +119,14 @@ pub async fn run_bluetooth(sd: &'static Softdevice, server: &Server) {
 
         info!("advertising done!");
         // Start rssi capture
-        let _ = conn.start_rssi();
+        conn.start_rssi();
         // Activate notification on handle of nus TX
         server.nus.handle(NusEvent::TxCccdWrite {
             notifications: true,
         });
 
         let gatt_fut = gatt_server::run(&conn, server, |e| server.handle_event(e));
-        let tx_fut = notify_data_tx(&server, &conn);
+        let tx_fut = notify_data_tx(server, &conn);
 
         // Pin mutable futures
         pin_mut!(tx_fut);
@@ -141,14 +141,14 @@ pub async fn run_bluetooth(sd: &'static Softdevice, server: &Server) {
         // server.run(&conn, &config).await;
         // Turn on message on bt
         //server.handle_event(ServerEvent::Nus(NusEvent::TxCccdWrite { notifications: true }));
-        let _ = match select(tx_fut, gatt_fut).await {
+        match select(tx_fut, gatt_fut).await {
             Either::Left((_, _)) => {
                 info!("Tx error")
             }
             Either::Right((e, _)) => {
                 info!("gatt_server run exited with error: {:?}", e);
             }
-        };
+        }
         // Force false
         BT_STATE.signal(false);
     }
