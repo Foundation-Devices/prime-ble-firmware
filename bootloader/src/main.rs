@@ -35,7 +35,7 @@ bind_interrupts!(struct Irqs {
 pub static BOOTLOADER_ADDR: i32 = 0x2A000;
 
 const BASE_ADDRESS_APP: u32 = 0x19000;
-const BASE_BOOTLOADE_APP: u32 = 0x2A000;
+const BASE_BOOTLOADER_APP: u32 = 0x2A000;
 const FLASH_PAGE: u32 = 4096;
 
 #[derive(Debug, Serialize, Deserialize, Default)]
@@ -105,20 +105,21 @@ fn update_chunk<'a>(
     idx: usize,
     data: &'a [u8],
     flash: &'a mut Nvmc,
-) -> &'a mut [u8] {
-    // cobs buffer for acks
-    let buf_cobs: &mut [u8] = &mut [];
+) -> HostProtocolMessage<'a> {
+    
     // Check what sector we are in now
+    boot_status.actual_sector = boot_status.offset / FLASH_PAGE;
+
     info!("Actual_sector : {}", boot_status.actual_sector);
-    if boot_status.actual_sector != boot_status.offset / FLASH_PAGE {
-        boot_status.actual_sector = boot_status.offset / FLASH_PAGE;
-        boot_status.offset = 0;
-    }
+    // if boot_status.actual_sector != boot_status.offset / FLASH_PAGE {
+    //     boot_status.actual_sector = boot_status.offset / FLASH_PAGE;
+    //     boot_status.offset = 0;
+    // }
 
     // Increase offset with data len
-    let cursor = BASE_ADDRESS_APP + (boot_status.offset + boot_status.actual_sector * FLASH_PAGE);
+    let cursor = BASE_ADDRESS_APP + boot_status.offset;
 
-    let cobs_ack = match flash.write(cursor, data) {
+    let ack = match flash.write(cursor, data) {
         Ok(()) => {
             boot_status.offset += data.len() as u32;
             info!("New offset : {}", boot_status.offset);
@@ -126,31 +127,21 @@ fn update_chunk<'a>(
             let crc_pkt = crc.checksum(&data);
             // Align packet index to avoid double send of yet flashed packet
             boot_status.actual_pkt_idx = idx as u32;
-
             // If write chunck is ok ack
-            to_slice_cobs(
-                &HostProtocolMessage::Bootloader(AckWithIdxCrc {
+            HostProtocolMessage::Bootloader(AckWithIdxCrc {
                     block_idx: idx,
                     crc: crc_pkt,
-                }),
-                buf_cobs,
-            )
-            .unwrap()
+                })
         }
-        Err(_) => to_slice_cobs(
-            &HostProtocolMessage::Bootloader(NackWithIdx { block_idx: idx }),
-            buf_cobs,
-        )
-        .unwrap(),
+        Err(_) => HostProtocolMessage::Bootloader(NackWithIdx { block_idx: idx })
     };
-    cobs_ack
+    ack
 }
 
 #[embassy_executor::main]
 async fn main(_spawner: Spawner) {
     let p = embassy_nrf::init(Default::default());
-    Timer::after_millis(5000).await;
-
+    
     let mut config_uart = uarte::Config::default();
     config_uart.parity = uarte::Parity::EXCLUDED;
     config_uart.baudrate = uarte::Baudrate::BAUD115200;
@@ -171,6 +162,7 @@ async fn main(_spawner: Spawner) {
 
     // Keep track of update of flash Application
     let mut boot_status: BootState = Default::default();
+
 
     loop {
         // while boot_gpio.is_high() {
@@ -221,23 +213,25 @@ async fn main(_spawner: Spawner) {
                             HostProtocolMessage::Bootloader(boot_msg) => match boot_msg {
                                 Bootloader::EraseFirmware => {
                                     info!("Erase firmware");
-                                    let _ = flash.erase(BASE_ADDRESS_APP, BASE_BOOTLOADE_APP);
+                                    let _ = flash.erase(BASE_ADDRESS_APP, BASE_BOOTLOADER_APP);
                                 }
                                 Bootloader::WriteFirmwareBlock {
                                     block_idx: idx,
                                     block_data: data,
                                 } => {
                                     info!("Bootloader pkt recv");
-                                    let ack_cobs =
+                                    // cobs buffer for acks
+                                    let mut buf_cobs = [0_u8;16];
+                                    let ack =
                                         update_chunk(&mut boot_status, idx, data, &mut flash);
-                                    let _ = tx.blocking_write(ack_cobs);
+                                    let cobs_ack = to_slice_cobs(&ack, &mut buf_cobs).unwrap();
+                                    let _ = tx.blocking_write(cobs_ack);
                                 }
                                 _ => (),
                             }, // no-op, handled in the bootloader
                             HostProtocolMessage::Reset => {
                                 info!("Resetting");
                                 info!("going to app...");
-                                // Jump to application
                                 unsafe {
                                     jump_to_app();
                                 }
@@ -250,5 +244,7 @@ async fn main(_spawner: Spawner) {
             embassy_time::Timer::after_millis(1).await;
         }
     }
-    
+    unsafe {
+        jump_to_app();
+    }
 }
