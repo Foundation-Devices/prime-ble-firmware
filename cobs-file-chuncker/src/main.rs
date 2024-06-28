@@ -13,7 +13,7 @@ fn main() {
     let mut buf = [0u8; 512];
 
     // Open port
-    let mut port = serialport::new("COM11", 115200)
+    let mut port = serialport::new("/dev/ttyUSB0", 115200)
         .timeout(Duration::from_millis(10))
         .open()
         .expect("error");
