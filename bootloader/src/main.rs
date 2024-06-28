@@ -23,6 +23,7 @@ use host_protocol::HostProtocolMessage;
 use postcard::accumulator::{CobsAccumulator, FeedResult};
 use postcard::to_slice_cobs;
 use serde::{Deserialize, Serialize};
+use cosign2::;
 
 bind_interrupts!(struct Irqs {
     UARTE0_UART0 => uarte::InterruptHandler<peripherals::UARTE0>;
@@ -132,7 +133,7 @@ fn update_chunk<'a>(
                 boot_status.actual_sector + boot_status.offset % 4096
             );
             let crc = Crc::<u32>::new(&CRC_32_ISCSI);
-            let crc_pkt = crc.checksum(&data);
+            let crc_pkt = crc.checksum(data);
             // Align packet index to avoid double send of yet flashed packet
             boot_status.actual_pkt_idx = idx as u32;
             // If write chunck is ok ack
