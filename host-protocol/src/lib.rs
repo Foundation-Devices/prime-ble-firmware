@@ -28,19 +28,22 @@ pub enum Bluetooth<'a> {
 #[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq)]
 pub enum Bootloader<'a> {
     EraseFirmware,
-    NackWithIdx{
+    NackWithIdx {
         block_idx: usize,
     },
-    AckWithIdx{
+    AckWithIdx {
         block_idx: usize,
     },
-    AckWithIdxCrc{
+    AckWithIdxCrc {
         block_idx: usize,
-        crc : u32,
+        crc: u32,
     },
     WriteFirmwareBlock {
         block_idx: usize,
         block_data: &'a [u8],
+    },
+    FirmwareOutOfBounds {
+        block_idx: usize,
     },
 }
 

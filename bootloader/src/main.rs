@@ -8,7 +8,6 @@ use defmt_rtt as _;
 use embassy_nrf::peripherals;
 // global logger
 use embassy_nrf as _;
-use embassy_time::Timer;
 // time driver
 use panic_probe as _;
 
@@ -18,9 +17,8 @@ use embassy_executor::Spawner;
 use embassy_nrf::gpio::{Input, Pull};
 use embassy_nrf::nvmc::Nvmc;
 use embassy_nrf::{bind_interrupts, uarte};
-use embassy_time::{with_timeout, Duration};
 use embedded_storage::nor_flash::NorFlash;
-use host_protocol::Bootloader::{self, AckWithIdx, AckWithIdxCrc, NackWithIdx};
+use host_protocol::Bootloader::{self, AckWithIdxCrc, NackWithIdx};
 use host_protocol::HostProtocolMessage;
 use postcard::accumulator::{CobsAccumulator, FeedResult};
 use postcard::to_slice_cobs;
@@ -53,7 +51,6 @@ pub struct BootState {
 ///
 /// This modifies the stack pointer and reset vector and will run code placed in the active partition.
 pub unsafe fn jump_to_app() -> ! {
-    use nrf_softdevice::Softdevice;
     use nrf_softdevice_mbr as mbr;
 
     // Address of softdevice which we'll forward interrupts to
@@ -106,34 +103,45 @@ fn update_chunk<'a>(
     data: &'a [u8],
     flash: &'a mut Nvmc,
 ) -> HostProtocolMessage<'a> {
-    
     // Check what sector we are in now
-    boot_status.actual_sector = boot_status.offset / FLASH_PAGE;
-
     info!("Actual_sector : {}", boot_status.actual_sector);
-    // if boot_status.actual_sector != boot_status.offset / FLASH_PAGE {
-    //     boot_status.actual_sector = boot_status.offset / FLASH_PAGE;
-    //     boot_status.offset = 0;
-    // }
 
     // Increase offset with data len
     let cursor = BASE_ADDRESS_APP + boot_status.offset;
+    match cursor {
+        (BASE_ADDRESS_APP..=BASE_BOOTLOADER_APP) => {}
+        _ => {
+            return HostProtocolMessage::Bootloader(Bootloader::FirmwareOutOfBounds {
+                block_idx: idx,
+            })
+        }
+    }
 
     let ack = match flash.write(cursor, data) {
         Ok(()) => {
             boot_status.offset += data.len() as u32;
-            info!("New offset : {}", boot_status.offset);
+            // Print some infos on update
+            boot_status.actual_sector =
+                BASE_ADDRESS_APP + (boot_status.offset / FLASH_PAGE) * FLASH_PAGE;
+            info!(
+                "Updating flash page starting at addr: {:02X}",
+                boot_status.actual_sector
+            );
+            info!(
+                "offset : {:02X}",
+                boot_status.actual_sector + boot_status.offset % 4096
+            );
             let crc = Crc::<u32>::new(&CRC_32_ISCSI);
             let crc_pkt = crc.checksum(&data);
             // Align packet index to avoid double send of yet flashed packet
             boot_status.actual_pkt_idx = idx as u32;
             // If write chunck is ok ack
             HostProtocolMessage::Bootloader(AckWithIdxCrc {
-                    block_idx: idx,
-                    crc: crc_pkt,
-                })
+                block_idx: idx,
+                crc: crc_pkt,
+            })
         }
-        Err(_) => HostProtocolMessage::Bootloader(NackWithIdx { block_idx: idx })
+        Err(_) => HostProtocolMessage::Bootloader(NackWithIdx { block_idx: idx }),
     };
     ack
 }
@@ -141,7 +149,7 @@ fn update_chunk<'a>(
 #[embassy_executor::main]
 async fn main(_spawner: Spawner) {
     let p = embassy_nrf::init(Default::default());
-    
+
     let mut config_uart = uarte::Config::default();
     config_uart.parity = uarte::Parity::EXCLUDED;
     config_uart.baudrate = uarte::Baudrate::BAUD115200;
@@ -163,24 +171,15 @@ async fn main(_spawner: Spawner) {
     // Keep track of update of flash Application
     let mut boot_status: BootState = Default::default();
 
-
+    // Loop for bootloader commands
+    // This loop will be a while loop with gpio state as condition to exit...
     loop {
-        // while boot_gpio.is_high() {
-        // Timer::after_millis(1000).await;
-        // info!("Going to app in {} seconds..", countdown_boot);
-        // countdown_boot -= 1;
-
-        // if countdown_boot == 0{
-        //     break;
-        // }
-
         // Raw buffer - 32 bytes for the accumulator of cobs
         let mut raw_buf = [0u8; 512];
         // Create a cobs accumulator for data incoming
         let mut cobs_buf: CobsAccumulator<512> = CobsAccumulator::new();
         // Getting chars from Uart in a while loop
-        while let Ok(n) = rx.read_until_idle(&mut raw_buf).await
-        {
+        while let Ok(n) = rx.read_until_idle(&mut raw_buf).await {
             // Finished reading input
             if n == 0 {
                 info!("Read 0 bytes");
@@ -209,7 +208,7 @@ async fn main(_spawner: Spawner) {
                         info!("Remaining {} bytes", remaining.len());
 
                         match data {
-                            HostProtocolMessage::Bluetooth(_) => (),
+                            HostProtocolMessage::Bluetooth(_) => (), // Message for application
                             HostProtocolMessage::Bootloader(boot_msg) => match boot_msg {
                                 Bootloader::EraseFirmware => {
                                     info!("Erase firmware");
@@ -221,20 +220,16 @@ async fn main(_spawner: Spawner) {
                                 } => {
                                     info!("Bootloader pkt recv");
                                     // cobs buffer for acks
-                                    let mut buf_cobs = [0_u8;16];
-                                    let ack =
-                                        update_chunk(&mut boot_status, idx, data, &mut flash);
+                                    let mut buf_cobs = [0_u8; 16];
+                                    let ack = update_chunk(&mut boot_status, idx, data, &mut flash);
                                     let cobs_ack = to_slice_cobs(&ack, &mut buf_cobs).unwrap();
                                     let _ = tx.blocking_write(cobs_ack);
                                 }
                                 _ => (),
-                            }, // no-op, handled in the bootloader
+                            },
                             HostProtocolMessage::Reset => {
                                 info!("Resetting");
-                                info!("going to app...");
-                                unsafe {
-                                    jump_to_app();
-                                }
+                                cortex_m::peripheral::SCB::sys_reset();
                             }
                         };
                         remaining
