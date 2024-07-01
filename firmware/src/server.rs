@@ -33,10 +33,10 @@ pub async fn stop_bluetooth() {
 pub fn initialize_sd() -> &'static mut Softdevice {
     let config = nrf_softdevice::Config {
         clock: Some(raw::nrf_clock_lf_cfg_t {
-            source: raw::NRF_CLOCK_LF_SRC_RC as u8,
-            rc_ctiv: 16,
-            rc_temp_ctiv: 2,
-            accuracy: raw::NRF_CLOCK_LF_ACCURACY_500_PPM as u8,
+            source: raw::NRF_CLOCK_LF_SRC_XTAL as u8,
+            rc_ctiv: 0,
+            rc_temp_ctiv: 0,
+            accuracy: raw::NRF_CLOCK_LF_ACCURACY_20_PPM as u8,
         }),
         conn_gap: Some(raw::ble_gap_conn_cfg_t {
             conn_count: 1,
@@ -89,7 +89,7 @@ async fn notify_data_tx<'a>(server: &'a Server, connection: &'a Connection) {
         }
 
         // Sleep for one second.
-        Timer::after(Duration::from_secs(1)).await
+        Timer::after(Duration::from_millis(5)).await
     }
 }
 

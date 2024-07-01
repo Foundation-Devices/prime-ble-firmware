@@ -85,7 +85,10 @@ async fn heartbeat() {
 async fn main(spawner: Spawner) {
     info!("Hello World!");
 
-    let mut conf = embassy_nrf::config::Config::default(); //embassy_nrf::init(Default::default());
+    let mut conf = embassy_nrf::config::Config::default(); 
+    conf.hfclk_source =embassy_nrf::config::HfclkSource::ExternalXtal; //embassy_nrf::init(Default::default());
+    conf.lfclk_source = embassy_nrf::config::LfclkSource::ExternalXtal;
+
     conf.gpiote_interrupt_priority = interrupt::Priority::P2;
     conf.time_interrupt_priority = interrupt::Priority::P2;
 
@@ -151,19 +154,6 @@ async fn main(spawner: Spawner) {
     unwrap!(spawner.spawn(send_bt_uart()));
 
     info!("Init tasks");
-
-    for num in 0..=MAX_IRQ {
-        let interrupt = unsafe { core::mem::transmute::<u16, Interrupt>(num) };
-        let is_enabled = InterruptExt::is_enabled(interrupt);
-        let priority = InterruptExt::get_priority(interrupt);
-
-        defmt::println!(
-            "Interrupt {}: Enabled = {}, Priority = {}",
-            num,
-            is_enabled,
-            priority
-        );
-    }
 
     loop {
         Timer::after_millis(100).await;
