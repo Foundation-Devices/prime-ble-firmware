@@ -20,12 +20,12 @@ use embedded_io_async::Write;
 use panic_probe as _;
 
 use comms::{comms_task, send_bt_uart};
-use consts::{ATT_MTU, MAX_IRQ};
+use consts::ATT_MTU;
 use defmt::{info, *};
 use embassy_executor::Spawner;
 use embassy_nrf::buffered_uarte::{self, BufferedUarte};
 use embassy_nrf::gpio::{Level, Output, OutputDrive};
-use embassy_nrf::interrupt::{self, Interrupt, InterruptExt};
+use embassy_nrf::interrupt::{self, InterruptExt};
 use embassy_nrf::{bind_interrupts, peripherals, uarte};
 use embassy_sync::blocking_mutex::raw::ThreadModeRawMutex;
 use embassy_sync::mutex::Mutex;
@@ -85,8 +85,8 @@ async fn heartbeat() {
 async fn main(spawner: Spawner) {
     info!("Hello World!");
 
-    let mut conf = embassy_nrf::config::Config::default(); 
-    conf.hfclk_source =embassy_nrf::config::HfclkSource::ExternalXtal; //embassy_nrf::init(Default::default());
+    let mut conf = embassy_nrf::config::Config::default();
+    conf.hfclk_source = embassy_nrf::config::HfclkSource::ExternalXtal;
     conf.lfclk_source = embassy_nrf::config::LfclkSource::ExternalXtal;
 
     conf.gpiote_interrupt_priority = interrupt::Priority::P2;
@@ -121,7 +121,7 @@ async fn main(spawner: Spawner) {
         &mut RX_BUFFER.init([0; COBS_MAX_MSG_SIZE])[..],
     );
 
-    uart.write_all(b"Hi from app!").await;
+    let _ = uart.write_all(b"Hi from app!").await;
 
     // Mutex is released
     {
