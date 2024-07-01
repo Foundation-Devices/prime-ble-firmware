@@ -31,10 +31,10 @@ bind_interrupts!(struct Irqs {
 
 #[used]
 #[link_section = ".uicr_bootloader_start_address"]
-pub static BOOTLOADER_ADDR: i32 = 0x2A000;
+pub static BOOTLOADER_ADDR: i32 = 0x28000;
 
 const BASE_ADDRESS_APP: u32 = 0x19000;
-const BASE_BOOTLOADER_APP: u32 = 0x2A000;
+const BASE_BOOTLOADER_APP: u32 = 0x28000;
 const FLASH_PAGE: u32 = 4096;
 
 #[derive(Debug, Serialize, Deserialize, Default)]
@@ -230,7 +230,11 @@ async fn main(_spawner: Spawner) {
                             },
                             HostProtocolMessage::Reset => {
                                 info!("Resetting");
-                                cortex_m::peripheral::SCB::sys_reset();
+                                drop(tx);
+                                drop(rx);
+                                unsafe {
+                                    jump_to_app();
+                                }
                             }
                         };
                         remaining

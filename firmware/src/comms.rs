@@ -64,7 +64,8 @@ pub async fn comms_task() {
                                     HostProtocolMessage::Bootloader(_) => (), // no-op, handled in the bootloader
                                     HostProtocolMessage::Reset => {
                                         info!("Resetting");
-                                        // TODO: reset
+                                        drop(uart_in);
+                                        cortex_m::peripheral::SCB::sys_reset();
                                     }
                                 };
 
