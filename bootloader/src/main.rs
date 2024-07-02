@@ -3,6 +3,7 @@
 
 #![no_std]
 #![no_main]
+mod verify;
 
 use defmt_rtt as _;
 use embassy_nrf::peripherals;
@@ -23,6 +24,8 @@ use host_protocol::HostProtocolMessage;
 use postcard::accumulator::{CobsAccumulator, FeedResult};
 use postcard::to_slice_cobs;
 use serde::{Deserialize, Serialize};
+use cosign2::Header;
+
 
 
 bind_interrupts!(struct Irqs {
