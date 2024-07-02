@@ -91,35 +91,9 @@ impl cosign2::Sha256 for Sha256 {
 
 pub(crate) fn verify_os_image(kind: BootImageKind, image: &[u8]) -> VerificationResult {
     if let Some((version, build_date)) = read_version_and_build_date(image) {
-        unsafe {
-            match kind {
-                BootImageKind::Main => {
-                    crate::systeminfo::MAIN_OS_VERSION.replace(version);
-                    crate::systeminfo::MAIN_OS_BUILD_DATE.replace(build_date);
-                }
-                BootImageKind::Recovery => {
-                    crate::systeminfo::RECOVERY_OS_VERSION.replace(version);
-                    crate::systeminfo::RECOVERY_OS_BUILD_DATE.replace(build_date);
-                }
-            };
-        }
-
         let (verif_res, hash) = verify_image(image);
-
-        match kind {
-            BootImageKind::Main => unsafe {
-                crate::systeminfo::MAIN_OS_IMAGE_HASH.replace(hash);
-                crate::systeminfo::MAIN_OS_VERIFICATION_RESULT = verif_res;
-            },
-            BootImageKind::Recovery => unsafe {
-                crate::systeminfo::RECOVERY_OS_IMAGE_HASH.replace(hash);
-                crate::systeminfo::RECOVERY_OS_VERIFICATION_RESULT = verif_res;
-            },
-        }
-
         return verif_res;
     }
-
     VerificationResult::Invalid
 }
 
