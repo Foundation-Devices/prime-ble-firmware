@@ -297,7 +297,6 @@ dependencies = [
 [[package]]
 name = "cosign2"
 version = "0.1.0"
-source = "git+https://github.com/Foundation-Devices/cosign2#2d275b14a42cd7079d22aafd1804a022431b56d2"
 dependencies = [
  "chrono",
 ]

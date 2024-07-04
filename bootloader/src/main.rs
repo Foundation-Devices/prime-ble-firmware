@@ -25,6 +25,7 @@ use postcard::accumulator::{CobsAccumulator, FeedResult};
 use postcard::to_slice_cobs;
 use serde::{Deserialize, Serialize};
 use cosign2::Header;
+use verify::verify_os_image;
 
 
 
@@ -45,8 +46,6 @@ pub struct BootState {
     pub offset: u32,
     pub actual_sector: u32,
     pub actual_pkt_idx: u32,
-    pub end_sector: u32,
-    pub start_sector: u32,
 }
 
 /// Boots the application assuming softdevice is present.
@@ -120,6 +119,8 @@ fn update_chunk<'a>(
             })
         }
     }
+
+    verify_os_image(data);
 
     let ack = match flash.write(cursor, data) {
         Ok(()) => {
@@ -217,6 +218,8 @@ async fn main(_spawner: Spawner) {
                                 Bootloader::EraseFirmware => {
                                     info!("Erase firmware");
                                     let _ = flash.erase(BASE_ADDRESS_APP, BASE_BOOTLOADER_APP);
+                                    //Reset counters
+                                    boot_status = Default::default();
                                 }
                                 Bootloader::WriteFirmwareBlock {
                                     block_idx: idx,
@@ -229,6 +232,14 @@ async fn main(_spawner: Spawner) {
                                     let cobs_ack = to_slice_cobs(&ack, &mut buf_cobs).unwrap();
                                     let _ = tx.blocking_write(cobs_ack);
                                 }
+                                Bootloader::VerifyFirmware => {
+                                    let image_slice = unsafe {
+                                        core::slice::from_raw_parts(BASE_ADDRESS_APP as *const u8, boot_status.offset as usize)
+                                    };
+                                    info!("{:?}", image_slice[..2048]);
+                                    let _ = verify_os_image(image_slice);
+                                    
+                                },
                                 _ => (),
                             },
                             HostProtocolMessage::Reset => {
