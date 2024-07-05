@@ -7,7 +7,7 @@ resolver = "2"
 members = [
     "firmware",
     "bootloader",
-    "host-protocol", "cobs-file-chuncker",
+    "host-protocol",
 ]
 exclude = ["cobs-file-chunker"]
 
