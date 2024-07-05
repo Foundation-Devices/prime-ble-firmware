@@ -24,10 +24,7 @@ use host_protocol::HostProtocolMessage;
 use postcard::accumulator::{CobsAccumulator, FeedResult};
 use postcard::to_slice_cobs;
 use serde::{Deserialize, Serialize};
-use cosign2::Header;
 use verify::verify_os_image;
-
-
 
 bind_interrupts!(struct Irqs {
     UARTE0_UART0 => uarte::InterruptHandler<peripherals::UARTE0>;
@@ -119,8 +116,6 @@ fn update_chunk<'a>(
             })
         }
     }
-
-    verify_os_image(data);
 
     let ack = match flash.write(cursor, data) {
         Ok(()) => {
@@ -234,12 +229,14 @@ async fn main(_spawner: Spawner) {
                                 }
                                 Bootloader::VerifyFirmware => {
                                     let image_slice = unsafe {
-                                        core::slice::from_raw_parts(BASE_ADDRESS_APP as *const u8, boot_status.offset as usize)
+                                        core::slice::from_raw_parts(
+                                            BASE_ADDRESS_APP as *const u8,
+                                            boot_status.offset as usize,
+                                        )
                                     };
                                     info!("{:?}", image_slice[..2048]);
                                     let _ = verify_os_image(image_slice);
-                                    
-                                },
+                                }
                                 _ => (),
                             },
                             HostProtocolMessage::Reset => {
