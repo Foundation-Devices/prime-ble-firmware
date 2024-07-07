@@ -1,7 +1,12 @@
+use cortex_m::{asm::delay, prelude::_embedded_hal_blocking_delay_DelayMs};
 use cosign2::{Header, VerificationResult};
 use defmt::info;
+use embassy_nrf::rng;
+use crate::RNG_HW;
+use embassy_time::Delay;
 use micro_ecc_sys::{uECC_decompress, uECC_secp256k1, uECC_valid_public_key, uECC_verify};
 use sha2::{Digest, Sha256 as Sha};
+
 
 // TODO: put well-known public keys here
 const KNOWN_SIGNERS: [[u8; 33]; 0] = [
@@ -27,6 +32,7 @@ impl cosign2::Secp256k1Verify for EccVerifier {
         const CFI_SUCCESS: u32 = CF1 + CF2;
         const CF1: u32 = 13;
         const CF2: u32 = 7;
+        info!("{:?}",signature);
         let mut control_flow_integrity_counter = 0;
         let mut uncompressed_pk = [0; 64];
         unsafe {
@@ -41,7 +47,7 @@ impl cosign2::Secp256k1Verify for EccVerifier {
         };
         if res == UECC_SUCCESS {
             control_flow_integrity_counter += CF1;
-            //random_delay(); // Random delay against glitch or timing attacks
+            random_delay(); // Random delay against glitch or timing attacks
             let res = unsafe {
                 uECC_verify(
                     uncompressed_pk.as_ptr(),
@@ -51,7 +57,7 @@ impl cosign2::Secp256k1Verify for EccVerifier {
                     uECC_secp256k1(),
                 )
             };
-            //random_delay(); // Random delay against glitch or timing attacks
+            random_delay(); // Random delay against glitch or timing attacks
             if res == UECC_SUCCESS {
                 control_flow_integrity_counter += CF2;
                 let complement = !UECC_SUCCESS;
@@ -73,21 +79,35 @@ struct Sha256 {
 
 impl cosign2::Sha256 for Sha256 {
     fn hash(&self, data: &[u8]) -> [u8; 32] {
-        let sha256 = Sha::digest(data).into();
-        sha256
+        Sha::digest(data).into()
     }
 }
 
 pub(crate) fn verify_os_image(image: &[u8]) -> VerificationResult {
-    if let Some((version, build_date)) = read_version_and_build_date(image) {
+    if let Some((mut version, mut build_date)) = read_version_and_build_date(image) {
         info!(
-            "Version : {:02X} - build date : {:02X}",
-            version, build_date
+            "Version : {} - build date : {}",
+            version.make_ascii_lowercase(), build_date.make_ascii_lowercase()
         );
-        let (verif_res, hash) = verify_image(image);
+        let (verif_res, _hash) = verify_image(image);
         return verif_res;
     }
     VerificationResult::Invalid
+}
+
+fn random_delay(){
+    RNG_HW.lock(|rng|{
+        let mut bytes = [0;1];
+        {
+            let mut rng = rng.borrow_mut();
+            let mut delay = Delay;
+            rng.as_mut().unwrap().blocking_fill_bytes(&mut bytes);
+            // Get 0 -200 ms
+            bytes[0] %= 200;
+            defmt::info!("random delay: {:?} ms", bytes);
+            delay.delay_ms(bytes[0]);
+        }
+    });
 }
 
 fn verify_image(image: &[u8]) -> (VerificationResult, [u8; 32]) {
@@ -101,7 +121,7 @@ fn verify_image(image: &[u8]) -> (VerificationResult, [u8; 32]) {
     let ecc = EccVerifier::new();
     let sha = Sha256 { sha: [0; 32] };
     // Random delay to thwart glitching the condition
-    //random_delay();
+    random_delay();
     // Parse and verify firmware signatures
     let res = Header::parse(image, &KNOWN_SIGNERS, &sha, &ecc);
     if res.is_ok() {

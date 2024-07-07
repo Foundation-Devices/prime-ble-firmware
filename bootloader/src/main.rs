@@ -4,19 +4,25 @@
 #![no_std]
 #![no_main]
 mod verify;
+mod jump_app;
 
 use defmt_rtt as _;
-use embassy_nrf::peripherals;
+use embassy_nrf::peripherals::{self, RNG};
 // global logger
 use embassy_nrf as _;
 // time driver
 use panic_probe as _;
 
+use core::cell::RefCell;
+use embassy_sync::blocking_mutex::Mutex;
+use embassy_sync::blocking_mutex::raw::ThreadModeRawMutex;
 use crc::{Crc, CRC_32_ISCSI};
-use defmt::{info, *};
+use defmt::info;
 use embassy_executor::Spawner;
 use embassy_nrf::gpio::{Input, Pull};
 use embassy_nrf::nvmc::Nvmc;
+use embassy_nrf::rng;
+use embassy_nrf::rng::Rng;
 use embassy_nrf::{bind_interrupts, uarte};
 use embedded_storage::nor_flash::NorFlash;
 use host_protocol::Bootloader::{self, AckWithIdxCrc, NackWithIdx};
@@ -25,17 +31,22 @@ use postcard::accumulator::{CobsAccumulator, FeedResult};
 use postcard::to_slice_cobs;
 use serde::{Deserialize, Serialize};
 use verify::verify_os_image;
+use jump_app::jump_to_app;
+
+// Mutex for random hw generator to delay in verification
+static RNG_HW: Mutex<ThreadModeRawMutex, RefCell<Option<Rng<'_,RNG>>>> = Mutex::new(RefCell::new(None));
 
 bind_interrupts!(struct Irqs {
     UARTE0_UART0 => uarte::InterruptHandler<peripherals::UARTE0>;
+    RNG => rng::InterruptHandler<peripherals::RNG>;
 });
 
 #[used]
 #[link_section = ".uicr_bootloader_start_address"]
-pub static BOOTLOADER_ADDR: i32 = 0x28000;
+pub static BOOTLOADER_ADDR: i32 = 0x27000;
 
 const BASE_ADDRESS_APP: u32 = 0x19000;
-const BASE_BOOTLOADER_APP: u32 = 0x28000;
+const BASE_BOOTLOADER_APP: u32 = 0x27000;
 const FLASH_PAGE: u32 = 4096;
 
 #[derive(Debug, Serialize, Deserialize, Default)]
@@ -45,58 +56,6 @@ pub struct BootState {
     pub actual_pkt_idx: u32,
 }
 
-/// Boots the application assuming softdevice is present.
-///
-/// # Safety
-///
-/// This modifies the stack pointer and reset vector and will run code placed in the active partition.
-pub unsafe fn jump_to_app() -> ! {
-    use nrf_softdevice_mbr as mbr;
-
-    // Address of softdevice which we'll forward interrupts to
-    let addr = 0x1000;
-    let mut cmd = mbr::sd_mbr_command_t {
-        command: mbr::NRF_MBR_COMMANDS_SD_MBR_COMMAND_IRQ_FORWARD_ADDRESS_SET,
-        params: mbr::sd_mbr_command_t__bindgen_ty_1 {
-            irq_forward_address_set: mbr::sd_mbr_command_irq_forward_address_set_t {
-                address: addr,
-            },
-        },
-    };
-    let ret = mbr::sd_mbr_command(&mut cmd);
-    info!("ret val {}", ret);
-
-    let msp = *(addr as *const u32);
-    let rv = *((addr + 4) as *const u32);
-
-    trace!("msp = {=u32:x}, rv = {=u32:x}", msp, rv);
-
-    // These instructions perform the following operations:
-    //
-    // * Modify control register to use MSP as stack pointer (clear spsel bit)
-    // * Synchronize instruction barrier
-    // * Initialize stack pointer (0x1000)
-    // * Set link register to not return (0xFF)
-    // * Jump to softdevice reset vector
-    core::arch::asm!(
-        "mrs {tmp}, CONTROL",
-        "bics {tmp}, {spsel}",
-        "msr CONTROL, {tmp}",
-        "isb",
-        "msr MSP, {msp}",
-        "mov lr, {new_lr}",
-        "bx {rv}",
-        // `out(reg) _` is not permitted in a `noreturn` asm! call,
-        // so instead use `in(reg) 0` and don't restore it afterwards.
-        tmp = in(reg) 0,
-        spsel = in(reg) 2,
-        new_lr = in(reg) 0xFFFFFFFFu32,
-        msp = in(reg) msp,
-        rv = in(reg) rv,
-        options(noreturn),
-    );
-}
-
 fn update_chunk<'a>(
     boot_status: &'a mut BootState,
     idx: usize,
@@ -104,8 +63,6 @@ fn update_chunk<'a>(
     flash: &'a mut Nvmc,
 ) -> HostProtocolMessage<'a> {
     // Check what sector we are in now
-    info!("Actual_sector : {}", boot_status.actual_sector);
-
     // Increase offset with data len
     let cursor = BASE_ADDRESS_APP + boot_status.offset;
     match cursor {
@@ -154,8 +111,17 @@ async fn main(_spawner: Spawner) {
     config_uart.parity = uarte::Parity::EXCLUDED;
     config_uart.baudrate = uarte::Baudrate::BAUD115200;
 
+    // Uarte config
     let uart = uarte::Uarte::new(p.UARTE0, Irqs, p.P0_16, p.P0_18, config_uart);
     let (mut tx, mut rx) = uart.split_with_idle(p.TIMER0, p.PPI_CH0, p.PPI_CH1);
+    
+    // RNG
+    let rng = Rng::new(p.RNG, Irqs);
+    {
+        RNG_HW.lock(|f| {
+            f.borrow_mut().replace(rng)
+        });
+    }
 
     // FLASH
     let mut flash = Nvmc::new(p.NVMC);
@@ -234,8 +200,10 @@ async fn main(_spawner: Spawner) {
                                             boot_status.offset as usize,
                                         )
                                     };
-                                    info!("{:?}", image_slice[..2048]);
+                                    info!("Image slice len dec {} - hex {:02X}", image_slice.len(),image_slice.len());
                                     let _ = verify_os_image(image_slice);
+                                    //Reset counters
+                                    boot_status = Default::default();
                                 }
                                 _ => (),
                             },

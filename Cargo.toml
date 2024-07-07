@@ -9,7 +9,7 @@ members = [
     "bootloader",
     "host-protocol",
 ]
-exclude = ["cobs-file-chunker"]
+
 
 [profile.release]
 debug = 2

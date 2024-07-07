@@ -7,7 +7,7 @@ use std::{thread, time::Duration};
 // Size of the chunk of app data
 const CHUNK_SIZE: usize = 256;
 // Read application file bin as bytes
-static APPLICATION: &[u8] = include_bytes!("../signed.bin");
+static APPLICATION: &[u8] = include_bytes!("../firmware_signed.bin");
 
 fn main() {
     let mut buf = [0u8; 512];
