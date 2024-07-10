@@ -1,12 +1,10 @@
-use cortex_m::{asm::delay, prelude::_embedded_hal_blocking_delay_DelayMs};
+use crate::RNG_HW;
+use cortex_m::prelude::_embedded_hal_blocking_delay_DelayMs;
 use cosign2::{Header, VerificationResult};
 use defmt::info;
-use embassy_nrf::rng;
-use crate::RNG_HW;
 use embassy_time::Delay;
 use micro_ecc_sys::{uECC_decompress, uECC_secp256k1, uECC_valid_public_key, uECC_verify};
 use sha2::{Digest, Sha256 as Sha};
-
 
 // TODO: put well-known public keys here
 const KNOWN_SIGNERS: [[u8; 33]; 0] = [
@@ -32,7 +30,6 @@ impl cosign2::Secp256k1Verify for EccVerifier {
         const CFI_SUCCESS: u32 = CF1 + CF2;
         const CF1: u32 = 13;
         const CF2: u32 = 7;
-        info!("{:?}",signature);
         let mut control_flow_integrity_counter = 0;
         let mut uncompressed_pk = [0; 64];
         unsafe {
@@ -73,8 +70,9 @@ impl cosign2::Secp256k1Verify for EccVerifier {
     }
 }
 
-struct Sha256 {
-    sha: [u8; 32],
+#[derive(Debug)]
+pub struct Sha256 {
+    pub sha: [u8; 32],
 }
 
 impl cosign2::Sha256 for Sha256 {
@@ -83,26 +81,27 @@ impl cosign2::Sha256 for Sha256 {
     }
 }
 
-pub(crate) fn verify_os_image(image: &[u8]) -> VerificationResult {
+pub(crate) fn verify_os_image(image: &[u8]) -> (VerificationResult, Sha256) {
     if let Some((mut version, mut build_date)) = read_version_and_build_date(image) {
         info!(
             "Version : {} - build date : {}",
-            version.make_ascii_lowercase(), build_date.make_ascii_lowercase()
+            version.make_ascii_lowercase(),
+            build_date.make_ascii_lowercase()
         );
-        let (verif_res, _hash) = verify_image(image);
-        return verif_res;
+        let (verif_res, hash) = verify_image(image);
+        return (verif_res, hash);
     }
-    VerificationResult::Invalid
+    (VerificationResult::Invalid, Sha256 { sha: [0; 32] })
 }
 
-fn random_delay(){
-    RNG_HW.lock(|rng|{
-        let mut bytes = [0;1];
+fn random_delay() {
+    RNG_HW.lock(|rng| {
+        let mut bytes = [0; 1];
         {
             let mut rng = rng.borrow_mut();
             let mut delay = Delay;
             rng.as_mut().unwrap().blocking_fill_bytes(&mut bytes);
-            // Get 0 -200 ms
+            // Get 0 - 200 ms
             bytes[0] %= 200;
             defmt::info!("random delay: {:?} ms", bytes);
             delay.delay_ms(bytes[0]);
@@ -110,7 +109,7 @@ fn random_delay(){
     });
 }
 
-fn verify_image(image: &[u8]) -> (VerificationResult, [u8; 32]) {
+fn verify_image(image: &[u8]) -> (VerificationResult, Sha256) {
     let mut control_flow_integrity_counter = 0;
     const CF1: u32 = 3;
     const CF2: u32 = 5;
@@ -144,8 +143,8 @@ fn verify_image(image: &[u8]) -> (VerificationResult, [u8; 32]) {
                             if unsafe { cfi_counter_ptr.read_volatile() }
                                 == CF1 + CF2 + CF3 + CF4 + CF5 + CF6
                             {
-                                let sha256 = Sha::digest(header.firmware_hash()).into();
-                                return (VerificationResult::Valid, sha256);
+                                let sha256 = header.firmware_hash();
+                                return (VerificationResult::Valid, Sha256 { sha: *sha256 });
                             }
                         }
                     }
@@ -153,7 +152,7 @@ fn verify_image(image: &[u8]) -> (VerificationResult, [u8; 32]) {
             }
         }
     }
-    (VerificationResult::Invalid, [0; 32])
+    (VerificationResult::Invalid, Sha256 { sha: [0; 32] })
 }
 
 fn read_version_and_build_date(image: &[u8]) -> Option<([u8; 20], [u8; 14])> {

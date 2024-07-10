@@ -2,3 +2,5 @@
 .idea
 /cobs-file-chunker/target
 /.vscode
+*.bin
+*.hex

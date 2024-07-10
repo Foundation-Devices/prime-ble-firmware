@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2024 Foundation Devices, Inc. <hello@foundationdevices.com>
 // SPDX-License-Identifier: GPL-3.0-or-later
-use defmt::{info,trace};
-use crate::BASE_ADDRESS_APP;
+
+use defmt::info;
 
 /// Boots the application assuming softdevice is present.
 ///
@@ -10,19 +10,6 @@ use crate::BASE_ADDRESS_APP;
 /// This modifies the stack pointer and reset vector and will run code placed in the active partition.
 pub unsafe fn jump_to_app() -> ! {
     use nrf_softdevice_mbr as mbr;
-    let app_addr = BASE_ADDRESS_APP + 0x0800;
-    let mut cmd = mbr::sd_mbr_command_t {
-        command: mbr::NRF_MBR_COMMANDS_SD_MBR_COMMAND_VECTOR_TABLE_BASE_SET,
-        params: mbr::sd_mbr_command_t__bindgen_ty_1 {
-                base_set: mbr::sd_mbr_command_vector_table_base_set_t {
-                address: app_addr,
-            },
-        },
-    };
-    let ret = mbr::sd_mbr_command(&mut cmd);
-    info!("ret val base set {}", ret);
-
-    // Address of softdevice which we'll forward interrupts to
     let addr = 0x1000;
     let mut cmd = mbr::sd_mbr_command_t {
         command: mbr::NRF_MBR_COMMANDS_SD_MBR_COMMAND_IRQ_FORWARD_ADDRESS_SET,
@@ -32,13 +19,14 @@ pub unsafe fn jump_to_app() -> ! {
             },
         },
     };
+
     let ret = mbr::sd_mbr_command(&mut cmd);
-    info!("ret val irq fw{}", ret);
+    info!("ret val base set {}", ret);
 
-    let msp = *(app_addr as *const u32);
-    let rv = *((app_addr + 4) as *const u32);
+    let msp = *(addr as *const u32);
+    let rv = *((addr + 4) as *const u32);
 
-    trace!("msp = {=u32:x}, rv = {=u32:x}", msp, rv);
+    info!("msp = {=u32:x}, rv = {=u32:x}", msp, rv);
 
     // These instructions perform the following operations:
     //

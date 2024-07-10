@@ -29,6 +29,10 @@ pub enum Bluetooth<'a> {
 pub enum Bootloader<'a> {
     EraseFirmware,
     VerifyFirmware,
+    AckVerifyFirmware{
+        result : bool,
+        hash : [u8;32],
+    },
     NackWithIdx {
         block_idx: usize,
     },

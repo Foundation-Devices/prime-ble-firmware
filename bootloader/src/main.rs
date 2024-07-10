@@ -3,9 +3,10 @@
 
 #![no_std]
 #![no_main]
-mod verify;
 mod jump_app;
+mod verify;
 
+use cosign2::VerificationResult;
 use defmt_rtt as _;
 use embassy_nrf::peripherals::{self, RNG};
 // global logger
@@ -14,27 +15,28 @@ use embassy_nrf as _;
 use panic_probe as _;
 
 use core::cell::RefCell;
-use embassy_sync::blocking_mutex::Mutex;
-use embassy_sync::blocking_mutex::raw::ThreadModeRawMutex;
 use crc::{Crc, CRC_32_ISCSI};
 use defmt::info;
 use embassy_executor::Spawner;
-use embassy_nrf::gpio::{Input, Pull};
+// use embassy_nrf::gpio::{Input, Pull};
 use embassy_nrf::nvmc::Nvmc;
 use embassy_nrf::rng;
 use embassy_nrf::rng::Rng;
 use embassy_nrf::{bind_interrupts, uarte};
+use embassy_sync::blocking_mutex::raw::ThreadModeRawMutex;
+use embassy_sync::blocking_mutex::Mutex;
 use embedded_storage::nor_flash::NorFlash;
 use host_protocol::Bootloader::{self, AckWithIdxCrc, NackWithIdx};
 use host_protocol::HostProtocolMessage;
+use jump_app::jump_to_app;
 use postcard::accumulator::{CobsAccumulator, FeedResult};
 use postcard::to_slice_cobs;
 use serde::{Deserialize, Serialize};
 use verify::verify_os_image;
-use jump_app::jump_to_app;
 
 // Mutex for random hw generator to delay in verification
-static RNG_HW: Mutex<ThreadModeRawMutex, RefCell<Option<Rng<'_,RNG>>>> = Mutex::new(RefCell::new(None));
+static RNG_HW: Mutex<ThreadModeRawMutex, RefCell<Option<Rng<'_, RNG>>>> =
+    Mutex::new(RefCell::new(None));
 
 bind_interrupts!(struct Irqs {
     UARTE0_UART0 => uarte::InterruptHandler<peripherals::UARTE0>;
@@ -43,10 +45,15 @@ bind_interrupts!(struct Irqs {
 
 #[used]
 #[link_section = ".uicr_bootloader_start_address"]
-pub static BOOTLOADER_ADDR: i32 = 0x27000;
+pub static BOOTLOADER_ADDR: i32 = 0x26000;
+
+//Page used to store address of app to jump from bootloader
+// #[used]
+// #[link_section = ".uicr_mbr_params_page"]
+// pub static PARAM_PAGE: i32 = 0x2F000;
 
 const BASE_ADDRESS_APP: u32 = 0x19000;
-const BASE_BOOTLOADER_APP: u32 = 0x27000;
+const BASE_BOOTLOADER_APP: u32 = 0x26000;
 const FLASH_PAGE: u32 = 4096;
 
 #[derive(Debug, Serialize, Deserialize, Default)]
@@ -86,7 +93,7 @@ fn update_chunk<'a>(
             );
             info!(
                 "offset : {:02X}",
-                boot_status.actual_sector + boot_status.offset % 4096
+                boot_status.actual_sector + boot_status.offset % FLASH_PAGE
             );
             let crc = Crc::<u32>::new(&CRC_32_ISCSI);
             let crc_pkt = crc.checksum(data);
@@ -109,25 +116,23 @@ async fn main(_spawner: Spawner) {
 
     let mut config_uart = uarte::Config::default();
     config_uart.parity = uarte::Parity::EXCLUDED;
-    config_uart.baudrate = uarte::Baudrate::BAUD115200;
+    config_uart.baudrate = uarte::Baudrate::BAUD460800;
 
     // Uarte config
     let uart = uarte::Uarte::new(p.UARTE0, Irqs, p.P0_16, p.P0_18, config_uart);
     let (mut tx, mut rx) = uart.split_with_idle(p.TIMER0, p.PPI_CH0, p.PPI_CH1);
-    
-    // RNG
+
+    // RNG - sync
     let rng = Rng::new(p.RNG, Irqs);
     {
-        RNG_HW.lock(|f| {
-            f.borrow_mut().replace(rng)
-        });
+        RNG_HW.lock(|f| f.borrow_mut().replace(rng));
     }
 
     // FLASH
     let mut flash = Nvmc::new(p.NVMC);
 
     // Init a GPIO to use as bootloader trigger
-    let _boot_gpio = Input::new(p.P0_11, Pull::Up);
+    // let boot_gpio = Input::new(p.P0_20, Pull::Down);
 
     // // Message must be in SRAM
     let mut buf = [0; 22];
@@ -139,7 +144,9 @@ async fn main(_spawner: Spawner) {
 
     // Loop for bootloader commands
     // This loop will be a while loop with gpio state as condition to exit...
+    // while boot_gpio.is_high() {
     loop {
+        // Now for testing locally i am looping until command reset
         // Raw buffer - 32 bytes for the accumulator of cobs
         let mut raw_buf = [0u8; 512];
         // Create a cobs accumulator for data incoming
@@ -200,10 +207,37 @@ async fn main(_spawner: Spawner) {
                                             boot_status.offset as usize,
                                         )
                                     };
-                                    info!("Image slice len dec {} - hex {:02X}", image_slice.len(),image_slice.len());
-                                    let _ = verify_os_image(image_slice);
-                                    //Reset counters
-                                    boot_status = Default::default();
+                                    info!(
+                                        "Image slice len dec {} - hex {:02X}",
+                                        image_slice.len(),
+                                        image_slice.len()
+                                    );
+                                    let (result, hash) = verify_os_image(image_slice);
+                                    // Prepare ack to fw verification
+                                    let mut buf_cobs = [0_u8; 64];
+
+                                    let cobs_ack = if result == VerificationResult::Valid {
+                                        info!("Valid signature!");
+                                        let ack = HostProtocolMessage::Bootloader(
+                                            Bootloader::AckVerifyFirmware {
+                                                result: true,
+                                                hash: hash.sha,
+                                            },
+                                        );
+                                        to_slice_cobs(&ack, &mut buf_cobs).unwrap()
+                                    } else {
+                                        info!("Invalid signature!");
+                                        let ack = HostProtocolMessage::Bootloader(
+                                            Bootloader::AckVerifyFirmware {
+                                                result: false,
+                                                hash: hash.sha,
+                                            },
+                                        );
+                                        to_slice_cobs(&ack, &mut buf_cobs).unwrap()
+                                    };
+
+                                    let _ = tx.blocking_write(cobs_ack);
+                                    info!("Hash {:?}", hash.sha);
                                 }
                                 _ => (),
                             },
@@ -223,6 +257,9 @@ async fn main(_spawner: Spawner) {
             embassy_time::Timer::after_millis(1).await;
         }
     }
+    info!("Resetting");
+    drop(tx);
+    drop(rx);
     unsafe {
         jump_to_app();
     }

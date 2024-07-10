@@ -910,7 +910,6 @@ name = "host-protocol"
 version = "0.1.0"
 dependencies = [
  "defmt",
- "num_enum",
  "postcard",
  "serde",
 ]
