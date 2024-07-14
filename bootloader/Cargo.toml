@@ -15,34 +15,40 @@ default = [
 
 nrf52805 = [
     "embassy-nrf/nrf52805",
+    "nrf-softdevice/nrf52805",
+    "nrf-softdevice/s112",
+    "nrf-softdevice/critical-section-impl"
 ]
 
 
 [dependencies]
 embassy-executor = { version = "0.5.0", features = ["arch-cortex-m", "executor-thread", "executor-interrupt", "defmt", "integrated-timers"]}
 embassy-time = { version = "0.3.0", features = ["defmt", "defmt-timestamp-uptime"]}
-embassy-sync = { version = "0.5.0" }
+embassy-sync = { version = "0.6.0" }
 embassy-nrf = { version = "0.1.0", features = ["defmt", "gpiote", "time-driver-rtc1" ]}
 embedded-io-async = { version = "0.6.1", features = ["defmt-03"] }
-cortex-m = { version = "0.7.7", features = ["critical-section-single-core"] }
+cortex-m = "0.7.7"
 cortex-m-rt = "0.7.3"
-defmt = "0.3.5"
+defmt = "0.3.6"
 defmt-rtt = "0.4.0"
 panic-probe = { version = "0.3.1", features= ["print-defmt"] }
 embedded-storage = "0.3.1"
 embedded-storage-async = "0.4.1"
 futures = { version = "0.3.29", default-features = false }
 fixed = "1.24.0"
-heapless = { version = "0.8.0", features = ["defmt-03"] }
-atomic-pool = "1.0.1"
 static_cell = "2.0.0"
 nrf-softdevice-mbr = { version = "0.2.0"}
 postcard = { version = "1.0.8", features = ["experimental-derive"] }
 serde = { version = "1.0.192", features = ["derive"], default-features = false }
 crc = "3.2.1"
-cosign2 = { git = "https://github.com/Foundation-Devices/cosign2", default-features = false }
+# cosign2 = { git = "https://github.com/Foundation-Devices/cosign2", default-features = false }
 micro-ecc-sys = { git = "https://github.com/Foundation-Devices/micro-ecc-sys.git", default-features = false }
 sha2 = { version = "0.10.8", default-features = false }
+cosign2 = { path = "../../cosign2/cosign2", default-features = false }
+critical-section = "1.1"
+nrf-softdevice-s112 = { git = "https://github.com/embassy-rs/nrf-softdevice.git" }
+nrf-softdevice = { git = "https://github.com/embassy-rs/nrf-softdevice.git", features = ["defmt", "evt-max-size-256", "ble-peripheral"] }
+
 
 [build-dependencies]
 bindgen = "0.69.4"

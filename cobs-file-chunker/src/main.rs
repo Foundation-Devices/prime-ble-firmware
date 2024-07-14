@@ -6,13 +6,13 @@ use std::{thread, time::Duration};
 // Size of the chunk of app data
 const CHUNK_SIZE: usize = 256;
 // Read application file bin as bytes
-static APPLICATION: &[u8] = include_bytes!("../firmware.bin");
+static APPLICATION: &[u8] = include_bytes!("../BtFwsigned.bin");
 
 fn main() {
     let mut buf = [0u8; 512];
 
     // Open port
-    let mut port = serialport::new("/dev/ttyUSB0", 460800)
+    let mut port = serialport::new("/dev/ttyUSB0", 115200)
         .timeout(Duration::from_millis(10))
         .open()
         .expect("error");

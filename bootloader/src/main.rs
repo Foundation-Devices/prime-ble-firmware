@@ -6,12 +6,10 @@
 mod jump_app;
 mod verify;
 
-use cosign2::VerificationResult;
-use defmt_rtt as _;
-use embassy_nrf::peripherals::{self, RNG};
-// global logger
+
+
 use embassy_nrf as _;
-// time driver
+use defmt_rtt as _;
 use panic_probe as _;
 
 use core::cell::RefCell;
@@ -23,7 +21,8 @@ use embassy_nrf::nvmc::Nvmc;
 use embassy_nrf::rng;
 use embassy_nrf::rng::Rng;
 use embassy_nrf::{bind_interrupts, uarte};
-use embassy_sync::blocking_mutex::raw::ThreadModeRawMutex;
+use embassy_nrf::peripherals::{self, RNG};
+use embassy_sync::blocking_mutex::CriticalSectionMutex;
 use embassy_sync::blocking_mutex::Mutex;
 use embedded_storage::nor_flash::NorFlash;
 use host_protocol::Bootloader::{self, AckWithIdxCrc, NackWithIdx};
@@ -33,9 +32,11 @@ use postcard::accumulator::{CobsAccumulator, FeedResult};
 use postcard::to_slice_cobs;
 use serde::{Deserialize, Serialize};
 use verify::verify_os_image;
+use cosign2::VerificationResult;
+
 
 // Mutex for random hw generator to delay in verification
-static RNG_HW: Mutex<ThreadModeRawMutex, RefCell<Option<Rng<'_, RNG>>>> =
+static RNG_HW: CriticalSectionMutex<RefCell<Option<Rng<'_, RNG>>>> =
     Mutex::new(RefCell::new(None));
 
 bind_interrupts!(struct Irqs {
@@ -45,15 +46,12 @@ bind_interrupts!(struct Irqs {
 
 #[used]
 #[link_section = ".uicr_bootloader_start_address"]
-pub static BOOTLOADER_ADDR: i32 = 0x26000;
+pub static BOOTLOADER_ADDR: i32 = 0x27000;
 
-//Page used to store address of app to jump from bootloader
-// #[used]
-// #[link_section = ".uicr_mbr_params_page"]
-// pub static PARAM_PAGE: i32 = 0x2F000;
 
-const BASE_ADDRESS_APP: u32 = 0x19000;
-const BASE_BOOTLOADER_APP: u32 = 0x26000;
+const BASE_ADDRESS_APP: u32 = 0x19800;
+const BASE_FLASH_ADDR: u32 = 0x19000;
+const BASE_BOOTLOADER_APP: u32 = 0x27000;
 const FLASH_PAGE: u32 = 4096;
 
 #[derive(Debug, Serialize, Deserialize, Default)]
@@ -71,9 +69,9 @@ fn update_chunk<'a>(
 ) -> HostProtocolMessage<'a> {
     // Check what sector we are in now
     // Increase offset with data len
-    let cursor = BASE_ADDRESS_APP + boot_status.offset;
+    let cursor = BASE_FLASH_ADDR + boot_status.offset;
     match cursor {
-        (BASE_ADDRESS_APP..=BASE_BOOTLOADER_APP) => {}
+        (BASE_FLASH_ADDR..=BASE_BOOTLOADER_APP) => {}
         _ => {
             return HostProtocolMessage::Bootloader(Bootloader::FirmwareOutOfBounds {
                 block_idx: idx,
@@ -86,7 +84,7 @@ fn update_chunk<'a>(
             boot_status.offset += data.len() as u32;
             // Print some infos on update
             boot_status.actual_sector =
-                BASE_ADDRESS_APP + (boot_status.offset / FLASH_PAGE) * FLASH_PAGE;
+                BASE_FLASH_ADDR + (boot_status.offset / FLASH_PAGE) * FLASH_PAGE;
             info!(
                 "Updating flash page starting at addr: {:02X}",
                 boot_status.actual_sector
@@ -116,7 +114,7 @@ async fn main(_spawner: Spawner) {
 
     let mut config_uart = uarte::Config::default();
     config_uart.parity = uarte::Parity::EXCLUDED;
-    config_uart.baudrate = uarte::Baudrate::BAUD460800;
+    config_uart.baudrate = uarte::Baudrate::BAUD115200;
 
     // Uarte config
     let uart = uarte::Uarte::new(p.UARTE0, Irqs, p.P0_16, p.P0_18, config_uart);
@@ -142,10 +140,12 @@ async fn main(_spawner: Spawner) {
     // Keep track of update of flash Application
     let mut boot_status: BootState = Default::default();
 
+    let mut jump_app = false;
+
     // Loop for bootloader commands
     // This loop will be a while loop with gpio state as condition to exit...
     // while boot_gpio.is_high() {
-    loop {
+    'exitloop: while !jump_app{
         // Now for testing locally i am looping until command reset
         // Raw buffer - 32 bytes for the accumulator of cobs
         let mut raw_buf = [0u8; 512];
@@ -185,7 +185,7 @@ async fn main(_spawner: Spawner) {
                             HostProtocolMessage::Bootloader(boot_msg) => match boot_msg {
                                 Bootloader::EraseFirmware => {
                                     info!("Erase firmware");
-                                    let _ = flash.erase(BASE_ADDRESS_APP, BASE_BOOTLOADER_APP);
+                                    let _ = flash.erase(BASE_FLASH_ADDR, BASE_BOOTLOADER_APP);
                                     //Reset counters
                                     boot_status = Default::default();
                                 }
@@ -203,7 +203,7 @@ async fn main(_spawner: Spawner) {
                                 Bootloader::VerifyFirmware => {
                                     let image_slice = unsafe {
                                         core::slice::from_raw_parts(
-                                            BASE_ADDRESS_APP as *const u8,
+                                            BASE_FLASH_ADDR as *const u8,
                                             boot_status.offset as usize,
                                         )
                                     };
@@ -242,12 +242,8 @@ async fn main(_spawner: Spawner) {
                                 _ => (),
                             },
                             HostProtocolMessage::Reset => {
-                                info!("Resetting");
-                                drop(tx);
-                                drop(rx);
-                                unsafe {
-                                    jump_to_app();
-                                }
+                                jump_app = true;
+                                break 'exitloop;
                             }
                         };
                         remaining

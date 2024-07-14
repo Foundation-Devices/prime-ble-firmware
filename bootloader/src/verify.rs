@@ -1,10 +1,11 @@
-use crate::RNG_HW;
+// use crate::RNG_HW;
 use cortex_m::prelude::_embedded_hal_blocking_delay_DelayMs;
 use cosign2::{Header, VerificationResult};
 use defmt::info;
 use embassy_time::Delay;
 use micro_ecc_sys::{uECC_decompress, uECC_secp256k1, uECC_valid_public_key, uECC_verify};
 use sha2::{Digest, Sha256 as Sha};
+use crate::RNG_HW;
 
 // TODO: put well-known public keys here
 const KNOWN_SIGNERS: [[u8; 33]; 0] = [
