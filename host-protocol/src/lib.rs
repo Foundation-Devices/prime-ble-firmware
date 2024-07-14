@@ -28,10 +28,11 @@ pub enum Bluetooth<'a> {
 #[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq)]
 pub enum Bootloader<'a> {
     EraseFirmware,
+    AckEraseFirmware,
     VerifyFirmware,
-    AckVerifyFirmware{
-        result : bool,
-        hash : [u8;32],
+    AckVerifyFirmware {
+        result: bool,
+        hash: [u8; 32],
     },
     NackWithIdx {
         block_idx: usize,
@@ -52,7 +53,7 @@ pub enum Bootloader<'a> {
     },
     NoCosignHeader,
     FirmwareVersion,
-    AckFirmwareVersion{
+    AckFirmwareVersion {
         version: &'a str,
     },
 }

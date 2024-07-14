@@ -1,11 +1,11 @@
 // SPDX-FileCopyrightText: 2024 Foundation Devices, Inc. <hello@foundationdevices.com>
 // SPDX-License-Identifier: GPL-3.0-or-later
-
-use crate::BASE_ADDRESS_APP;
+use crate::consts::BASE_ADDRESS_APP;
 use cortex_m::peripheral::NVIC;
 use defmt::info;
 use embassy_nrf::interrupt::Interrupt;
 use nrf_softdevice_s112::sd_softdevice_vector_table_base_set;
+
 /// Boots the application assuming softdevice is present.
 ///
 /// # Safety

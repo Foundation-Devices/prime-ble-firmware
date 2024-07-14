@@ -3,6 +3,7 @@
 
 #![no_std]
 #![no_main]
+mod consts;
 mod jump_app;
 mod verify;
 
@@ -10,8 +11,9 @@ use defmt_rtt as _;
 use embassy_nrf as _;
 use panic_probe as _;
 
+use consts::*;
 use core::cell::RefCell;
-use cosign2::{VerificationResult,Header};
+use cosign2::{Header, VerificationResult};
 use crc::{Crc, CRC_32_ISCSI};
 use defmt::info;
 use embassy_executor::Spawner;
@@ -30,7 +32,7 @@ use nrf_softdevice::Softdevice;
 use postcard::accumulator::{CobsAccumulator, FeedResult};
 use postcard::to_slice_cobs;
 use serde::{Deserialize, Serialize};
-use verify::{verify_os_image, get_fw_image_slice};
+use verify::{get_fw_image_slice, verify_os_image};
 
 // Mutex for random hw generator to delay in verification
 static RNG_HW: CriticalSectionMutex<RefCell<Option<Rng<'_, RNG>>>> = Mutex::new(RefCell::new(None));
@@ -39,20 +41,6 @@ bind_interrupts!(struct Irqs {
     UARTE0_UART0 => uarte::InterruptHandler<peripherals::UARTE0>;
     RNG => rng::InterruptHandler<peripherals::RNG>;
 });
-
-#[used]
-#[link_section = ".uicr_bootloader_start_address"]
-pub static BOOTLOADER_ADDR: i32 = 0x27000;
-
-#[cfg(feature = "boot-signed-fw")]
-const BASE_ADDRESS_APP: u32 = 0x19800;
-
-#[cfg(feature = "boot-unsigned-fw")]
-const BASE_ADDRESS_APP: u32 = 0x19000;
-
-const BASE_FLASH_ADDR: u32 = 0x19000;
-const BASE_BOOTLOADER_APP: u32 = 0x27000;
-const FLASH_PAGE: u32 = 4096;
 
 #[derive(Debug, Serialize, Deserialize, Default)]
 pub struct BootState {
@@ -185,9 +173,18 @@ async fn main(_spawner: Spawner) {
                             HostProtocolMessage::Bootloader(boot_msg) => match boot_msg {
                                 Bootloader::EraseFirmware => {
                                     info!("Erase firmware");
-                                    let _ = flash.erase(BASE_FLASH_ADDR, BASE_BOOTLOADER_APP);
-                                    //Reset counters
-                                    boot_status = Default::default();
+                                    if let Ok(res) =
+                                        flash.erase(BASE_FLASH_ADDR, BASE_BOOTLOADER_APP)
+                                    {
+                                        let mut buf_cobs = [0_u8; 16];
+                                        let ack = HostProtocolMessage::Bootloader(
+                                            Bootloader::AckEraseFirmware,
+                                        );
+                                        let cobs_ack = to_slice_cobs(&ack, &mut buf_cobs).unwrap();
+                                        //Reset counters
+                                        boot_status = Default::default();
+                                        let _ = tx.blocking_write(cobs_ack);
+                                    }
                                 }
                                 Bootloader::WriteFirmwareBlock {
                                     block_idx: idx,
@@ -199,20 +196,28 @@ async fn main(_spawner: Spawner) {
                                     let ack = update_chunk(&mut boot_status, idx, data, &mut flash);
                                     let cobs_ack = to_slice_cobs(&ack, &mut buf_cobs).unwrap();
                                     let _ = tx.blocking_write(cobs_ack);
-                                },
+                                }
                                 Bootloader::FirmwareVersion => {
-                                    let image = get_fw_image_slice(BASE_FLASH_ADDR.clone(), boot_status.offset.clone());
+                                    let image = get_fw_image_slice(
+                                        BASE_FLASH_ADDR.clone(),
+                                        boot_status.offset.clone(),
+                                    );
                                     if let Ok(Some(header)) = Header::parse_unverified(image) {
                                         let version = header.version();
                                         let ack = HostProtocolMessage::Bootloader(
-                                            Bootloader::AckFirmwareVersion { version }
+                                            Bootloader::AckFirmwareVersion { version },
                                         );
                                         let mut buf_cobs = [0_u8; 64];
-                                        let _ = tx.blocking_write(to_slice_cobs(&ack, &mut buf_cobs).unwrap());
+                                        let _ = tx.blocking_write(
+                                            to_slice_cobs(&ack, &mut buf_cobs).unwrap(),
+                                        );
                                     }
-                                },
+                                }
                                 Bootloader::VerifyFirmware => {
-                                    let image_slice = get_fw_image_slice(BASE_FLASH_ADDR.clone(), boot_status.offset.clone());
+                                    let image_slice = get_fw_image_slice(
+                                        BASE_FLASH_ADDR.clone(),
+                                        boot_status.offset.clone(),
+                                    );
                                     info!(
                                         "Image slice len dec {} - hex {:02X}",
                                         image_slice.len(),
@@ -244,7 +249,6 @@ async fn main(_spawner: Spawner) {
                                             );
                                             to_slice_cobs(&ack, &mut buf_cobs).unwrap()
                                         }
-
                                     } else {
                                         info!("No Header present!");
                                         let ack = HostProtocolMessage::Bootloader(

@@ -172,14 +172,7 @@ fn read_version_and_build_date(image: &[u8]) -> Option<([u8; 20], [u8; 14])> {
     None
 }
 
-pub fn get_fw_image_slice<'a>(base_address : u32, len : u32) -> &'a [u8]{
-    let slice = unsafe {
-        core::slice::from_raw_parts(
-            base_address as *const u8,
-            len as usize,
-        )
-    };
+pub fn get_fw_image_slice<'a>(base_address: u32, len: u32) -> &'a [u8] {
+    let slice = unsafe { core::slice::from_raw_parts(base_address as *const u8, len as usize) };
     slice
 }
-
-
