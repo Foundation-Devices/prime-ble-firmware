@@ -50,6 +50,11 @@ pub enum Bootloader<'a> {
     FirmwareOutOfBounds {
         block_idx: usize,
     },
+    NoCosignHeader,
+    FirmwareVersion,
+    AckFirmwareVersion{
+        version: &'a str,
+    },
 }
 
 /// Host protocol messages.
