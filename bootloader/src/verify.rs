@@ -1,11 +1,11 @@
 // use crate::RNG_HW;
+use crate::RNG_HW;
 use cortex_m::prelude::_embedded_hal_blocking_delay_DelayMs;
 use cosign2::{Header, VerificationResult};
 use defmt::info;
 use embassy_time::Delay;
 use micro_ecc_sys::{uECC_decompress, uECC_secp256k1, uECC_valid_public_key, uECC_verify};
 use sha2::{Digest, Sha256 as Sha};
-use crate::RNG_HW;
 
 // TODO: put well-known public keys here
 const KNOWN_SIGNERS: [[u8; 33]; 0] = [
@@ -82,7 +82,7 @@ impl cosign2::Sha256 for Sha256 {
     }
 }
 
-pub(crate) fn verify_os_image(image: &[u8]) -> (VerificationResult, Sha256) {
+pub(crate) fn verify_os_image(image: &[u8]) -> Option<(VerificationResult, Sha256)> {
     if let Some((mut version, mut build_date)) = read_version_and_build_date(image) {
         info!(
             "Version : {} - build date : {}",
@@ -90,9 +90,9 @@ pub(crate) fn verify_os_image(image: &[u8]) -> (VerificationResult, Sha256) {
             build_date.make_ascii_lowercase()
         );
         let (verif_res, hash) = verify_image(image);
-        return (verif_res, hash);
+        return Some((verif_res, hash));
     }
-    (VerificationResult::Invalid, Sha256 { sha: [0; 32] })
+    None
 }
 
 fn random_delay() {
@@ -171,3 +171,15 @@ fn read_version_and_build_date(image: &[u8]) -> Option<([u8; 20], [u8; 14])> {
 
     None
 }
+
+pub fn get_fw_image_slice<'a>(base_address : u32, len : u32) -> &'a [u8]{
+    let slice = unsafe {
+        core::slice::from_raw_parts(
+            base_address as *const u8,
+            len as usize,
+        )
+    };
+    slice
+}
+
+

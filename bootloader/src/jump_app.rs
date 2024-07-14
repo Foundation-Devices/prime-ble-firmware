@@ -1,11 +1,11 @@
 // SPDX-FileCopyrightText: 2024 Foundation Devices, Inc. <hello@foundationdevices.com>
 // SPDX-License-Identifier: GPL-3.0-or-later
 
+use crate::BASE_ADDRESS_APP;
 use cortex_m::peripheral::NVIC;
 use defmt::info;
 use embassy_nrf::interrupt::Interrupt;
 use nrf_softdevice_s112::sd_softdevice_vector_table_base_set;
-use crate::BASE_ADDRESS_APP;
 /// Boots the application assuming softdevice is present.
 ///
 /// # Safety
@@ -13,30 +13,34 @@ use crate::BASE_ADDRESS_APP;
 /// This modifies the stack pointer and reset vector and will run code placed in the active partition.
 pub unsafe fn jump_to_app() -> ! {
     use nrf_softdevice_mbr as mbr;
+
     let addr = 0x1000;
     let mut cmd = mbr::sd_mbr_command_t {
         command: mbr::NRF_MBR_COMMANDS_SD_MBR_COMMAND_INIT_SD,
         params: mbr::sd_mbr_command_t__bindgen_ty_1 {
-            irq_forward_address_set: mbr::sd_mbr_command_irq_forward_address_set_t { address: 0x19000 },
+            irq_forward_address_set: mbr::sd_mbr_command_irq_forward_address_set_t {
+                address: 0x19000,
+            },
         },
     };
     let ret = mbr::sd_mbr_command(&mut cmd);
 
     info!("ret SD init result {}", ret);
-    
+
     // Disable active interrupts
     NVIC::mask(Interrupt::UARTE0_UART0);
     NVIC::mask(Interrupt::RNG);
 
-    critical_section::with(|_|{
-
-        let ret = sd_softdevice_vector_table_base_set(BASE_ADDRESS_APP); 
+    critical_section::with(|_| {
+        let ret = sd_softdevice_vector_table_base_set(BASE_ADDRESS_APP);
         info!("ret val base set {}", ret);
 
         let mut cmd = mbr::sd_mbr_command_t {
             command: mbr::NRF_MBR_COMMANDS_SD_MBR_COMMAND_IRQ_FORWARD_ADDRESS_SET,
             params: mbr::sd_mbr_command_t__bindgen_ty_1 {
-                irq_forward_address_set: mbr::sd_mbr_command_irq_forward_address_set_t { address: addr },
+                irq_forward_address_set: mbr::sd_mbr_command_irq_forward_address_set_t {
+                    address: addr,
+                },
             },
         };
         let ret = mbr::sd_mbr_command(&mut cmd);
