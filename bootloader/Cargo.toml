@@ -25,7 +25,7 @@ nrf52805 = [
 boot-signed-fw = []
 
 # Bootloader jumps to application without cosign2 header
-boot-unsinged-fw = []
+boot-unsigned-fw = []
 
 [dependencies]
 embassy-executor = { version = "0.5.0", features = ["arch-cortex-m", "executor-thread", "executor-interrupt", "defmt", "integrated-timers"]}

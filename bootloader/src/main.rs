@@ -9,6 +9,7 @@ mod verify;
 
 use defmt_rtt as _;
 use embassy_nrf as _;
+use embassy_time::Timer;
 use panic_probe as _;
 
 use consts::*;
@@ -17,6 +18,7 @@ use cosign2::{Header, VerificationResult};
 use crc::{Crc, CRC_32_ISCSI};
 use defmt::info;
 use embassy_executor::Spawner;
+use embassy_nrf::gpio::{Input, Pull};
 use embassy_nrf::nvmc::Nvmc;
 use embassy_nrf::peripherals::{self, RNG, UARTE0};
 use embassy_nrf::rng;
@@ -119,7 +121,19 @@ async fn main(_spawner: Spawner) {
     let mut flash = Nvmc::new(p.NVMC);
 
     // Init a GPIO to use as bootloader trigger
-    // let boot_gpio = Input::new(p.P0_20, Pull::Down);
+    let boot_gpio = Input::new(p.P0_20, Pull::Down);
+    // Small delay to have stable GPIO
+    let _ = Timer::after_millis(5).await;
+    // Check if pin is low to reset - if high go on with bootloader
+    if boot_gpio.is_low() {
+        // Go to app!!
+        info!("Resetting");
+        drop(tx);
+        drop(rx);
+        unsafe {
+            jump_to_app();
+        }
+    }
 
     // // Message must be in SRAM
     let mut buf = [0; 22];
