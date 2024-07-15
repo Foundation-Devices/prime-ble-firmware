@@ -18,14 +18,15 @@ use crc::{Crc, CRC_32_ISCSI};
 use defmt::info;
 use embassy_executor::Spawner;
 use embassy_nrf::nvmc::Nvmc;
-use embassy_nrf::peripherals::{self, RNG};
+use embassy_nrf::peripherals::{self, RNG, UARTE0};
 use embassy_nrf::rng;
 use embassy_nrf::rng::Rng;
+use embassy_nrf::uarte::UarteTx;
 use embassy_nrf::{bind_interrupts, uarte};
 use embassy_sync::blocking_mutex::CriticalSectionMutex;
 use embassy_sync::blocking_mutex::Mutex;
 use embedded_storage::nor_flash::NorFlash;
-use host_protocol::Bootloader::{self, AckWithIdxCrc, NackWithIdx};
+use host_protocol::Bootloader;
 use host_protocol::HostProtocolMessage;
 use jump_app::jump_to_app;
 use nrf_softdevice::Softdevice;
@@ -49,51 +50,51 @@ pub struct BootState {
     pub actual_pkt_idx: u32,
 }
 
-fn update_chunk<'a>(
-    boot_status: &'a mut BootState,
-    idx: usize,
-    data: &'a [u8],
-    flash: &'a mut Nvmc,
-) -> HostProtocolMessage<'a> {
+fn update_chunk<'a>(boot_status: &'a mut BootState, idx: usize, data: &'a [u8], flash: &'a mut Nvmc, tx: &mut UarteTx<UARTE0>) {
     // Check what sector we are in now
     // Increase offset with data len
     let cursor = BASE_FLASH_ADDR + boot_status.offset;
     match cursor {
         (BASE_FLASH_ADDR..=BASE_BOOTLOADER_APP) => {}
         _ => {
-            return HostProtocolMessage::Bootloader(Bootloader::FirmwareOutOfBounds {
-                block_idx: idx,
-            })
+            ack_msg_send(
+                HostProtocolMessage::Bootloader(Bootloader::FirmwareOutOfBounds { block_idx: idx }),
+                tx,
+            );
+            return;
         }
     }
 
-    let ack = match flash.write(cursor, data) {
+    match flash.write(cursor, data) {
         Ok(()) => {
             boot_status.offset += data.len() as u32;
             // Print some infos on update
-            boot_status.actual_sector =
-                BASE_FLASH_ADDR + (boot_status.offset / FLASH_PAGE) * FLASH_PAGE;
-            info!(
-                "Updating flash page starting at addr: {:02X}",
-                boot_status.actual_sector
-            );
-            info!(
-                "offset : {:02X}",
-                boot_status.actual_sector + boot_status.offset % FLASH_PAGE
-            );
+            boot_status.actual_sector = BASE_FLASH_ADDR + (boot_status.offset / FLASH_PAGE) * FLASH_PAGE;
+            info!("Updating flash page starting at addr: {:02X}", boot_status.actual_sector);
+            info!("offset : {:02X}", boot_status.actual_sector + boot_status.offset % FLASH_PAGE);
             let crc = Crc::<u32>::new(&CRC_32_ISCSI);
             let crc_pkt = crc.checksum(data);
             // Align packet index to avoid double send of yet flashed packet
             boot_status.actual_pkt_idx = idx as u32;
             // If write chunck is ok ack
-            HostProtocolMessage::Bootloader(AckWithIdxCrc {
-                block_idx: idx,
-                crc: crc_pkt,
-            })
+            ack_msg_send(
+                HostProtocolMessage::Bootloader(Bootloader::AckWithIdxCrc {
+                    block_idx: idx,
+                    crc: crc_pkt,
+                }),
+                tx,
+            );
         }
-        Err(_) => HostProtocolMessage::Bootloader(NackWithIdx { block_idx: idx }),
+        Err(_) => ack_msg_send(HostProtocolMessage::Bootloader(Bootloader::NackWithIdx { block_idx: idx }), tx),
     };
-    ack
+}
+
+fn ack_msg_send(message: HostProtocolMessage, tx: &mut UarteTx<UARTE0>) {
+    // Prepare cobs buffer
+    let mut buf_cobs = [0_u8; 64];
+    let cobs_ack = to_slice_cobs(&message, &mut buf_cobs).unwrap();
+
+    let _ = tx.blocking_write(cobs_ack);
 }
 
 #[embassy_executor::main]
@@ -171,92 +172,59 @@ async fn main(_spawner: Spawner) {
                         match data {
                             HostProtocolMessage::Bluetooth(_) => (), // Message for application
                             HostProtocolMessage::Bootloader(boot_msg) => match boot_msg {
+                                // Erase all flash application space
                                 Bootloader::EraseFirmware => {
                                     info!("Erase firmware");
-                                    if let Ok(res) =
-                                        flash.erase(BASE_FLASH_ADDR, BASE_BOOTLOADER_APP)
-                                    {
-                                        let mut buf_cobs = [0_u8; 16];
-                                        let ack = HostProtocolMessage::Bootloader(
-                                            Bootloader::AckEraseFirmware,
-                                        );
-                                        let cobs_ack = to_slice_cobs(&ack, &mut buf_cobs).unwrap();
+                                    if flash.erase(BASE_FLASH_ADDR, BASE_BOOTLOADER_APP).is_ok() {
+                                        ack_msg_send(HostProtocolMessage::Bootloader(Bootloader::AckEraseFirmware), &mut tx);
                                         //Reset counters
                                         boot_status = Default::default();
-                                        let _ = tx.blocking_write(cobs_ack);
                                     }
                                 }
+                                // Write chunks of firmware
                                 Bootloader::WriteFirmwareBlock {
                                     block_idx: idx,
                                     block_data: data,
                                 } => {
                                     info!("Bootloader pkt recv");
-                                    // cobs buffer for acks
-                                    let mut buf_cobs = [0_u8; 16];
-                                    let ack = update_chunk(&mut boot_status, idx, data, &mut flash);
-                                    let cobs_ack = to_slice_cobs(&ack, &mut buf_cobs).unwrap();
-                                    let _ = tx.blocking_write(cobs_ack);
+                                    update_chunk(&mut boot_status, idx, data, &mut flash, &mut tx);
                                 }
                                 Bootloader::FirmwareVersion => {
-                                    let image = get_fw_image_slice(
-                                        BASE_FLASH_ADDR.clone(),
-                                        boot_status.offset.clone(),
-                                    );
+                                    let image = get_fw_image_slice(BASE_FLASH_ADDR, boot_status.offset);
                                     if let Ok(Some(header)) = Header::parse_unverified(image) {
                                         let version = header.version();
-                                        let ack = HostProtocolMessage::Bootloader(
-                                            Bootloader::AckFirmwareVersion { version },
-                                        );
-                                        let mut buf_cobs = [0_u8; 64];
-                                        let _ = tx.blocking_write(
-                                            to_slice_cobs(&ack, &mut buf_cobs).unwrap(),
-                                        );
+                                        ack_msg_send(HostProtocolMessage::Bootloader(Bootloader::AckFirmwareVersion { version }), &mut tx)
                                     }
                                 }
                                 Bootloader::VerifyFirmware => {
-                                    let image_slice = get_fw_image_slice(
-                                        BASE_FLASH_ADDR.clone(),
-                                        boot_status.offset.clone(),
-                                    );
-                                    info!(
-                                        "Image slice len dec {} - hex {:02X}",
-                                        image_slice.len(),
-                                        image_slice.len()
-                                    );
+                                    let image_slice = get_fw_image_slice(BASE_FLASH_ADDR, boot_status.offset);
+                                    info!("Image slice len dec {} - hex {:02X}", image_slice.len(), image_slice.len());
 
-                                    // Prepare ack to fw verification
-                                    let mut buf_cobs = [0_u8; 64];
-
-                                    let cobs_ack = if let Some((result, hash)) =
-                                        verify_os_image(image_slice)
-                                    {
+                                    if let Some((result, hash)) = verify_os_image(image_slice) {
                                         if result == VerificationResult::Valid {
                                             info!("Valid signature!");
-                                            let ack = HostProtocolMessage::Bootloader(
-                                                Bootloader::AckVerifyFirmware {
+
+                                            ack_msg_send(
+                                                HostProtocolMessage::Bootloader(Bootloader::AckVerifyFirmware {
                                                     result: true,
                                                     hash: hash.sha,
-                                                },
+                                                }),
+                                                &mut tx,
                                             );
-                                            to_slice_cobs(&ack, &mut buf_cobs).unwrap()
                                         } else {
                                             info!("Invalid signature!");
-                                            let ack = HostProtocolMessage::Bootloader(
-                                                Bootloader::AckVerifyFirmware {
+                                            ack_msg_send(
+                                                HostProtocolMessage::Bootloader(Bootloader::AckVerifyFirmware {
                                                     result: false,
                                                     hash: hash.sha,
-                                                },
+                                                }),
+                                                &mut tx,
                                             );
-                                            to_slice_cobs(&ack, &mut buf_cobs).unwrap()
                                         }
                                     } else {
                                         info!("No Header present!");
-                                        let ack = HostProtocolMessage::Bootloader(
-                                            Bootloader::NoCosignHeader,
-                                        );
-                                        to_slice_cobs(&ack, &mut buf_cobs).unwrap()
+                                        ack_msg_send(HostProtocolMessage::Bootloader(Bootloader::NoCosignHeader), &mut tx);
                                     };
-                                    let _ = tx.blocking_write(cobs_ack);
                                 }
                                 _ => (),
                             },

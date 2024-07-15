@@ -10,9 +10,7 @@ use defmt::{info, *};
 use embassy_time::{Duration, Timer};
 use futures::future::{select, Either};
 use futures::pin_mut;
-use nrf_softdevice::ble::advertisement_builder::{
-    ExtendedAdvertisementBuilder, ExtendedAdvertisementPayload, Flag, ServiceList,
-};
+use nrf_softdevice::ble::advertisement_builder::{ExtendedAdvertisementBuilder, ExtendedAdvertisementPayload, Flag, ServiceList};
 use nrf_softdevice::ble::gatt_server::notify_value;
 use nrf_softdevice::ble::peripheral;
 use nrf_softdevice::ble::{gatt_server, Connection};
@@ -42,9 +40,7 @@ pub fn initialize_sd() -> &'static mut Softdevice {
             conn_count: 1,
             event_length: 24,
         }),
-        conn_gatt: Some(raw::ble_gatt_conn_cfg_t {
-            att_mtu: ATT_MTU as u16,
-        }),
+        conn_gatt: Some(raw::ble_gatt_conn_cfg_t { att_mtu: ATT_MTU as u16 }),
         gatts_attr_tab_size: Some(raw::ble_gatts_cfg_attr_tab_size_t {
             attr_tab_size: raw::BLE_GATTS_ATTR_TAB_SIZE_DEFAULT,
         }),
@@ -57,9 +53,7 @@ pub fn initialize_sd() -> &'static mut Softdevice {
             current_len: DEVICE_NAME.len() as u16,
             max_len: DEVICE_NAME.len() as u16,
             write_perm: unsafe { mem::zeroed() },
-            _bitfield_1: raw::ble_gap_cfg_device_name_t::new_bitfield_1(
-                raw::BLE_GATTS_VLOC_STACK as u8,
-            ),
+            _bitfield_1: raw::ble_gap_cfg_device_name_t::new_bitfield_1(raw::BLE_GATTS_VLOC_STACK as u8),
         }),
         ..Default::default()
     };
@@ -100,9 +94,7 @@ pub async fn run_bluetooth(sd: &'static Softdevice, server: &Server) {
         .short_name(SHORT_NAME)
         .build();
 
-    static SCAN_DATA: ExtendedAdvertisementPayload = ExtendedAdvertisementBuilder::new()
-        .full_name(DEVICE_NAME)
-        .build();
+    static SCAN_DATA: ExtendedAdvertisementPayload = ExtendedAdvertisementBuilder::new().full_name(DEVICE_NAME).build();
 
     let adv = peripheral::ConnectableAdvertisement::ScannableUndirected {
         adv_data: &ADV_DATA,
@@ -121,9 +113,7 @@ pub async fn run_bluetooth(sd: &'static Softdevice, server: &Server) {
         // Start rssi capture
         conn.start_rssi();
         // Activate notification on handle of nus TX
-        server.nus.handle(NusEvent::TxCccdWrite {
-            notifications: true,
-        });
+        server.nus.handle(NusEvent::TxCccdWrite { notifications: true });
 
         let gatt_fut = gatt_server::run(&conn, server, |e| server.handle_event(e));
         let tx_fut = notify_data_tx(server, &conn);

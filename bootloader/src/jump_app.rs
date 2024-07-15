@@ -18,9 +18,7 @@ pub unsafe fn jump_to_app() -> ! {
     let mut cmd = mbr::sd_mbr_command_t {
         command: mbr::NRF_MBR_COMMANDS_SD_MBR_COMMAND_INIT_SD,
         params: mbr::sd_mbr_command_t__bindgen_ty_1 {
-            irq_forward_address_set: mbr::sd_mbr_command_irq_forward_address_set_t {
-                address: 0x19000,
-            },
+            irq_forward_address_set: mbr::sd_mbr_command_irq_forward_address_set_t { address: 0x19000 },
         },
     };
     let ret = mbr::sd_mbr_command(&mut cmd);
@@ -31,6 +29,7 @@ pub unsafe fn jump_to_app() -> ! {
     NVIC::mask(Interrupt::UARTE0_UART0);
     NVIC::mask(Interrupt::RNG);
 
+    // Probably this critical section is redundant, but keepin it for softdevice.
     critical_section::with(|_| {
         let ret = sd_softdevice_vector_table_base_set(BASE_ADDRESS_APP);
         info!("ret val base set {}", ret);
@@ -38,9 +37,7 @@ pub unsafe fn jump_to_app() -> ! {
         let mut cmd = mbr::sd_mbr_command_t {
             command: mbr::NRF_MBR_COMMANDS_SD_MBR_COMMAND_IRQ_FORWARD_ADDRESS_SET,
             params: mbr::sd_mbr_command_t__bindgen_ty_1 {
-                irq_forward_address_set: mbr::sd_mbr_command_irq_forward_address_set_t {
-                    address: addr,
-                },
+                irq_forward_address_set: mbr::sd_mbr_command_irq_forward_address_set_t { address: addr },
             },
         };
         let ret = mbr::sd_mbr_command(&mut cmd);

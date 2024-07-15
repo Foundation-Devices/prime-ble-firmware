@@ -25,9 +25,7 @@ pub async fn comms_task() {
             // Getting chars from Uart in a while loop
             let mut uart_in = BUFFERED_UART.lock().await;
             if let Some(uart) = uart_in.as_mut() {
-                if let Ok(n) =
-                    with_timeout(Duration::from_millis(500), uart.read(&mut raw_buf)).await
-                {
+                if let Ok(n) = with_timeout(Duration::from_millis(500), uart.read(&mut raw_buf)).await {
                     // Finished reading input
                     let n = n.unwrap();
                     if n == 0 {
@@ -140,7 +138,7 @@ pub async fn send_bt_uart() {
                 assert_out_irq().await; // Ask the MPU to process a new packet we just sent
             }
         }
-        embassy_time::Timer::after_millis(10).await;
+        embassy_time::Timer::after_millis(2).await;
     }
 }
 

@@ -57,14 +57,12 @@ pub struct BleState {
 static BT_STATE: Signal<ThreadModeRawMutex, bool> = Signal::new();
 static BT_DATA_RX: Signal<ThreadModeRawMutex, Vec<u8, ATT_MTU>> = Signal::new();
 static TX_BT_VEC: Mutex<ThreadModeRawMutex, Vec<Vec<u8, ATT_MTU>, 4>> = Mutex::new(Vec::new());
-static BUFFERED_UART: Mutex<ThreadModeRawMutex, Option<BufferedUarte<UARTE0, TIMER1>>> =
-    Mutex::new(None);
+static BUFFERED_UART: Mutex<ThreadModeRawMutex, Option<BufferedUarte<UARTE0, TIMER1>>> = Mutex::new(None);
 
 static RSSI_VALUE: Mutex<ThreadModeRawMutex, u8> = Mutex::new(0);
 
 /// nRF -> MPU IRQ output pin
-static IRQ_OUT_PIN: Mutex<ThreadModeRawMutex, RefCell<Option<Output<'static, P0_20>>>> =
-    Mutex::new(RefCell::new(None));
+static IRQ_OUT_PIN: Mutex<ThreadModeRawMutex, RefCell<Option<Output<'static, P0_20>>>> = Mutex::new(RefCell::new(None));
 
 #[embassy_executor::task]
 async fn softdevice_task(sd: &'static Softdevice) -> ! {
@@ -130,11 +128,11 @@ async fn main(spawner: Spawner) {
 
     // Configure the OUT IRQ pin
     {
-        IRQ_OUT_PIN.lock().await.borrow_mut().replace(Output::new(
-            p.P0_20,
-            Level::High,
-            OutputDrive::Standard,
-        ));
+        IRQ_OUT_PIN
+            .lock()
+            .await
+            .borrow_mut()
+            .replace(Output::new(p.P0_20, Level::High, OutputDrive::Standard));
     }
 
     // set priority to avoid collisions with softdevice

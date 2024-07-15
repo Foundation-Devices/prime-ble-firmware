@@ -21,28 +21,15 @@ impl EccVerifier {
 }
 
 impl cosign2::Secp256k1Verify for EccVerifier {
-    fn verify_ecdsa(
-        &self,
-        msg: [u8; 32],
-        signature: [u8; 64],
-        pubkey: [u8; 33],
-    ) -> cosign2::VerificationResult {
+    fn verify_ecdsa(&self, msg: [u8; 32], signature: [u8; 64], pubkey: [u8; 33]) -> cosign2::VerificationResult {
         const UECC_SUCCESS: i32 = 1;
         const CFI_SUCCESS: u32 = CF1 + CF2;
         const CF1: u32 = 13;
         const CF2: u32 = 7;
         let mut control_flow_integrity_counter = 0;
         let mut uncompressed_pk = [0; 64];
-        unsafe {
-            uECC_decompress(
-                pubkey.as_ptr(),
-                uncompressed_pk.as_mut_ptr(),
-                uECC_secp256k1(),
-            )
-        };
-        let res = unsafe {
-            uECC_valid_public_key(uncompressed_pk.as_ptr(), micro_ecc_sys::uECC_secp256k1())
-        };
+        unsafe { uECC_decompress(pubkey.as_ptr(), uncompressed_pk.as_mut_ptr(), uECC_secp256k1()) };
+        let res = unsafe { uECC_valid_public_key(uncompressed_pk.as_ptr(), micro_ecc_sys::uECC_secp256k1()) };
         if res == UECC_SUCCESS {
             control_flow_integrity_counter += CF1;
             random_delay(); // Random delay against glitch or timing attacks
@@ -60,9 +47,7 @@ impl cosign2::Secp256k1Verify for EccVerifier {
                 control_flow_integrity_counter += CF2;
                 let complement = !UECC_SUCCESS;
                 let complement_ptr = &complement as *const i32;
-                if !res == unsafe { complement_ptr.read_volatile() }
-                    && control_flow_integrity_counter == CFI_SUCCESS
-                {
+                if !res == unsafe { complement_ptr.read_volatile() } && control_flow_integrity_counter == CFI_SUCCESS {
                     return cosign2::VerificationResult::Valid;
                 }
             }
@@ -136,14 +121,10 @@ fn verify_image(image: &[u8]) -> (VerificationResult, Sha256) {
                     #[allow(clippy::collapsible_if)]
                     if firmware_bytes.len() as u32 == header.firmware_size() {
                         control_flow_integrity_counter += CF5;
-                        if core::hint::black_box(
-                            firmware_bytes.len() as u32 == header.firmware_size(),
-                        ) {
+                        if core::hint::black_box(firmware_bytes.len() as u32 == header.firmware_size()) {
                             control_flow_integrity_counter += CF6;
                             let cfi_counter_ptr = &control_flow_integrity_counter as *const u32;
-                            if unsafe { cfi_counter_ptr.read_volatile() }
-                                == CF1 + CF2 + CF3 + CF4 + CF5 + CF6
-                            {
+                            if unsafe { cfi_counter_ptr.read_volatile() } == CF1 + CF2 + CF3 + CF4 + CF5 + CF6 {
                                 let sha256 = header.firmware_hash();
                                 return (VerificationResult::Valid, Sha256 { sha: *sha256 });
                             }

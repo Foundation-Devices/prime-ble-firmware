@@ -1,6 +1,14 @@
 ## `prime-ble-firmware`
 
-Passport Prime BLE controller firmware.
+### Passport Prime BLE controller firmware.
+
+This workspace is composed of:
+
+- Bootloader
+- Application firmware
+- Host protocol
+
+Firmware and bootloader communicates via UART with the main MCU 
 
 ### Installation and running
 
@@ -23,3 +31,4 @@ Passport Prime BLE controller firmware.
    ```bash
    cargo run --release --bin firmware -- --probe <PROBE>
    ```
+5. Flash:
