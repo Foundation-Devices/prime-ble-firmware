@@ -1,4 +1,4 @@
-use crate::consts::BT_MAX_NUM_PKT;
+use crate::consts::{BT_MAX_NUM_PKT, MTU};
 use crate::{BT_DATA_RX, BT_STATE, BUFFERED_UART, RSSI_VALUE};
 use crate::{IRQ_OUT_PIN, TX_BT_VEC};
 use defmt::info;
@@ -105,9 +105,12 @@ async fn bluetooth_handler(uart: &mut BufferedUarte<'static, UARTE0, TIMER1>, ms
         Bluetooth::SignalStrength(_) => (), // no-op, host-side packet
         Bluetooth::SendData(data) => {
             info!("Sending BLE data: {:?}", data);
-            let mut buffer_tx_bt = TX_BT_VEC.lock().await;
-            if buffer_tx_bt.len() < BT_MAX_NUM_PKT {
-                let _ = buffer_tx_bt.push(Vec::from_slice(data).unwrap());
+            // Error if data length is greater than max MTU size
+            if data.len() <= MTU {
+                let mut buffer_tx_bt = TX_BT_VEC.lock().await;
+                if buffer_tx_bt.len() < BT_MAX_NUM_PKT {
+                    let _ = buffer_tx_bt.push(Vec::from_slice(data).unwrap());
+                }
             }
         }
         Bluetooth::ReceivedData(_) => {} // no-op, host-side packet

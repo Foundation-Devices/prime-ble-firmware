@@ -39,6 +39,8 @@ pub enum Bootloader<'a> {
     NoCosignHeader,
     FirmwareVersion,
     AckFirmwareVersion { version: &'a str },
+    BootloaderVersion,
+    AckBootloaderVersion { version: &'a str },
 }
 
 /// Host protocol messages.

@@ -31,6 +31,7 @@ use embedded_storage::nor_flash::NorFlash;
 use host_protocol::Bootloader;
 use host_protocol::HostProtocolMessage;
 use jump_app::jump_to_app;
+#[allow(unused_imports)]
 use nrf_softdevice::Softdevice;
 use postcard::accumulator::{CobsAccumulator, FeedResult};
 use postcard::to_slice_cobs;
@@ -208,7 +209,16 @@ async fn main(_spawner: Spawner) {
                                     if let Ok(Some(header)) = Header::parse_unverified(image) {
                                         let version = header.version();
                                         ack_msg_send(HostProtocolMessage::Bootloader(Bootloader::AckFirmwareVersion { version }), &mut tx)
+                                    } else {
+                                        ack_msg_send(HostProtocolMessage::Bootloader(Bootloader::NoCosignHeader), &mut tx);
                                     }
+                                }
+                                Bootloader::BootloaderVersion => {
+                                    let version = env!("CARGO_PKG_VERSION");
+                                    ack_msg_send(
+                                        HostProtocolMessage::Bootloader(Bootloader::AckBootloaderVersion { version }),
+                                        &mut tx,
+                                    )
                                 }
                                 Bootloader::VerifyFirmware => {
                                     let image_slice = get_fw_image_slice(BASE_FLASH_ADDR, boot_status.offset);
@@ -245,7 +255,7 @@ async fn main(_spawner: Spawner) {
                             HostProtocolMessage::Reset => {
                                 jump_app = true;
                                 break 'exitloop;
-                            }
+                            },
                         };
                         remaining
                     }
