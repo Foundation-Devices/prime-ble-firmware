@@ -141,7 +141,7 @@ pub async fn send_bt_uart() {
                 assert_out_irq().await; // Ask the MPU to process a new packet we just sent
             }
         }
-        embassy_time::Timer::after_millis(2).await;
+        embassy_time::Timer::after_millis(1).await;
     }
 }
 
