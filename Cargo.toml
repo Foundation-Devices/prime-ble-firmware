@@ -10,5 +10,10 @@ members = [
     "host-protocol",
 ]
 
+
 [profile.release]
 debug = 2
+lto = true
+opt-level = "s"  # Optimize for size
+panic = "abort"
+codegen-units = 1

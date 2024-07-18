@@ -1,4 +1,6 @@
 /target
 .idea
-/cobs-gen/target
+/cobs-file-chunker/target
 /.vscode
+*.bin
+*.hex

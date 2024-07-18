@@ -1,4 +1,4 @@
-use crate::consts::BT_MAX_NUM_PKT;
+use crate::consts::{BT_MAX_NUM_PKT, MTU};
 use crate::{BT_DATA_RX, BT_STATE, BUFFERED_UART, RSSI_VALUE};
 use crate::{IRQ_OUT_PIN, TX_BT_VEC};
 use defmt::info;
@@ -25,9 +25,7 @@ pub async fn comms_task() {
             // Getting chars from Uart in a while loop
             let mut uart_in = BUFFERED_UART.lock().await;
             if let Some(uart) = uart_in.as_mut() {
-                if let Ok(n) =
-                    with_timeout(Duration::from_millis(500), uart.read(&mut raw_buf)).await
-                {
+                if let Ok(n) = with_timeout(Duration::from_millis(500), uart.read(&mut raw_buf)).await {
                     // Finished reading input
                     let n = n.unwrap();
                     if n == 0 {
@@ -64,7 +62,8 @@ pub async fn comms_task() {
                                     HostProtocolMessage::Bootloader(_) => (), // no-op, handled in the bootloader
                                     HostProtocolMessage::Reset => {
                                         info!("Resetting");
-                                        // TODO: reset
+                                        drop(uart_in);
+                                        cortex_m::peripheral::SCB::sys_reset();
                                     }
                                 };
 
@@ -106,9 +105,12 @@ async fn bluetooth_handler(uart: &mut BufferedUarte<'static, UARTE0, TIMER1>, ms
         Bluetooth::SignalStrength(_) => (), // no-op, host-side packet
         Bluetooth::SendData(data) => {
             info!("Sending BLE data: {:?}", data);
-            let mut buffer_tx_bt = TX_BT_VEC.lock().await;
-            if buffer_tx_bt.len() < BT_MAX_NUM_PKT {
-                let _ = buffer_tx_bt.push(Vec::from_slice(data).unwrap());
+            // Error if data length is greater than max MTU size
+            if data.len() <= MTU {
+                let mut buffer_tx_bt = TX_BT_VEC.lock().await;
+                if buffer_tx_bt.len() < BT_MAX_NUM_PKT {
+                    let _ = buffer_tx_bt.push(Vec::from_slice(data).unwrap());
+                }
             }
         }
         Bluetooth::ReceivedData(_) => {} // no-op, host-side packet
@@ -139,7 +141,7 @@ pub async fn send_bt_uart() {
                 assert_out_irq().await; // Ask the MPU to process a new packet we just sent
             }
         }
-        embassy_time::Timer::after_millis(10).await;
+        embassy_time::Timer::after_millis(1).await;
     }
 }
 

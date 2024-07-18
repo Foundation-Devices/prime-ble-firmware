@@ -1,0 +1,14 @@
+[package]
+name = "cobs-file-chunker"
+version = "0.1.0"
+edition = "2021"
+
+[workspace]
+
+[dependencies]
+serialport = "4.3.0"
+postcard = { version = "1.0.8", features = ["experimental-derive","use-crc"] }
+serde = { version = "1.0.192", features = ["derive"], default-features = false }
+
+[dependencies.host-protocol]
+path = "../host-protocol"

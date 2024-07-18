@@ -15,16 +15,17 @@ use embassy_nrf::peripherals::{P0_20, TIMER1, UARTE0};
 // global logger
 use embassy_nrf as _;
 use embassy_time::Timer;
+use embedded_io_async::Write;
 // time driver
 use panic_probe as _;
 
 use comms::{comms_task, send_bt_uart};
-use consts::{ATT_MTU, MAX_IRQ};
+use consts::ATT_MTU;
 use defmt::{info, *};
 use embassy_executor::Spawner;
 use embassy_nrf::buffered_uarte::{self, BufferedUarte};
 use embassy_nrf::gpio::{Level, Output, OutputDrive};
-use embassy_nrf::interrupt::{self, Interrupt, InterruptExt};
+use embassy_nrf::interrupt::{self, InterruptExt};
 use embassy_nrf::{bind_interrupts, peripherals, uarte};
 use embassy_sync::blocking_mutex::raw::ThreadModeRawMutex;
 use embassy_sync::mutex::Mutex;
@@ -56,14 +57,12 @@ pub struct BleState {
 static BT_STATE: Signal<ThreadModeRawMutex, bool> = Signal::new();
 static BT_DATA_RX: Signal<ThreadModeRawMutex, Vec<u8, ATT_MTU>> = Signal::new();
 static TX_BT_VEC: Mutex<ThreadModeRawMutex, Vec<Vec<u8, ATT_MTU>, 4>> = Mutex::new(Vec::new());
-static BUFFERED_UART: Mutex<ThreadModeRawMutex, Option<BufferedUarte<UARTE0, TIMER1>>> =
-    Mutex::new(None);
+static BUFFERED_UART: Mutex<ThreadModeRawMutex, Option<BufferedUarte<UARTE0, TIMER1>>> = Mutex::new(None);
 
 static RSSI_VALUE: Mutex<ThreadModeRawMutex, u8> = Mutex::new(0);
 
 /// nRF -> MPU IRQ output pin
-static IRQ_OUT_PIN: Mutex<ThreadModeRawMutex, RefCell<Option<Output<'static, P0_20>>>> =
-    Mutex::new(RefCell::new(None));
+static IRQ_OUT_PIN: Mutex<ThreadModeRawMutex, RefCell<Option<Output<'static, P0_20>>>> = Mutex::new(RefCell::new(None));
 
 #[embassy_executor::task]
 async fn softdevice_task(sd: &'static Softdevice) -> ! {
@@ -84,7 +83,10 @@ async fn heartbeat() {
 async fn main(spawner: Spawner) {
     info!("Hello World!");
 
-    let mut conf = embassy_nrf::config::Config::default(); //embassy_nrf::init(Default::default());
+    let mut conf = embassy_nrf::config::Config::default();
+    conf.hfclk_source = embassy_nrf::config::HfclkSource::ExternalXtal;
+    conf.lfclk_source = embassy_nrf::config::LfclkSource::ExternalXtal;
+
     conf.gpiote_interrupt_priority = interrupt::Priority::P2;
     conf.time_interrupt_priority = interrupt::Priority::P2;
 
@@ -92,7 +94,7 @@ async fn main(spawner: Spawner) {
 
     let mut config_uart = uarte::Config::default();
     config_uart.parity = uarte::Parity::EXCLUDED;
-    config_uart.baudrate = uarte::Baudrate::BAUD460800;
+    config_uart.baudrate = uarte::Baudrate::BAUD115200;
 
     static TX_BUFFER: StaticCell<[u8; COBS_MAX_MSG_SIZE]> = StaticCell::new();
     static RX_BUFFER: StaticCell<[u8; COBS_MAX_MSG_SIZE]> = StaticCell::new();
@@ -103,7 +105,7 @@ async fn main(spawner: Spawner) {
     #[cfg(feature = "uart-pins-console")]
     let (rxd, txd) = (p.P0_16, p.P0_18);
 
-    let uart = BufferedUarte::new(
+    let mut uart = BufferedUarte::new(
         p.UARTE0,
         p.TIMER1,
         p.PPI_CH0,
@@ -117,6 +119,8 @@ async fn main(spawner: Spawner) {
         &mut RX_BUFFER.init([0; COBS_MAX_MSG_SIZE])[..],
     );
 
+    let _ = uart.write_all(b"Hi from app!").await;
+
     // Mutex is released
     {
         *(BUFFERED_UART.lock().await) = Some(uart);
@@ -124,11 +128,11 @@ async fn main(spawner: Spawner) {
 
     // Configure the OUT IRQ pin
     {
-        IRQ_OUT_PIN.lock().await.borrow_mut().replace(Output::new(
-            p.P0_20,
-            Level::High,
-            OutputDrive::Standard,
-        ));
+        IRQ_OUT_PIN
+            .lock()
+            .await
+            .borrow_mut()
+            .replace(Output::new(p.P0_20, Level::High, OutputDrive::Standard));
     }
 
     // set priority to avoid collisions with softdevice
@@ -148,19 +152,6 @@ async fn main(spawner: Spawner) {
     unwrap!(spawner.spawn(send_bt_uart()));
 
     info!("Init tasks");
-
-    for num in 0..=MAX_IRQ {
-        let interrupt = unsafe { core::mem::transmute::<u16, Interrupt>(num) };
-        let is_enabled = InterruptExt::is_enabled(interrupt);
-        let priority = InterruptExt::get_priority(interrupt);
-
-        defmt::println!(
-            "Interrupt {}: Enabled = {}, Priority = {}",
-            num,
-            is_enabled,
-            priority
-        );
-    }
 
     loop {
         Timer::after_millis(100).await;
