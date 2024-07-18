@@ -51,10 +51,13 @@ Leaving here both probe-rs-cli solution and probe-rs ( which is the new one), be
    ```bash
     probe-rs download misc/s112_nrf52_7.2.0_softdevice.hex --chip nrf52805_xxAA --binary-format hex --probe <PROBE>
    ```
+   
 4. Modify in .cargo folder of firmware:
+   ```bash
    runner = "probe-rs run --chip nrf52805_xxAA"
-  
-5. Flash and run the firmware:
+   ```
+   
+6. Flash and run the firmware:
    ```bash
    cargo run --release --bin firmware -- --probe <PROBE>
    ```
