@@ -75,6 +75,9 @@ async fn notify_data_tx<'a>(server: &'a Server, connection: &'a Connection) {
         // This is the way we can notify data when NUS service is up
         {
             let mut buffer = TX_BT_VEC.lock().await;
+            if buffer.len()>2{
+                info!("Buffer to BT len {}", buffer.len());
+            }
             if buffer.len() > 0 {
                 let _ = notify_value(connection, server.nus.get_handle(), &buffer[0]);
                 buffer.remove(0);

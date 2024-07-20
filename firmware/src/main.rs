@@ -51,9 +51,13 @@ bind_interrupts!(struct Irqs {
 // Signal for BT state
 static BT_STATE: Signal<ThreadModeRawMutex, bool> = Signal::new();
 static TX_BT_VEC: Mutex<ThreadModeRawMutex, Vec<Vec<u8, ATT_MTU>, 4>> = Mutex::new(Vec::new());
-static BUFFERED_UART: Mutex<ThreadModeRawMutex, Option<BufferedUarte<UARTE0, TIMER1>>> = Mutex::new(None);
+// static BUFFERED_UART: Mutex<ThreadModeRawMutex, Option<BufferedUarte<UARTE0, TIMER1>>> = Mutex::new(None);
 static RSSI_VALUE: Mutex<ThreadModeRawMutex, u8> = Mutex::new(0);
 static BT_DATA_RX: Channel<ThreadModeRawMutex, Vec<u8, ATT_MTU>, 4> = Channel::new();
+
+static RSSI_TX: Channel<ThreadModeRawMutex,u8,1> = Channel::new();
+
+static BUFFERED_UART: StaticCell<BufferedUarte<'static, UARTE0, TIMER1>> = StaticCell::new();
 
 /// nRF -> MPU IRQ output pin
 static IRQ_OUT_PIN: Mutex<ThreadModeRawMutex, RefCell<Option<Output<'static, P0_20>>>> = Mutex::new(RefCell::new(None));
@@ -91,7 +95,7 @@ async fn main(spawner: Spawner) {
     config_uart.baudrate = uarte::Baudrate::BAUD460800;
 
     static TX_BUFFER: StaticCell<[u8; COBS_MAX_MSG_SIZE]> = StaticCell::new();
-    static RX_BUFFER: StaticCell<[u8; COBS_MAX_MSG_SIZE]> = StaticCell::new();
+    static RX_BUFFER: StaticCell<[u8; 1024]> = StaticCell::new();
 
     #[cfg(feature = "uart-pins-mpu")]
     let (rxd, txd) = (p.P0_14, p.P0_12);
@@ -99,7 +103,7 @@ async fn main(spawner: Spawner) {
     #[cfg(feature = "uart-pins-console")]
     let (rxd, txd) = (p.P0_16, p.P0_18);
 
-    let mut uart = BufferedUarte::new(
+    let uart = BUFFERED_UART.init(BufferedUarte::new(
         p.UARTE0,
         p.TIMER1,
         p.PPI_CH0,
@@ -110,15 +114,12 @@ async fn main(spawner: Spawner) {
         txd,
         config_uart,
         &mut TX_BUFFER.init([0; COBS_MAX_MSG_SIZE])[..],
-        &mut RX_BUFFER.init([0; COBS_MAX_MSG_SIZE])[..],
-    );
+        &mut RX_BUFFER.init([0; 1024])[..],
+    ));
 
     let _ = uart.write_all(b"Hi from app!").await;
 
-    // Mutex is released
-    {
-        *(BUFFERED_UART.lock().await) = Some(uart);
-    }
+    let (rx,tx) = uart.split();
 
     // Configure the OUT IRQ pin
     {
@@ -142,8 +143,8 @@ async fn main(spawner: Spawner) {
     // heartbeat small task to check activity
     unwrap!(spawner.spawn(heartbeat()));
     // Uart task
-    unwrap!(spawner.spawn(comms_task()));
-    unwrap!(spawner.spawn(send_bt_uart()));
+    unwrap!(spawner.spawn(comms_task(rx)));
+    unwrap!(spawner.spawn(send_bt_uart(tx)));
 
     info!("Init tasks");
 
