@@ -95,7 +95,7 @@ async fn main(spawner: Spawner) {
     config_uart.baudrate = uarte::Baudrate::BAUD460800;
 
     static TX_BUFFER: StaticCell<[u8; COBS_MAX_MSG_SIZE]> = StaticCell::new();
-    static RX_BUFFER: StaticCell<[u8; 1024]> = StaticCell::new();
+    static RX_BUFFER: StaticCell<[u8; COBS_MAX_MSG_SIZE]> = StaticCell::new();
 
     #[cfg(feature = "uart-pins-mpu")]
     let (rxd, txd) = (p.P0_14, p.P0_12);
@@ -114,7 +114,7 @@ async fn main(spawner: Spawner) {
         txd,
         config_uart,
         &mut TX_BUFFER.init([0; COBS_MAX_MSG_SIZE])[..],
-        &mut RX_BUFFER.init([0; 1024])[..],
+        &mut RX_BUFFER.init([0; COBS_MAX_MSG_SIZE])[..],
     ));
 
     let _ = uart.write_all(b"Hi from app!").await;
