@@ -25,7 +25,7 @@ pub async fn comms_task() {
             // Getting chars from Uart in a while loop
             let mut uart_in = BUFFERED_UART.lock().await;
             if let Some(uart) = uart_in.as_mut() {
-                if let Ok(n) = with_timeout(Duration::from_millis(500), uart.read(&mut raw_buf)).await {
+                if let Ok(n) = with_timeout(Duration::from_millis(40), uart.read(&mut raw_buf)).await {
                     // Finished reading input
                     let n = n.unwrap();
                     if n == 0 {
@@ -123,25 +123,31 @@ pub async fn send_bt_uart() {
     let mut send_buf = [0u8; COBS_MAX_MSG_SIZE];
 
     loop {
-        let data = BT_DATA_RX.wait().await;
-        let msg = HostProtocolMessage::Bluetooth(Bluetooth::ReceivedData(data.as_slice()));
-
-        send_buf.fill(0); // Clear the buffer from any previous data
-        let cobs_tx = to_slice_cobs(&msg, &mut send_buf).expect("to_slice_cobs");
+        // Try receive from BT sender channel
+        let cobs = if let Ok(data) = BT_DATA_RX.try_receive() {
+            let msg = HostProtocolMessage::Bluetooth(Bluetooth::ReceivedData(data.as_slice()));
+            send_buf.fill(0); // Clear the buffer from any previous data
+            Some(to_slice_cobs(&msg, &mut send_buf).expect("to_slice_cobs"))
+        } else {
+            None
+        };
 
         {
-            info!("Data rx from BT --> UART");
-            // Getting chars from Uart in a while loop
-            let mut uart = BUFFERED_UART.lock().await;
-            if let Some(uart_tx) = uart.as_mut() {
-                let _ = uart_tx.write_all(cobs_tx).await;
-                let _ = uart_tx.flush().await;
+            // If data is present from BT send to serial with Cobs format
+            if let Some(cobs_tx) = cobs {
+                info!("Data rx from BT --> UART");
+                // Getting chars from Uart in a while loop
+                let mut uart = BUFFERED_UART.lock().await;
+                if let Some(uart_tx) = uart.as_mut() {
+                    let _ = uart_tx.write_all(cobs_tx).await;
+                    let _ = uart_tx.flush().await;
 
-                info!("{}", *cobs_tx);
-                assert_out_irq().await; // Ask the MPU to process a new packet we just sent
+                    info!("{}", *cobs_tx);
+                    assert_out_irq().await; // Ask the MPU to process a new packet we just sent
+                }
             }
         }
-        embassy_time::Timer::after_millis(1).await;
+        embassy_time::Timer::after_micros(200).await;
     }
 }
 

@@ -726,7 +726,7 @@ dependencies = [
  "defmt-rtt",
  "embassy-executor",
  "embassy-nrf",
- "embassy-sync 0.5.0",
+ "embassy-sync 0.6.0",
  "embassy-time",
  "embedded-io-async",
  "embedded-storage",

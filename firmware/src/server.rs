@@ -65,7 +65,6 @@ pub fn initialize_sd() -> &'static mut Softdevice {
 async fn notify_data_tx<'a>(server: &'a Server, connection: &'a Connection) {
     loop {
         // info!("Getting RSSI - tick 1S");
-        // info!("RSSI {}db", connection.rssi());
         if connection.rssi().is_some() {
             // Get as u8 rssi - receiver side will take care of cast to i8
             let rssi_as_u8 = connection.rssi().unwrap() as u8;

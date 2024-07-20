@@ -28,6 +28,7 @@ use embassy_nrf::gpio::{Level, Output, OutputDrive};
 use embassy_nrf::interrupt::{self, InterruptExt};
 use embassy_nrf::{bind_interrupts, peripherals, uarte};
 use embassy_sync::blocking_mutex::raw::ThreadModeRawMutex;
+use embassy_sync::channel::Channel;
 use embassy_sync::mutex::Mutex;
 use embassy_sync::signal::Signal;
 use futures::pin_mut;
@@ -46,20 +47,13 @@ compile_error!("One of the features `uart-pins-console` or `uart-pins-mpu` must 
 bind_interrupts!(struct Irqs {
     UARTE0_UART0 => buffered_uarte::InterruptHandler<peripherals::UARTE0>;
 });
-#[allow(dead_code)]
-#[derive(Default)]
-pub struct BleState {
-    state: bool,
-    rssi: Option<i8>,
-}
 
 // Signal for BT state
 static BT_STATE: Signal<ThreadModeRawMutex, bool> = Signal::new();
-static BT_DATA_RX: Signal<ThreadModeRawMutex, Vec<u8, ATT_MTU>> = Signal::new();
 static TX_BT_VEC: Mutex<ThreadModeRawMutex, Vec<Vec<u8, ATT_MTU>, 4>> = Mutex::new(Vec::new());
 static BUFFERED_UART: Mutex<ThreadModeRawMutex, Option<BufferedUarte<UARTE0, TIMER1>>> = Mutex::new(None);
-
 static RSSI_VALUE: Mutex<ThreadModeRawMutex, u8> = Mutex::new(0);
+static BT_DATA_RX: Channel<ThreadModeRawMutex, Vec<u8, ATT_MTU>, 4> = Channel::new();
 
 /// nRF -> MPU IRQ output pin
 static IRQ_OUT_PIN: Mutex<ThreadModeRawMutex, RefCell<Option<Output<'static, P0_20>>>> = Mutex::new(RefCell::new(None));
@@ -94,7 +88,7 @@ async fn main(spawner: Spawner) {
 
     let mut config_uart = uarte::Config::default();
     config_uart.parity = uarte::Parity::EXCLUDED;
-    config_uart.baudrate = uarte::Baudrate::BAUD460800;
+    config_uart.baudrate = uarte::Baudrate::BAUD115200;
 
     static TX_BUFFER: StaticCell<[u8; COBS_MAX_MSG_SIZE]> = StaticCell::new();
     static RX_BUFFER: StaticCell<[u8; COBS_MAX_MSG_SIZE]> = StaticCell::new();
