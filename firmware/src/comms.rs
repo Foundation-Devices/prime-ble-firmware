@@ -1,4 +1,4 @@
-use crate::consts::{BT_MAX_NUM_PKT, MTU};
+use crate::consts::{ATT_MTU, BT_MAX_NUM_PKT, MTU};
 use crate::{BT_DATA_RX, BT_STATE, RSSI_TX, RSSI_VALUE};
 use crate::{IRQ_OUT_PIN, TX_BT_VEC};
 use defmt::info;
@@ -16,6 +16,9 @@ use postcard::to_slice_cobs;
 pub async fn comms_task(mut rx : BufferedUarteRx<'static,'static,UARTE0,TIMER1>) {
     // Raw buffer - 32 bytes for the accumulator of cobs
     let mut raw_buf = [0u8; 128];
+
+    let mut counter = 0;
+    let mut data_rx = 0;
     // Create a cobs accumulator for data incoming
     let mut cobs_buf: CobsAccumulator<COBS_MAX_MSG_SIZE> = CobsAccumulator::new();
     loop {
@@ -30,7 +33,7 @@ pub async fn comms_task(mut rx : BufferedUarteRx<'static,'static,UARTE0,TIMER1>)
                     info!("overfull");
                     break;
                 }
-                info!("Data incoming {} bytes", n);
+                // info!("Data incoming {} bytes", n);
 
                 let buf = &raw_buf[..n];
                 let mut window = buf;
@@ -38,7 +41,7 @@ pub async fn comms_task(mut rx : BufferedUarteRx<'static,'static,UARTE0,TIMER1>)
                 'cobs: while !window.is_empty() {
                     window = match cobs_buf.feed_ref::<HostProtocolMessage>(window) {
                         FeedResult::Consumed => {
-                            info!("consumed");
+                            // info!("consumed");
                             break 'cobs;
                         }
                         FeedResult::OverFull(new_wind) => {
@@ -55,6 +58,14 @@ pub async fn comms_task(mut rx : BufferedUarteRx<'static,'static,UARTE0,TIMER1>)
                             match data {
                                 HostProtocolMessage::Bluetooth(bluetooth_msg) => {
                                     info!("Received HostProtocolMessage::Bluetooth");
+                                    match bluetooth_msg {
+                                        Bluetooth::SendData(data) =>{
+                                        counter += 1;
+                                        data_rx += data.len();
+                                        info!("Packet recv {} - data recv {}",counter,data_rx);
+                                        },
+                                        _ => {}
+                                    }
                                     bluetooth_handler(bluetooth_msg).await
                                 }
                                 HostProtocolMessage::Bootloader(_) => (), // no-op, handled in the bootloader
@@ -71,7 +82,6 @@ pub async fn comms_task(mut rx : BufferedUarteRx<'static,'static,UARTE0,TIMER1>)
                 }
             }
         }
-        embassy_time::Timer::after_millis(1).await;
     }
 }
 
@@ -98,7 +108,7 @@ async fn bluetooth_handler(msg: Bluetooth<'_>) {
             // Error if data length is greater than max MTU size
             if data.len() <= MTU {
                 let mut buffer_tx_bt = TX_BT_VEC.lock().await;
-                info!("Buffer to BT len {:?}", buffer_tx_bt.len());
+                // info!("Buffer to BT len {:?}", buffer_tx_bt.len());
                 if buffer_tx_bt.len() < BT_MAX_NUM_PKT {
                     let _ = buffer_tx_bt.push(Vec::from_slice(data).unwrap());
                 }
