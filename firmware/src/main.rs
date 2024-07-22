@@ -50,7 +50,7 @@ bind_interrupts!(struct Irqs {
 
 // Signal for BT state
 static BT_STATE: Signal<ThreadModeRawMutex, bool> = Signal::new();
-static TX_BT_VEC: Mutex<ThreadModeRawMutex, Vec<Vec<u8, ATT_MTU>, 8>> = Mutex::new(Vec::new());
+static TX_BT_VEC: Mutex<ThreadModeRawMutex, Vec<Vec<u8, ATT_MTU>, 4>> = Mutex::new(Vec::new());
 static RSSI_VALUE: Mutex<ThreadModeRawMutex, u8> = Mutex::new(0);
 static BT_DATA_RX: Channel<ThreadModeRawMutex, Vec<u8, ATT_MTU>, 4> = Channel::new();
 static RSSI_TX: Channel<ThreadModeRawMutex,u8,1> = Channel::new();

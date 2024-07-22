@@ -56,7 +56,7 @@ pub fn initialize_sd() -> &'static mut Softdevice {
             _bitfield_1: raw::ble_gap_cfg_device_name_t::new_bitfield_1(raw::BLE_GATTS_VLOC_STACK as u8),
         }),
         conn_gatts: Some(raw::ble_gatts_conn_cfg_t{
-            hvn_tx_queue_size : 6,
+            hvn_tx_queue_size : 3,
         }),
         
         ..Default::default()
@@ -93,7 +93,7 @@ async fn notify_data_tx<'a>(server: &'a Server, connection: &'a Connection) {
         }
 
         // Sleep for one millisecond.
-        Timer::after(Duration::from_millis(1)).await
+        Timer::after(Duration::from_micros(500)).await
     }
 }
 

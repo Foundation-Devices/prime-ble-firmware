@@ -1,11 +1,9 @@
-use crate::consts::{ATT_MTU, BT_MAX_NUM_PKT, MTU};
+use crate::consts::{BT_MAX_NUM_PKT, MTU};
 use crate::{BT_DATA_RX, BT_STATE, RSSI_TX, RSSI_VALUE};
 use crate::{IRQ_OUT_PIN, TX_BT_VEC};
 use defmt::info;
 use embassy_nrf::buffered_uarte::{BufferedUarteRx, BufferedUarteTx};
-use embassy_nrf::{
-    peripherals::{TIMER1, UARTE0},
-};
+use embassy_nrf::peripherals::{TIMER1, UARTE0};
 use embedded_io_async::Write;
 use heapless::Vec;
 use host_protocol::{Bluetooth, HostProtocolMessage, COBS_MAX_MSG_SIZE};

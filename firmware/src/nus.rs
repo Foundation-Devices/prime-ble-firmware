@@ -32,7 +32,6 @@ impl Nus {
             NusEvent::RxWrite(data) => {
                 info!("Received: {} bytes {:?}", data.len(), data);
                 let _ = BT_DATA_RX.try_send(data);
-                info!("Buffer len {}", BT_DATA_RX.len())
             }
         }
     }
