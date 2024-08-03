@@ -79,6 +79,7 @@ async fn main(spawner: Spawner) {
     info!("Hello World!");
 
     let mut conf = embassy_nrf::config::Config::default();
+    conf.dcdc = embassy_nrf::config::DcdcConfig{reg1 : true};
     conf.hfclk_source = embassy_nrf::config::HfclkSource::ExternalXtal;
     conf.lfclk_source = embassy_nrf::config::LfclkSource::ExternalXtal;
 
