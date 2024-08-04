@@ -55,10 +55,8 @@ pub fn initialize_sd() -> &'static mut Softdevice {
             write_perm: unsafe { mem::zeroed() },
             _bitfield_1: raw::ble_gap_cfg_device_name_t::new_bitfield_1(raw::BLE_GATTS_VLOC_STACK as u8),
         }),
-        conn_gatts: Some(raw::ble_gatts_conn_cfg_t{
-            hvn_tx_queue_size : 3,
-        }),
-        
+        conn_gatts: Some(raw::ble_gatts_conn_cfg_t { hvn_tx_queue_size: 3 }),
+
         ..Default::default()
     };
 
@@ -68,18 +66,18 @@ pub fn initialize_sd() -> &'static mut Softdevice {
 /// Notifies the connected client about new data.
 async fn notify_data_tx<'a>(server: &'a Server, connection: &'a Connection) {
     loop {
-        
-
         // This is the way we can notify data when NUS service is up
         {
             let mut buffer = TX_BT_VEC.lock().await;
-            if buffer.len()>2{
+            if buffer.len() > 2 {
                 info!("Buffer to BT len {}", buffer.len());
             }
             if buffer.len() > 0 {
-                match notify_value(connection, server.nus.get_handle(), &buffer[0]){
-                    Ok(_) => { buffer.remove(0); },
-                    Err(e) => info!("Error on nus send {:?}",e),
+                match notify_value(connection, server.nus.get_handle(), &buffer[0]) {
+                    Ok(_) => {
+                        buffer.remove(0);
+                    }
+                    Err(e) => info!("Error on nus send {:?}", e),
                 }
             }
 

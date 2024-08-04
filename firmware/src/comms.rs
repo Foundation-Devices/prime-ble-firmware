@@ -12,7 +12,7 @@ use postcard::accumulator::{CobsAccumulator, FeedResult};
 use postcard::to_slice_cobs;
 
 #[embassy_executor::task]
-pub async fn comms_task(mut rx : BufferedUarteRx<'static,'static,UARTE0,TIMER1>) {
+pub async fn comms_task(mut rx: BufferedUarteRx<'static, 'static, UARTE0, TIMER1>) {
     // Raw buffer - 32 bytes for the accumulator of cobs
     let mut raw_buf = [0u8; 128];
 
@@ -119,16 +119,15 @@ async fn bluetooth_handler(msg: Bluetooth<'_>) {
 
 /// Sends the data received from the BLE NUS as `host-protocol` encoded data message.
 #[embassy_executor::task]
-pub async fn send_bt_uart(mut uart_tx: BufferedUarteTx<'static,'static, UARTE0, TIMER1>, ) {
+pub async fn send_bt_uart(mut uart_tx: BufferedUarteTx<'static, 'static, UARTE0, TIMER1>) {
     let mut send_buf = [0u8; 1024];
     let mut rx_buf: Vec<u8, 1024> = Vec::new();
 
-    let mut data_count : u32 = 0;
-    let mut total_data : u32 = 0;
+    let mut data_count: u32 = 0;
+    let mut total_data: u32 = 0;
 
     loop {
-
-        if let Ok(rssi) = RSSI_TX.try_receive(){
+        if let Ok(rssi) = RSSI_TX.try_receive() {
             send_buf.fill(0); // Clear the buffer from any previous data
 
             info!("Sending back RSSI: {}", rssi);
@@ -149,25 +148,23 @@ pub async fn send_bt_uart(mut uart_tx: BufferedUarteTx<'static,'static, UARTE0, 
         let cobs = if let Ok(data) = BT_DATA_RX.try_receive() {
             now = Instant::now();
 
-            if data_count == 0{
+            if data_count == 0 {
                 // Get length
                 let (len, data) = data.split_at(4);
                 total_data = u32::from_ne_bytes(len[0..4].try_into().unwrap());
                 data_count += data.len() as u32;
                 let _ = rx_buf.extend_from_slice(data);
-                info!("total data: {} - data count {} - rx buf {}",total_data, data_count, rx_buf)
-            }
-            else {
+                info!("total data: {} - data count {} - rx buf {}", total_data, data_count, rx_buf)
+            } else {
                 data_count += data.len() as u32;
                 rx_buf.extend(data);
-                info!("total data: {} - data count {} - rx buf {}",total_data, data_count, rx_buf)
+                info!("total data: {} - data count {} - rx buf {}", total_data, data_count, rx_buf)
             };
-            if data_count == total_data{
+            if data_count == total_data {
                 let msg = HostProtocolMessage::Bluetooth(Bluetooth::ReceivedData(rx_buf.as_slice()));
                 send_buf.fill(0); // Clear the buffer from any previous data
                 Some(to_slice_cobs(&msg, &mut send_buf).expect("to_slice_cobs"))
-            }
-            else{
+            } else {
                 None
             }
         } else {
@@ -182,24 +179,22 @@ pub async fn send_bt_uart(mut uart_tx: BufferedUarteTx<'static,'static, UARTE0, 
                 let _ = uart_tx.write_all(cobs_tx).await;
                 let _ = uart_tx.flush().await;
 
-
                 info!("{}", *cobs_tx);
                 assert_out_irq().await; // Ask the MPU to process a new packet we just sent
 
                 total_data = 0;
                 data_count = 0;
                 rx_buf.clear();
-
             }
         }
 
         // If we don't receive packet for more than one second just clear all data counter for safety
-        if now.elapsed().as_millis() > 1500{
+        if now.elapsed().as_millis() > 1500 {
             total_data = 0;
             data_count = 0;
             rx_buf.clear();
         }
-        
+
         embassy_time::Timer::after_micros(200).await;
     }
 }
