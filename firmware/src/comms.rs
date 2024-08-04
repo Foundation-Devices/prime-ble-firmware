@@ -151,7 +151,7 @@ pub async fn send_bt_uart(mut uart_tx: BufferedUarteTx<'static, 'static, UARTE0,
             if data_count == 0 {
                 // Get length
                 let (len, data) = data.split_at(4);
-                total_data = u32::from_ne_bytes(len[0..4].try_into().unwrap());
+                total_data = u32::from_ne_bytes(len.try_into().unwrap());
                 data_count += data.len() as u32;
                 let _ = rx_buf.extend_from_slice(data);
                 info!("total data: {} - data count {} - rx buf {}", total_data, data_count, rx_buf)
