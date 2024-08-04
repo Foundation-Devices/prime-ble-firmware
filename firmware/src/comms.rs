@@ -126,6 +126,10 @@ pub async fn send_bt_uart(mut uart_tx: BufferedUarteTx<'static, 'static, UARTE0,
     let mut data_count: u32 = 0;
     let mut total_data: u32 = 0;
 
+    // Get time to discard packet counter in case of long time with no rx
+    // this shit must be more secure just a quick solution
+    let mut now = Instant::now();
+
     loop {
         if let Ok(rssi) = RSSI_TX.try_receive() {
             send_buf.fill(0); // Clear the buffer from any previous data
@@ -141,9 +145,6 @@ pub async fn send_bt_uart(mut uart_tx: BufferedUarteTx<'static, 'static, UARTE0,
             assert_out_irq().await; // Ask the MP
         }
 
-        // Get time
-        let mut now = Instant::now();
-
         // Try receive from BT sender channel
         let cobs = if let Ok(data) = BT_DATA_RX.try_receive() {
             now = Instant::now();
@@ -157,8 +158,10 @@ pub async fn send_bt_uart(mut uart_tx: BufferedUarteTx<'static, 'static, UARTE0,
                 info!("total data: {} - data count {} - rx buf {}", total_data, data_count, rx_buf)
             } else {
                 data_count += data.len() as u32;
-                rx_buf.extend(data);
-                info!("total data: {} - data count {} - rx buf {}", total_data, data_count, rx_buf)
+                if data_count <= 1024 {
+                    rx_buf.extend(data);
+                    info!("total data: {} - data count {} - rx buf {}", total_data, data_count, rx_buf)
+                }
             };
             if data_count == total_data {
                 let msg = HostProtocolMessage::Bluetooth(Bluetooth::ReceivedData(rx_buf.as_slice()));
@@ -189,7 +192,7 @@ pub async fn send_bt_uart(mut uart_tx: BufferedUarteTx<'static, 'static, UARTE0,
         }
 
         // If we don't receive packet for more than one second just clear all data counter for safety
-        if now.elapsed().as_millis() > 1500 {
+        if now.elapsed().as_millis() > 1500 || data_count > 1024 {
             total_data = 0;
             data_count = 0;
             rx_buf.clear();
