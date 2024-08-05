@@ -163,7 +163,7 @@ pub async fn send_bt_uart(mut uart_tx: BufferedUarteTx<'static, 'static, UARTE0,
                     info!("total data: {} - data count {} - rx buf {}", total_data, data_count, rx_buf)
                 }
             };
-            if data_count == total_data {
+            if data_count == total_data && total_data > 0 {
                 let msg = HostProtocolMessage::Bluetooth(Bluetooth::ReceivedData(rx_buf.as_slice()));
                 send_buf.fill(0); // Clear the buffer from any previous data
                 Some(to_slice_cobs(&msg, &mut send_buf).expect("to_slice_cobs"))
