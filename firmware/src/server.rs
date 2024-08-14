@@ -16,6 +16,8 @@ use nrf_softdevice::ble::peripheral;
 use nrf_softdevice::ble::{gatt_server, Connection};
 use nrf_softdevice::gatt_server;
 use nrf_softdevice::{raw, Softdevice};
+use raw::ble_gap_conn_params_t;
+use nrf_softdevice::ble::PhySet;
 
 #[gatt_server]
 pub struct Server {
@@ -93,7 +95,7 @@ async fn notify_data_tx<'a>(server: &'a Server, connection: &'a Connection) {
         }
 
         // Sleep for one millisecond.
-        Timer::after(Duration::from_micros(500)).await
+        Timer::after(Duration::from_nanos(10)).await
     }
 }
 
@@ -112,14 +114,47 @@ pub async fn run_bluetooth(sd: &'static Softdevice, server: &Server) {
     };
 
     loop {
+
+        let ret = unsafe {
+            raw::sd_ble_opt_set(
+                raw::BLE_COMMON_OPTS_BLE_COMMON_OPT_CONN_EVT_EXT,
+                &raw::ble_opt_t {
+                    common_opt: raw::ble_common_opt_t {
+                        conn_evt_ext: raw::ble_common_opt_conn_evt_ext_t{
+                            _bitfield_1 : raw::ble_common_opt_conn_evt_ext_t::new_bitfield_1(1)
+                        },
+                    },
+                },
+            )
+        };
+
+        info!("ret from conn length {}",ret);
+
         let config = peripheral::Config {
-            interval: 50,
+            interval: 150,
             ..Default::default()
         };
 
-        let conn = unwrap!(peripheral::advertise_connectable(sd, adv, &config).await);
+        let mut conn = unwrap!(peripheral::advertise_connectable(sd, adv, &config).await);
 
         info!("advertising done!");
+
+        let conn_params= ble_gap_conn_params_t {
+            conn_sup_timeout: 500,
+            max_conn_interval: 15,
+            min_conn_interval: 9,
+            slave_latency: 0,
+        };
+
+        
+        if let Err(e) = conn.set_conn_params(conn_params){
+            info!("set_conn_params error - {:?}",e)
+        }
+
+        if let Err(e) = conn.phy_update(PhySet::M2, PhySet::M2){
+            info!("sphy_update error");
+        }
+
         // Start rssi capture
         conn.start_rssi();
         // Activate notification on handle of nus TX

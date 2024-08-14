@@ -4,6 +4,7 @@ use crate::{IRQ_OUT_PIN, TX_BT_VEC};
 use defmt::info;
 use embassy_nrf::buffered_uarte::{BufferedUarteRx, BufferedUarteTx};
 use embassy_nrf::peripherals::{TIMER1, UARTE0};
+use embassy_time::Instant;
 use embedded_io_async::Write;
 use heapless::Vec;
 use host_protocol::{Bluetooth, HostProtocolMessage, COBS_MAX_MSG_SIZE};
@@ -150,16 +151,18 @@ pub async fn send_bt_uart(mut uart_tx: BufferedUarteTx<'static,'static, UARTE0, 
         {
             // If data is present from BT send to serial with Cobs format
             if let Some(cobs_tx) = cobs {
-                info!("Data rx from BT --> UART");
+                info!("Data rx from BT --> UART - data len {}",cobs_tx.len());
+                let now = Instant::now();
                 // Getting chars from Uart in a while loop
                 let _ = uart_tx.write_all(cobs_tx).await;
                 let _ = uart_tx.flush().await;
+                info!("Elapsed for packet to UART - {}", now.elapsed().as_micros());
 
-                info!("{}", *cobs_tx);
+                // info!("{}", *cobs_tx);
                 assert_out_irq().await; // Ask the MPU to process a new packet we just sent
             }
         }
-        embassy_time::Timer::after_micros(200).await;
+        embassy_time::Timer::after_nanos(10).await;
     }
 }
 
