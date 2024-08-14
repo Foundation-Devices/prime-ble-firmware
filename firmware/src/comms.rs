@@ -12,12 +12,10 @@ use postcard::accumulator::{CobsAccumulator, FeedResult};
 use postcard::to_slice_cobs;
 
 #[embassy_executor::task]
-pub async fn comms_task(mut rx : BufferedUarteRx<'static,'static,UARTE0,TIMER1>) {
+pub async fn comms_task(mut rx: BufferedUarteRx<'static, 'static, UARTE0, TIMER1>) {
     // Raw buffer - 32 bytes for the accumulator of cobs
     let mut raw_buf = [0u8; 128];
 
-    let mut counter = 0;
-    let mut data_rx = 0;
     // Create a cobs accumulator for data incoming
     let mut cobs_buf: CobsAccumulator<COBS_MAX_MSG_SIZE> = CobsAccumulator::new();
     loop {
@@ -57,14 +55,6 @@ pub async fn comms_task(mut rx : BufferedUarteRx<'static,'static,UARTE0,TIMER1>)
                             match data {
                                 HostProtocolMessage::Bluetooth(bluetooth_msg) => {
                                     info!("Received HostProtocolMessage::Bluetooth");
-                                    match bluetooth_msg {
-                                        Bluetooth::SendData(data) =>{
-                                        counter += 1;
-                                        data_rx += data.len();
-                                        info!("Packet recv {} - data recv {}",counter,data_rx);
-                                        },
-                                        _ => {}
-                                    }
                                     bluetooth_handler(bluetooth_msg).await
                                 }
                                 HostProtocolMessage::Bootloader(_) => (), // no-op, handled in the bootloader
@@ -119,12 +109,11 @@ async fn bluetooth_handler(msg: Bluetooth<'_>) {
 
 /// Sends the data received from the BLE NUS as `host-protocol` encoded data message.
 #[embassy_executor::task]
-pub async fn send_bt_uart(mut uart_tx: BufferedUarteTx<'static,'static, UARTE0, TIMER1>, ) {
+pub async fn send_bt_uart(mut uart_tx: BufferedUarteTx<'static, 'static, UARTE0, TIMER1>) {
     let mut send_buf = [0u8; COBS_MAX_MSG_SIZE];
 
     loop {
-
-        if let Ok(rssi) = RSSI_TX.try_receive(){
+        if let Ok(rssi) = RSSI_TX.try_receive() {
             send_buf.fill(0); // Clear the buffer from any previous data
 
             info!("Sending back RSSI: {}", rssi);
@@ -138,7 +127,6 @@ pub async fn send_bt_uart(mut uart_tx: BufferedUarteTx<'static,'static, UARTE0, 
             assert_out_irq().await; // Ask the MP
         }
 
-
         // Try receive from BT sender channel
         let cobs = if let Ok(data) = BT_DATA_RX.try_receive() {
             let msg = HostProtocolMessage::Bluetooth(Bluetooth::ReceivedData(data.as_slice()));
@@ -151,7 +139,7 @@ pub async fn send_bt_uart(mut uart_tx: BufferedUarteTx<'static,'static, UARTE0, 
         {
             // If data is present from BT send to serial with Cobs format
             if let Some(cobs_tx) = cobs {
-                info!("Data rx from BT --> UART - data len {}",cobs_tx.len());
+                info!("Data rx from BT --> UART - data len {}", cobs_tx.len());
                 let now = Instant::now();
                 // Getting chars from Uart in a while loop
                 let _ = uart_tx.write_all(cobs_tx).await;

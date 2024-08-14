@@ -13,11 +13,11 @@ use futures::pin_mut;
 use nrf_softdevice::ble::advertisement_builder::{ExtendedAdvertisementBuilder, ExtendedAdvertisementPayload, Flag, ServiceList};
 use nrf_softdevice::ble::gatt_server::notify_value;
 use nrf_softdevice::ble::peripheral;
+use nrf_softdevice::ble::PhySet;
 use nrf_softdevice::ble::{gatt_server, Connection};
 use nrf_softdevice::gatt_server;
 use nrf_softdevice::{raw, Softdevice};
 use raw::ble_gap_conn_params_t;
-use nrf_softdevice::ble::PhySet;
 
 #[gatt_server]
 pub struct Server {
@@ -57,10 +57,8 @@ pub fn initialize_sd() -> &'static mut Softdevice {
             write_perm: unsafe { mem::zeroed() },
             _bitfield_1: raw::ble_gap_cfg_device_name_t::new_bitfield_1(raw::BLE_GATTS_VLOC_STACK as u8),
         }),
-        conn_gatts: Some(raw::ble_gatts_conn_cfg_t{
-            hvn_tx_queue_size : 3,
-        }),
-        
+        conn_gatts: Some(raw::ble_gatts_conn_cfg_t { hvn_tx_queue_size: 3 }),
+
         ..Default::default()
     };
 
@@ -70,18 +68,18 @@ pub fn initialize_sd() -> &'static mut Softdevice {
 /// Notifies the connected client about new data.
 async fn notify_data_tx<'a>(server: &'a Server, connection: &'a Connection) {
     loop {
-        
-
         // This is the way we can notify data when NUS service is up
         {
             let mut buffer = TX_BT_VEC.lock().await;
-            if buffer.len()>2{
+            if buffer.len() > 2 {
                 info!("Buffer to BT len {}", buffer.len());
             }
             if buffer.len() > 0 {
-                match notify_value(connection, server.nus.get_handle(), &buffer[0]){
-                    Ok(_) => { buffer.remove(0); },
-                    Err(e) => info!("Error on nus send {:?}",e),
+                match notify_value(connection, server.nus.get_handle(), &buffer[0]) {
+                    Ok(_) => {
+                        buffer.remove(0);
+                    }
+                    Err(e) => info!("Error on nus send {:?}", e),
                 }
             }
 
@@ -114,21 +112,20 @@ pub async fn run_bluetooth(sd: &'static Softdevice, server: &Server) {
     };
 
     loop {
-
         let ret = unsafe {
             raw::sd_ble_opt_set(
                 raw::BLE_COMMON_OPTS_BLE_COMMON_OPT_CONN_EVT_EXT,
                 &raw::ble_opt_t {
                     common_opt: raw::ble_common_opt_t {
-                        conn_evt_ext: raw::ble_common_opt_conn_evt_ext_t{
-                            _bitfield_1 : raw::ble_common_opt_conn_evt_ext_t::new_bitfield_1(1)
+                        conn_evt_ext: raw::ble_common_opt_conn_evt_ext_t {
+                            _bitfield_1: raw::ble_common_opt_conn_evt_ext_t::new_bitfield_1(1),
                         },
                     },
                 },
             )
         };
 
-        info!("ret from conn length {}",ret);
+        info!("ret from conn length {}", ret);
 
         let config = peripheral::Config {
             interval: 150,
@@ -139,19 +136,18 @@ pub async fn run_bluetooth(sd: &'static Softdevice, server: &Server) {
 
         info!("advertising done!");
 
-        let conn_params= ble_gap_conn_params_t {
+        let conn_params = ble_gap_conn_params_t {
             conn_sup_timeout: 500,
             max_conn_interval: 15,
             min_conn_interval: 9,
             slave_latency: 0,
         };
 
-        
-        if let Err(e) = conn.set_conn_params(conn_params){
-            info!("set_conn_params error - {:?}",e)
+        if let Err(e) = conn.set_conn_params(conn_params) {
+            info!("set_conn_params error - {:?}", e)
         }
 
-        if let Err(e) = conn.phy_update(PhySet::M2, PhySet::M2){
+        if conn.phy_update(PhySet::M2, PhySet::M2).is_err() {
             info!("sphy_update error");
         }
 

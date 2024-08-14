@@ -30,8 +30,10 @@ impl Nus {
                 info!("Enable UART: {}", notifications);
             }
             NusEvent::RxWrite(data) => {
-                info!("Received: {} bytes {:?}", data.len(), data);
-                let _ = BT_DATA_RX.try_send(data);
+                if data.len() <= ATT_MTU {
+                    // info!("Received: {} bytes {:?}", data.len(), data);
+                    let _ = BT_DATA_RX.try_send(data);
+                }
             }
         }
     }
