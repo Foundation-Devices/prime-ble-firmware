@@ -103,18 +103,6 @@ pub async fn update_phy(mut conn: Connection) {
     if conn.phy_update(PhySet::M2, PhySet::M2).is_err() {
         info!("phy_update error");
     }
-
-    if conn
-        .data_length_update(Some(&raw::ble_gap_data_length_params_t {
-            max_tx_octets: 251,
-            max_rx_octets: 251,
-            max_tx_time_us: 2120,
-            max_rx_time_us: 2120,
-        }))
-        .is_err()
-    {
-        info!("dle error");
-    };
 }
 
 pub async fn run_bluetooth(sd: &'static Softdevice, server: &Server) {
