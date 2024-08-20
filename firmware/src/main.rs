@@ -19,7 +19,11 @@ use embedded_io_async::Write;
 // time driver
 use panic_probe as _;
 
-use comms::{comms_task, send_bt_uart};
+use comms::comms_task;
+#[cfg(feature = "uart-cobs-mcu")]
+use comms::send_bt_uart;
+#[cfg(feature = "uart-no-cobs-mcu")]
+use comms::send_bt_uart_no_cobs;
 use consts::ATT_MTU;
 use defmt::{info, *};
 use embassy_executor::Spawner;
@@ -142,21 +146,24 @@ async fn main(spawner: Spawner) {
     unwrap!(spawner.spawn(heartbeat()));
     // Uart task
     unwrap!(spawner.spawn(comms_task(rx)));
+    #[cfg(feature = "uart-cobs-mcu")]
     unwrap!(spawner.spawn(send_bt_uart(tx)));
+    #[cfg(feature = "uart-no-cobs-mcu")]
+    unwrap!(spawner.spawn(send_bt_uart_no_cobs(tx)));
 
     info!("Init tasks");
 
     loop {
         Timer::after_millis(100).await;
-        let state = BT_STATE.wait().await;
-        if state {
-            info!("BT state ON");
-        }
-        if !state {
-            info!("BT state OFF");
-        }
+        //let state = BT_STATE.wait().await;
+        // if state {
+        //     info!("BT state ON");
+        // }
+        // if !state {
+        //     info!("BT state OFF");
+        // }
 
-        if state {
+        if true {
             let run_bluetooth_fut = run_bluetooth(sd, &server);
             let stop_bluetooth_fut = stop_bluetooth();
             pin_mut!(run_bluetooth_fut);

@@ -10,7 +10,8 @@ publish = false
 
 [features]
 default = [
-    "uart-pins-mpu",
+    "uart-pins-console",
+    "uart-no-cobs-mcu",
     "ble-gatt-server",
     "ble-gatt-client",
     "ble-sec",
@@ -24,8 +25,14 @@ ble-sec = ["nrf-softdevice/ble-sec"]
 nrf52805 = [
     "embassy-nrf/nrf52805",
     "nrf-softdevice/nrf52805",
-    "nrf-softdevice/s112",
+    "nrf-softdevice/s113",
 ]
+
+# Cobs format for MCU
+uart-cobs-mcu = []
+
+# No cobs format for MCU
+uart-no-cobs-mcu = []
 
 # Target comm protocol to the UART console (used for developing)
 uart-pins-console = []
@@ -52,7 +59,7 @@ fixed = "1.24.0"
 heapless = { version = "0.8.0", features = ["defmt-03"] }
 atomic-pool = "1.0.1"
 static_cell = "2.0.0"
-nrf-softdevice-s112 = { git = "https://github.com/embassy-rs/nrf-softdevice.git" }
+nrf-softdevice-s113 = { git = "https://github.com/embassy-rs/nrf-softdevice.git" }
 postcard                = { version = "1.0.8" }
 serde = { version = "1.0.200", default-features = false }
 cobs = { version = "0.2.3", default-features = false }
