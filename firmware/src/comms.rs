@@ -145,12 +145,67 @@ pub async fn send_bt_uart(mut uart_tx: BufferedUarteTx<'static, 'static, UARTE0,
                 let _ = uart_tx.write_all(cobs_tx).await;
                 let _ = uart_tx.flush().await;
                 info!("Elapsed for packet to UART - {}", now.elapsed().as_micros());
-
-                // info!("{}", *cobs_tx);
                 assert_out_irq().await; // Ask the MPU to process a new packet we just sent
             }
         }
-        embassy_time::Timer::after_nanos(10).await;
+        embassy_time::Timer::after_nanos(5).await;
+    }
+}
+
+/// Sends the data received from the BLE NUS as `host-protocol` encoded data message.
+#[embassy_executor::task]
+pub async fn send_bt_uart_no_cobs(mut uart_tx: BufferedUarteTx<'static, 'static, UARTE0, TIMER1>) {
+    let mut send_buf = [0u8; COBS_MAX_MSG_SIZE];
+    let mut data_counter: u64 = 0;
+    let mut timer_pkt: Instant = Instant::now();
+    let mut timer_tot: Instant = Instant::now();
+
+    loop {
+        if let Ok(rssi) = RSSI_TX.try_receive() {
+            send_buf.fill(0); // Clear the buffer from any previous data
+
+            info!("Sending back RSSI: {}", rssi);
+
+            let msg = HostProtocolMessage::Bluetooth(Bluetooth::SignalStrength(rssi));
+            let cobs_tx = to_slice_cobs(&msg, &mut send_buf).unwrap();
+            info!("{}", cobs_tx);
+
+            let _ = uart_tx.write_all(cobs_tx).await;
+            let _ = uart_tx.flush().await;
+            assert_out_irq().await; // Ask the MP
+        }
+
+        if timer_pkt.elapsed().as_millis() > 1500 && timer_pkt.elapsed().as_millis() < 1505 {
+            info!("Total data flow rx : {}", data_counter);
+            data_counter = 0;
+            timer_pkt = Instant::now();
+            timer_tot = Instant::now();
+        }
+
+        {
+            // If data is present from BT send to serial with Cobs format
+            if let Ok(data) = BT_DATA_RX.try_receive() {
+                info!("buffer packet len {}", BT_DATA_RX.len());
+                info!("Infra packet time: {}", timer_pkt.elapsed().as_millis());
+                info!("Total packet time: {}", timer_tot.elapsed().as_millis());
+                timer_pkt = Instant::now();
+                data_counter += data.len() as u64;
+                info!("Total data incoming: {}", data_counter);
+                if (timer_tot.elapsed().as_secs()) > 0 {
+                    let rate: f32 = (data_counter / timer_tot.elapsed().as_secs()) as f32;
+                    info!("Rough data rate : {}", rate);
+                }
+
+                let now = Instant::now();
+                // Getting chars from Uart in a while loop
+                let _ = uart_tx.write_all(data.as_slice()).await;
+                let _ = uart_tx.flush().await;
+                info!("Elapsed for packet to UART - {}", now.elapsed().as_micros());
+
+                assert_out_irq().await; // Ask the MPU to process a new packet we just sent
+            }
+        }
+        embassy_time::Timer::after_nanos(5).await;
     }
 }
 

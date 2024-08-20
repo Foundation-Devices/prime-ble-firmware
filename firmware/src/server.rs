@@ -97,6 +97,26 @@ async fn notify_data_tx<'a>(server: &'a Server, connection: &'a Connection) {
     }
 }
 
+pub async fn update_phy(mut conn: Connection) {
+    Timer::after_secs(1).await;
+    // Request PHY2
+    if conn.phy_update(PhySet::M2, PhySet::M2).is_err() {
+        info!("phy_update error");
+    }
+
+    if conn
+        .data_length_update(Some(&raw::ble_gap_data_length_params_t {
+            max_tx_octets: 251,
+            max_rx_octets: 251,
+            max_tx_time_us: 2120,
+            max_rx_time_us: 2120,
+        }))
+        .is_err()
+    {
+        info!("dle error");
+    };
+}
+
 pub async fn run_bluetooth(sd: &'static Softdevice, server: &Server) {
     static ADV_DATA: ExtendedAdvertisementPayload = ExtendedAdvertisementBuilder::new()
         .flags(&[Flag::GeneralDiscovery, Flag::LE_Only])
@@ -128,27 +148,24 @@ pub async fn run_bluetooth(sd: &'static Softdevice, server: &Server) {
         info!("ret from conn length {}", ret);
 
         let config = peripheral::Config {
-            interval: 150,
+            interval: 100,
             ..Default::default()
         };
 
-        let mut conn = unwrap!(peripheral::advertise_connectable(sd, adv, &config).await);
+        let conn = unwrap!(peripheral::advertise_connectable(sd, adv, &config).await);
 
         info!("advertising done!");
 
         let conn_params = ble_gap_conn_params_t {
             conn_sup_timeout: 500,
-            max_conn_interval: 15,
+            max_conn_interval: 24,
             min_conn_interval: 9,
             slave_latency: 0,
         };
 
+        // Request connection param update
         if let Err(e) = conn.set_conn_params(conn_params) {
             info!("set_conn_params error - {:?}", e)
-        }
-
-        if conn.phy_update(PhySet::M2, PhySet::M2).is_err() {
-            info!("sphy_update error");
         }
 
         // Start rssi capture
@@ -158,6 +175,7 @@ pub async fn run_bluetooth(sd: &'static Softdevice, server: &Server) {
 
         let gatt_fut = gatt_server::run(&conn, server, |e| server.handle_event(e));
         let tx_fut = notify_data_tx(server, &conn);
+        let _phy_upd = update_phy(conn.clone()).await;
 
         // Pin mutable futures
         pin_mut!(tx_fut);
