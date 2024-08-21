@@ -175,37 +175,37 @@ pub async fn send_bt_uart_no_cobs(mut uart_tx: BufferedUarteTx<'static, 'static,
             assert_out_irq().await; // Ask the MP
         }
 
-        if timer_pkt.elapsed().as_millis() > 1500 && timer_pkt.elapsed().as_millis() < 1505 {
-            info!("Total data flow rx : {}", data_counter);
-            data_counter = 0;
-            timer_pkt = Instant::now();
-            timer_tot = Instant::now();
-        }
+        // if timer_pkt.elapsed().as_millis() > 1500 && timer_pkt.elapsed().as_millis() < 1505 {
+        //     info!("Total data flow rx : {}", data_counter);
+        //     data_counter = 0;
+        //     timer_pkt = Instant::now();
+        //     timer_tot = Instant::now();
+        // }
 
         {
             // If data is present from BT send to serial with Cobs format
             if let Ok(data) = BT_DATA_RX.try_receive() {
-                info!("buffer packet len {}", BT_DATA_RX.len());
-                info!("Infra packet time: {}", timer_pkt.elapsed().as_millis());
-                info!("Total packet time: {}", timer_tot.elapsed().as_millis());
-                timer_pkt = Instant::now();
+                // info!("buffer packet len {}", BT_DATA_RX.len());
+                // info!("Infra packet time: {}", timer_pkt.elapsed().as_millis());
+                // info!("Total packet time: {}", timer_tot.elapsed().as_millis());
+                // timer_pkt = Instant::now();
                 data_counter += data.len() as u64;
                 info!("Total data incoming: {}", data_counter);
-                if (timer_tot.elapsed().as_secs()) > 0 {
-                    let rate: f32 = (data_counter / timer_tot.elapsed().as_secs()) as f32;
-                    info!("Rough data rate : {}", rate);
-                }
-
-                let now = Instant::now();
+                // if (timer_tot.elapsed().as_secs()) > 0 {
+                //     let rate: f32 = (data_counter / timer_tot.elapsed().as_secs()) as f32;
+                //     info!("Rough data rate : {}", rate);
+                // }
+                
+                // let now = Instant::now();
                 // Getting chars from Uart in a while loop
                 let _ = uart_tx.write_all(data.as_slice()).await;
                 let _ = uart_tx.flush().await;
-                info!("Elapsed for packet to UART - {}", now.elapsed().as_micros());
+                // info!("Elapsed for packet to UART - {}", now.elapsed().as_micros());
 
                 assert_out_irq().await; // Ask the MPU to process a new packet we just sent
             }
         }
-        embassy_time::Timer::after_nanos(5).await;
+        embassy_time::Timer::after_nanos(20).await;
     }
 }
 

@@ -32,7 +32,6 @@ impl Nus {
             NusEvent::RxWrite(data) => {
                 // If we receive something bigger for some reasons discard it
                 if data.len() <= ATT_MTU && !BT_DATA_RX.is_full() {
-                    // info!("Received: {} bytes {:?}", data.len(), data);
                     if let Err(e) = BT_DATA_RX.try_send(data) {
                         info!("Error BT_DATA_RX");
                     }
