@@ -7,7 +7,7 @@ MEMORY
   /* These values correspond to the NRF52805 with SoftDevices S112 7.2.0 */
   /* Need to add header size here to origin (0x800) to make SD boot correctly */
   /* NOTE if you want to use unsigned firmware use flash ORIGIN 0x19000       */
-  FLASH (rx) : ORIGIN = 0x1C000, LENGTH = 52K
+  FLASH (rx) : ORIGIN = 0x1C000, LENGTH = 44K
   RAM : ORIGIN = 0x20000000 + 10648, LENGTH = 24K - 10648
 }
 
