@@ -33,7 +33,7 @@ impl Nus {
                 // If we receive something bigger for some reasons discard it
                 if data.len() <= ATT_MTU && !BT_DATA_RX.is_full() {
                     // info!("Received: {} bytes {:?}", data.len(), data);
-                    if let Err(e) = BT_DATA_RX.try_send(data) {
+                    if BT_DATA_RX.try_send(data).is_err() {
                         info!("Error BT_DATA_RX");
                     }
                 }

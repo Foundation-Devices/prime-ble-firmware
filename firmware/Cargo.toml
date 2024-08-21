@@ -10,8 +10,8 @@ publish = false
 
 [features]
 default = [
-    "uart-pins-console",
-    "uart-no-cobs-mcu",
+    "uart-pins-mpu",
+    "uart-cobs-mcu",
     "ble-gatt-server",
     "ble-gatt-client",
     "ble-sec",

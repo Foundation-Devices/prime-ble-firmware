@@ -131,7 +131,10 @@ pub async fn send_bt_uart(mut uart_tx: BufferedUarteTx<'static, 'static, UARTE0,
         let cobs = if let Ok(data) = BT_DATA_RX.try_receive() {
             let msg = HostProtocolMessage::Bluetooth(Bluetooth::ReceivedData(data.as_slice()));
             send_buf.fill(0); // Clear the buffer from any previous data
-            Some(to_slice_cobs(&msg, &mut send_buf).expect("to_slice_cobs"))
+            match to_slice_cobs(&msg, &mut send_buf) {
+                Ok(cobs) => Some(cobs),
+                Err(_) => None,
+            }
         } else {
             None
         };
@@ -157,6 +160,7 @@ pub async fn send_bt_uart(mut uart_tx: BufferedUarteTx<'static, 'static, UARTE0,
 pub async fn send_bt_uart_no_cobs(mut uart_tx: BufferedUarteTx<'static, 'static, UARTE0, TIMER1>) {
     let mut send_buf = [0u8; COBS_MAX_MSG_SIZE];
     let mut data_counter: u64 = 0;
+    let mut pkt_counter: u64 = 0;
     let mut timer_pkt: Instant = Instant::now();
     let mut timer_tot: Instant = Instant::now();
 
@@ -178,6 +182,7 @@ pub async fn send_bt_uart_no_cobs(mut uart_tx: BufferedUarteTx<'static, 'static,
         if timer_pkt.elapsed().as_millis() > 1500 && timer_pkt.elapsed().as_millis() < 1505 {
             info!("Total data flow rx : {}", data_counter);
             data_counter = 0;
+            pkt_counter = 0;
             timer_pkt = Instant::now();
             timer_tot = Instant::now();
         }
@@ -185,11 +190,13 @@ pub async fn send_bt_uart_no_cobs(mut uart_tx: BufferedUarteTx<'static, 'static,
         {
             // If data is present from BT send to serial with Cobs format
             if let Ok(data) = BT_DATA_RX.try_receive() {
-                info!("buffer packet len {}", BT_DATA_RX.len());
                 info!("Infra packet time: {}", timer_pkt.elapsed().as_millis());
                 info!("Total packet time: {}", timer_tot.elapsed().as_millis());
                 timer_pkt = Instant::now();
                 data_counter += data.len() as u64;
+                pkt_counter += 1;
+                info!("Total packet number: {}", pkt_counter);
+
                 info!("Total data incoming: {}", data_counter);
                 if (timer_tot.elapsed().as_secs()) > 0 {
                     let rate: f32 = (data_counter / timer_tot.elapsed().as_secs()) as f32;
@@ -205,7 +212,7 @@ pub async fn send_bt_uart_no_cobs(mut uart_tx: BufferedUarteTx<'static, 'static,
                 assert_out_irq().await; // Ask the MPU to process a new packet we just sent
             }
         }
-        embassy_time::Timer::after_nanos(5).await;
+        embassy_time::Timer::after_nanos(10).await;
     }
 }
 

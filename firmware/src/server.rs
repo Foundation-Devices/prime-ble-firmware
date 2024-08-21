@@ -146,7 +146,7 @@ pub async fn run_bluetooth(sd: &'static Softdevice, server: &Server) {
 
         let conn_params = ble_gap_conn_params_t {
             conn_sup_timeout: 500,
-            max_conn_interval: 24,
+            max_conn_interval: 16,
             min_conn_interval: 9,
             slave_latency: 0,
         };
