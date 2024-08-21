@@ -155,15 +155,15 @@ async fn main(spawner: Spawner) {
 
     loop {
         Timer::after_millis(100).await;
-        //let state = BT_STATE.wait().await;
-        // if state {
-        //     info!("BT state ON");
-        // }
-        // if !state {
-        //     info!("BT state OFF");
-        // }
+        let state = BT_STATE.wait().await;
+        if state {
+             info!("BT state ON");
+        }
+        if !state {
+             info!("BT state OFF");
+        }
 
-        if true {
+        if state {
             let run_bluetooth_fut = run_bluetooth(sd, &server);
             let stop_bluetooth_fut = stop_bluetooth();
             pin_mut!(run_bluetooth_fut);
