@@ -14,7 +14,7 @@ use postcard::to_slice_cobs;
 #[embassy_executor::task]
 pub async fn comms_task(mut rx: BufferedUarteRx<'static, 'static, UARTE0, TIMER1>) {
     // Raw buffer - 32 bytes for the accumulator of cobs
-    let mut raw_buf = [0u8; 128];
+    let mut raw_buf = [0u8; 64];
 
     // Create a cobs accumulator for data incoming
     let mut cobs_buf: CobsAccumulator<COBS_MAX_MSG_SIZE> = CobsAccumulator::new();
@@ -148,7 +148,7 @@ pub async fn send_bt_uart(mut uart_tx: BufferedUarteTx<'static, 'static, UARTE0,
                 assert_out_irq().await; // Ask the MPU to process a new packet we just sent
             }
         }
-        embassy_time::Timer::after_nanos(5).await;
+        embassy_time::Timer::after_nanos(1).await;
     }
 }
 
