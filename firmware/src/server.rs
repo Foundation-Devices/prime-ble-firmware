@@ -98,11 +98,30 @@ async fn notify_data_tx<'a>(server: &'a Server, connection: &'a Connection) {
 }
 
 pub async fn update_phy(mut conn: Connection) {
-    Timer::after_secs(1).await;
+    // delay to avoid request during discovery services, many phones reject in this case
+    Timer::after_secs(2).await;
     // Request PHY2
     if conn.phy_update(PhySet::M2, PhySet::M2).is_err() {
         info!("phy_update error");
     }
+}
+
+// Set parameter for data event extension on Sd112
+pub fn set_data_event_ext() -> u32 {
+    let ret = unsafe {
+        raw::sd_ble_opt_set(
+            raw::BLE_COMMON_OPTS_BLE_COMMON_OPT_CONN_EVT_EXT,
+            &raw::ble_opt_t {
+                common_opt: raw::ble_common_opt_t {
+                    conn_evt_ext: raw::ble_common_opt_conn_evt_ext_t {
+                        _bitfield_1: raw::ble_common_opt_conn_evt_ext_t::new_bitfield_1(1),
+                    },
+                },
+            },
+        )
+    };
+    info!("ret from conn length {}", ret);
+    ret
 }
 
 pub async fn run_bluetooth(sd: &'static Softdevice, server: &Server) {
@@ -120,34 +139,24 @@ pub async fn run_bluetooth(sd: &'static Softdevice, server: &Server) {
     };
 
     loop {
-        let ret = unsafe {
-            raw::sd_ble_opt_set(
-                raw::BLE_COMMON_OPTS_BLE_COMMON_OPT_CONN_EVT_EXT,
-                &raw::ble_opt_t {
-                    common_opt: raw::ble_common_opt_t {
-                        conn_evt_ext: raw::ble_common_opt_conn_evt_ext_t {
-                            _bitfield_1: raw::ble_common_opt_conn_evt_ext_t::new_bitfield_1(1),
-                        },
-                    },
-                },
-            )
-        };
+        
+        set_data_event_ext();
 
-        info!("ret from conn length {}", ret);
-
+        // Set advertising timer in units of 625us (about 50ms with 75 units)
         let config = peripheral::Config {
-            interval: 100,
+            interval: 75,
             ..Default::default()
         };
 
+        // Start advertising
         let conn = unwrap!(peripheral::advertise_connectable(sd, adv, &config).await);
-
         info!("advertising done!");
 
+        // Request connection interval - trying to request a short one.
         let conn_params = ble_gap_conn_params_t {
             conn_sup_timeout: 500,
-            max_conn_interval: 16,
-            min_conn_interval: 9,
+            max_conn_interval:12,
+            min_conn_interval:9,
             slave_latency: 0,
         };
 
