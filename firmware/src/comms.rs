@@ -148,7 +148,7 @@ pub async fn send_bt_uart(mut uart_tx: BufferedUarteTx<'static, 'static, UARTE0,
                 assert_out_irq().await; // Ask the MPU to process a new packet we just sent
             }
         }
-        embassy_time::Timer::after_nanos(1).await;
+        embassy_time::Timer::after_nanos(5).await;
     }
 }
 
