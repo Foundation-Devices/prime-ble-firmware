@@ -36,6 +36,7 @@
     ```Bash
     probe-rs download <PATH_TO_HEX> --chip nrf52805_xxAA --verify --binary-format hex
     ```
+    
   In case you have more than one probe connected to your pc, for example:
   ```Bash
     probe-rs list
@@ -51,8 +52,8 @@
   
   A progress bar will confirm that flash programming is running.
   
- ```Bash
- Erasing ✔ [00:00:02] [###################################################################################################] 100.00 KiB/100.00 KiB @ 40.74 KiB/s (eta 0s )
- Programming ✔ [00:00:01] [###################################################################################################] 100.00 KiB/100.00 KiB @     63.78 KiB/s (eta 0s )    Finished in 4.964s
- ```
-Just repeat download command to program another mcu.
+   ```Bash
+   Erasing ✔ [00:00:02] [###################################################################################################] 100.00 KiB/100.00 KiB @ 40.74 KiB/s (eta 0s )
+   Programming ✔ [00:00:01] [###################################################################################################] 100.00 KiB/100.00 KiB @     63.78 KiB/s (eta 0s )    Finished in 4.964s
+   ```
+  Just repeat download command to program another mcu.
