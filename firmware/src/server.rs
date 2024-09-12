@@ -19,6 +19,15 @@ use nrf_softdevice::gatt_server;
 use nrf_softdevice::{raw, Softdevice};
 use raw::ble_gap_conn_params_t;
 
+
+// Get connection interval with macro
+// to get 15ms just call ci_ms!(15)
+macro_rules! ci_ms {
+    ($a:expr) => {{
+        $a * 1000 / 1250
+    }};
+}
+
 #[gatt_server]
 pub struct Server {
     nus: Nus,
@@ -155,8 +164,8 @@ pub async fn run_bluetooth(sd: &'static Softdevice, server: &Server) {
         // Request connection interval - trying to request a short one.
         let conn_params = ble_gap_conn_params_t {
             conn_sup_timeout: 500,
-            max_conn_interval:12,
-            min_conn_interval:9,
+            max_conn_interval:ci_ms!(25),
+            min_conn_interval:ci_ms!(12),
             slave_latency: 0,
         };
 
@@ -172,7 +181,7 @@ pub async fn run_bluetooth(sd: &'static Softdevice, server: &Server) {
 
         let gatt_fut = gatt_server::run(&conn, server, |e| server.handle_event(e));
         let tx_fut = notify_data_tx(server, &conn);
-        let _phy_upd = update_phy(conn.clone()).await;
+        // let _phy_upd = update_phy(conn.clone()).await;
 
         // Pin mutable futures
         pin_mut!(tx_fut);

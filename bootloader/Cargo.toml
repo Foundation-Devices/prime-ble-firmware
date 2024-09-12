@@ -12,6 +12,7 @@ publish = false
 default = [
     "nrf52805",
     "boot-signed-fw",
+    "flash-protect"
 ]
 
 nrf52805 = [
@@ -20,6 +21,13 @@ nrf52805 = [
     "nrf-softdevice/s112",
     "nrf-softdevice/critical-section-impl"
 ]
+
+# Activate APP Protection on nrf MCU
+# https://infocenter.nordicsemi.com/topic/ps_nrf52805/uicr.html?cp=5_6_0_3_4_0_5#register.APPROTECT
+# We should check for this part code to check version
+# https://infocenter.nordicsemi.com/pdf/in_153_v1.0.pdf?cp=18_4
+no-dbg-access = []
+flash-protect = []
 
 # Bootloader jumps to application with cosign2 header
 boot-signed-fw = []
@@ -54,6 +62,7 @@ cosign2 = { path = "../../cosign2/cosign2", default-features = false }
 critical-section = "1.1"
 nrf-softdevice-s112 = { git = "https://github.com/embassy-rs/nrf-softdevice.git" }
 nrf-softdevice = { git = "https://github.com/embassy-rs/nrf-softdevice.git", features = ["defmt", "evt-max-size-256", "ble-peripheral"] }
+nrf52805-pac = "0.12.2"
 
 
 [build-dependencies]

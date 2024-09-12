@@ -38,6 +38,8 @@ use postcard::to_slice_cobs;
 use serde::{Deserialize, Serialize};
 use verify::{get_fw_image_slice, verify_os_image};
 
+
+
 // Mutex for random hw generator to delay in verification
 static RNG_HW: CriticalSectionMutex<RefCell<Option<Rng<'_, RNG>>>> = Mutex::new(RefCell::new(None));
 
@@ -102,6 +104,35 @@ fn ack_msg_send(message: HostProtocolMessage, tx: &mut UarteTx<UARTE0>) {
 
 #[embassy_executor::main]
 async fn main(_spawner: Spawner) {
+
+    unsafe { &*nrf52805_pac::BPROT::ptr() }.config0.write(|w| 
+        w.region0().enabled()
+    );
+    let bits_0 = unsafe { &*nrf52805_pac::BPROT::ptr() }.config0.read().bits();
+    info!("CONFIG0_BITS : {}",bits_0);
+
+
+    unsafe { &*nrf52805_pac::BPROT::ptr() }.config1.write(|w| {
+        w.region47().enabled();
+        w.region46().enabled();
+        w.region45().enabled();
+        w.region44().enabled();
+        w.region43().enabled();
+        w.region42().enabled();
+        w.region41().enabled();
+        w.region40().enabled();
+        w.region39().enabled();
+        w
+    });
+    let bits_1 = unsafe { &*nrf52805_pac::BPROT::ptr() }.config1.read().bits();
+    info!("CONFIG1_BITS : {}",bits_1);
+
+    unsafe { &*nrf52805_pac::BPROT::ptr() }.disableindebug.write(|w| unsafe { w.bits(0x00) });
+
+    let disabledebug = unsafe { &*nrf52805_pac::BPROT::ptr() }.disableindebug.read().bits();
+    info!("DISABLE : {}",disabledebug);
+
+
     let p = embassy_nrf::init(Default::default());
 
     let mut config_uart = uarte::Config::default();

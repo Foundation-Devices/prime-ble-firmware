@@ -13,8 +13,8 @@ use postcard::to_slice_cobs;
 
 #[embassy_executor::task]
 pub async fn comms_task(mut rx: BufferedUarteRx<'static, 'static, UARTE0, TIMER1>) {
-    // Raw buffer - 32 bytes for the accumulator of cobs
-    let mut raw_buf = [0u8; 128];
+    // Raw buffer - 64 bytes for the accumulator of cobs
+    let mut raw_buf = [0u8; 64];
 
     // Create a cobs accumulator for data incoming
     let mut cobs_buf: CobsAccumulator<COBS_MAX_MSG_SIZE> = CobsAccumulator::new();
@@ -110,7 +110,7 @@ async fn bluetooth_handler(msg: Bluetooth<'_>) {
 /// Sends the data received from the BLE NUS as `host-protocol` encoded data message.
 #[embassy_executor::task]
 pub async fn send_bt_uart(mut uart_tx: BufferedUarteTx<'static, 'static, UARTE0, TIMER1>) {
-    let mut send_buf = [0u8; COBS_MAX_MSG_SIZE];
+    let mut send_buf = [0u8; 270];
 
     loop {
         if let Ok(rssi) = RSSI_TX.try_receive() {
