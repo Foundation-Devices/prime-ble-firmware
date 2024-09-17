@@ -11,6 +11,7 @@ pub const BASE_ADDRESS_APP: u32 = 0x1000; // SD base address
 pub const BASE_FLASH_ADDR: u32 = 0x19000;
 pub const BASE_BOOTLOADER_APP: u32 = 0x27000;
 pub const FLASH_PAGE: u32 = 4096;
+pub const HEADER_SIZE: u32 = 0x800;
 
 #[cfg(feature = "no-dbg-access")]
 #[used]

@@ -14,7 +14,7 @@ use panic_probe as _;
 
 use consts::*;
 use core::cell::RefCell;
-use cosign2::{Header, VerificationResult};
+use cosign2::Header;
 use crc::{Crc, CRC_32_ISCSI};
 use defmt::info;
 use embassy_executor::Spawner;
@@ -36,9 +36,7 @@ use nrf_softdevice::Softdevice;
 use postcard::accumulator::{CobsAccumulator, FeedResult};
 use postcard::to_slice_cobs;
 use serde::{Deserialize, Serialize};
-use verify::{get_fw_image_slice, verify_os_image};
-
-
+use verify::{check_fw, get_fw_image_slice};
 
 // Mutex for random hw generator to delay in verification
 static RNG_HW: CriticalSectionMutex<RefCell<Option<Rng<'_, RNG>>>> = Mutex::new(RefCell::new(None));
@@ -94,7 +92,7 @@ fn update_chunk<'a>(boot_status: &'a mut BootState, idx: usize, data: &'a [u8], 
     };
 }
 
-fn ack_msg_send(message: HostProtocolMessage, tx: &mut UarteTx<UARTE0>) {
+pub fn ack_msg_send(message: HostProtocolMessage, tx: &mut UarteTx<UARTE0>) {
     // Prepare cobs buffer
     let mut buf_cobs = [0_u8; 64];
     let cobs_ack = to_slice_cobs(&message, &mut buf_cobs).unwrap();
@@ -107,16 +105,14 @@ fn flash_protect() {
     // Set bprot registers values
     // Nordic MBR area protection
     let bits_0 = unsafe { &*nrf52805_pac::BPROT::ptr() }.config0.read().bits();
-    info!("CONFIG0_BITS : {}",bits_0);
-    unsafe { &*nrf52805_pac::BPROT::ptr() }.config0.write(|w| 
-        w.region0().enabled()
-    );
+    info!("CONFIG0_BITS : {}", bits_0);
+    unsafe { &*nrf52805_pac::BPROT::ptr() }.config0.write(|w| w.region0().enabled());
     let bits_0 = unsafe { &*nrf52805_pac::BPROT::ptr() }.config0.read().bits();
-    info!("CONFIG0_BITS : {}",bits_0);
+    info!("CONFIG0_BITS : {}", bits_0);
 
     // Bootloader area protection
     let bits_1 = unsafe { &*nrf52805_pac::BPROT::ptr() }.config1.read().bits();
-    info!("CONFIG1_BITS : {}",bits_1);
+    info!("CONFIG1_BITS : {}", bits_1);
     unsafe { &*nrf52805_pac::BPROT::ptr() }.config1.write(|w| {
         w.region47().enabled(); //0x2F000-0x30000
         w.region46().enabled(); //0x2E000-0x2F000
@@ -125,25 +121,25 @@ fn flash_protect() {
         w.region43().enabled(); //0x2B000-0x2C000
         w.region42().enabled(); //0x2A000-0x2B000
         w.region41().enabled(); //0x29000-0x2A000
-        w.region40().enabled(); //0x28000-0x29000 
-        w.region39().enabled(); //0x27000-0x28000 
+        w.region40().enabled(); //0x28000-0x29000
+        w.region39().enabled(); //0x27000-0x28000
         w
     });
     let bits_1 = unsafe { &*nrf52805_pac::BPROT::ptr() }.config1.read().bits();
-    info!("CONFIG1_BITS : {}",bits_1);
+    info!("CONFIG1_BITS : {}", bits_1);
 
     // Enable area protection also in debug
     let disabledebug = unsafe { &*nrf52805_pac::BPROT::ptr() }.disableindebug.read().bits();
-    info!("DISABLE : {}",disabledebug);
-    unsafe { &*nrf52805_pac::BPROT::ptr() }.disableindebug.write(|w| unsafe { w.bits(0x00) });
+    info!("DISABLE : {}", disabledebug);
+    unsafe { &*nrf52805_pac::BPROT::ptr() }
+        .disableindebug
+        .write(|w| unsafe { w.bits(0x00) });
     let disabledebug = unsafe { &*nrf52805_pac::BPROT::ptr() }.disableindebug.read().bits();
-    info!("DISABLE : {}",disabledebug);
-
+    info!("DISABLE : {}", disabledebug);
 }
 
 #[embassy_executor::main]
 async fn main(_spawner: Spawner) {
-
     #[cfg(feature = "flash-protect")]
     flash_protect();
 
@@ -166,12 +162,31 @@ async fn main(_spawner: Spawner) {
     // FLASH
     let mut flash = Nvmc::new(p.NVMC);
 
+    let mut fw_is_valid = false;
+
+    // Get Cosign application header if present
+    let header_slice = get_fw_image_slice(BASE_FLASH_ADDR, HEADER_SIZE);
+    // Check if fw is valid
+    if let Ok(Some(header_unverified)) = Header::parse_unverified(header_slice) {
+        let image_slice = get_fw_image_slice(BASE_ADDRESS_APP, header_unverified.firmware_size());
+        info!("Image size {}", image_slice.len());
+        if let Some(res) = check_fw(image_slice, &mut tx) {
+            fw_is_valid = res;
+        } else {
+            ack_msg_send(HostProtocolMessage::Bootloader(Bootloader::NoCosignHeader), &mut tx);
+        }
+    } else {
+        ack_msg_send(HostProtocolMessage::Bootloader(Bootloader::NoCosignHeader), &mut tx);
+    }
+
+    // if check_fw(image_slice)
+
     // Init a GPIO to use as bootloader trigger
     let boot_gpio = Input::new(p.P0_20, Pull::Down);
     // Small delay to have stable GPIO
     let _ = Timer::after_millis(5).await;
     // Check if pin is low to reset - if high go on with bootloader
-    if boot_gpio.is_low() {
+    if boot_gpio.is_low() && fw_is_valid {
         // Go to app!!
         info!("Resetting");
         drop(tx);
@@ -250,12 +265,18 @@ async fn main(_spawner: Spawner) {
                                     update_chunk(&mut boot_status, idx, data, &mut flash, &mut tx);
                                 }
                                 Bootloader::FirmwareVersion => {
-                                    let image = get_fw_image_slice(BASE_FLASH_ADDR, boot_status.offset);
-                                    if let Ok(Some(header)) = Header::parse_unverified(image) {
-                                        let version = header.version();
-                                        ack_msg_send(HostProtocolMessage::Bootloader(Bootloader::AckFirmwareVersion { version }), &mut tx)
-                                    } else {
-                                        ack_msg_send(HostProtocolMessage::Bootloader(Bootloader::NoCosignHeader), &mut tx);
+                                    if let Ok(Some(header)) = Header::parse_unverified(header_slice) {
+                                        let image = get_fw_image_slice(BASE_FLASH_ADDR, header.firmware_size());
+                                        if let Ok(Some(header)) = Header::parse_unverified(image) {
+                                            info!("Firmware size - {}", header.firmware_size());
+                                            let version = header.version();
+                                            ack_msg_send(
+                                                HostProtocolMessage::Bootloader(Bootloader::AckFirmwareVersion { version }),
+                                                &mut tx,
+                                            )
+                                        } else {
+                                            ack_msg_send(HostProtocolMessage::Bootloader(Bootloader::NoCosignHeader), &mut tx);
+                                        }
                                     }
                                 }
                                 Bootloader::BootloaderVersion => {
@@ -266,41 +287,23 @@ async fn main(_spawner: Spawner) {
                                     )
                                 }
                                 Bootloader::VerifyFirmware => {
-                                    let image_slice = get_fw_image_slice(BASE_FLASH_ADDR, boot_status.offset);
-                                    info!("Image slice len dec {} - hex {:02X}", image_slice.len(), image_slice.len());
-
-                                    if let Some((result, hash)) = verify_os_image(image_slice) {
-                                        if result == VerificationResult::Valid {
-                                            info!("Valid signature!");
-
-                                            ack_msg_send(
-                                                HostProtocolMessage::Bootloader(Bootloader::AckVerifyFirmware {
-                                                    result: true,
-                                                    hash: hash.sha,
-                                                }),
-                                                &mut tx,
-                                            );
-                                        } else {
-                                            info!("Invalid signature!");
-                                            ack_msg_send(
-                                                HostProtocolMessage::Bootloader(Bootloader::AckVerifyFirmware {
-                                                    result: false,
-                                                    hash: hash.sha,
-                                                }),
-                                                &mut tx,
-                                            );
+                                    if let Ok(Some(header)) = Header::parse_unverified(header_slice) {
+                                        let image_slice = get_fw_image_slice(BASE_FLASH_ADDR, header.firmware_size());
+                                        info!("Image slice len dec {} - hex {:02X}", image_slice.len(), image_slice.len());
+                                        if let Some(res) = check_fw(image_slice, &mut tx) {
+                                            info!("Fw image valid : {}",res)
                                         }
                                     } else {
                                         info!("No Header present!");
                                         ack_msg_send(HostProtocolMessage::Bootloader(Bootloader::NoCosignHeader), &mut tx);
-                                    };
+                                    }
                                 }
                                 _ => (),
                             },
                             HostProtocolMessage::Reset => {
                                 jump_app = true;
                                 break 'exitloop;
-                            },
+                            }
                         };
                         remaining
                     }
