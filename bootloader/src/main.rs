@@ -102,36 +102,50 @@ fn ack_msg_send(message: HostProtocolMessage, tx: &mut UarteTx<UARTE0>) {
     let _ = tx.blocking_write(cobs_ack);
 }
 
-#[embassy_executor::main]
-async fn main(_spawner: Spawner) {
-
+// Flash areas protection using https://docs.nordicsemi.com/bundle/ps_nrf52805/page/bprot.html
+fn flash_protect() {
+    // Set bprot registers values
+    // Nordic MBR area protection
+    let bits_0 = unsafe { &*nrf52805_pac::BPROT::ptr() }.config0.read().bits();
+    info!("CONFIG0_BITS : {}",bits_0);
     unsafe { &*nrf52805_pac::BPROT::ptr() }.config0.write(|w| 
         w.region0().enabled()
     );
     let bits_0 = unsafe { &*nrf52805_pac::BPROT::ptr() }.config0.read().bits();
     info!("CONFIG0_BITS : {}",bits_0);
 
-
+    // Bootloader area protection
+    let bits_1 = unsafe { &*nrf52805_pac::BPROT::ptr() }.config1.read().bits();
+    info!("CONFIG1_BITS : {}",bits_1);
     unsafe { &*nrf52805_pac::BPROT::ptr() }.config1.write(|w| {
-        w.region47().enabled();
-        w.region46().enabled();
-        w.region45().enabled();
-        w.region44().enabled();
-        w.region43().enabled();
-        w.region42().enabled();
-        w.region41().enabled();
-        w.region40().enabled();
-        w.region39().enabled();
+        w.region47().enabled(); //0x2F000-0x30000
+        w.region46().enabled(); //0x2E000-0x2F000
+        w.region45().enabled(); //0x2D000-0x2E000
+        w.region44().enabled(); //0x2C000-0x2D000
+        w.region43().enabled(); //0x2B000-0x2C000
+        w.region42().enabled(); //0x2A000-0x2B000
+        w.region41().enabled(); //0x29000-0x2A000
+        w.region40().enabled(); //0x28000-0x29000 
+        w.region39().enabled(); //0x27000-0x28000 
         w
     });
     let bits_1 = unsafe { &*nrf52805_pac::BPROT::ptr() }.config1.read().bits();
     info!("CONFIG1_BITS : {}",bits_1);
 
+    // Enable area protection also in debug
+    let disabledebug = unsafe { &*nrf52805_pac::BPROT::ptr() }.disableindebug.read().bits();
+    info!("DISABLE : {}",disabledebug);
     unsafe { &*nrf52805_pac::BPROT::ptr() }.disableindebug.write(|w| unsafe { w.bits(0x00) });
-
     let disabledebug = unsafe { &*nrf52805_pac::BPROT::ptr() }.disableindebug.read().bits();
     info!("DISABLE : {}",disabledebug);
 
+}
+
+#[embassy_executor::main]
+async fn main(_spawner: Spawner) {
+
+    #[cfg(feature = "flash-protect")]
+    flash_protect();
 
     let p = embassy_nrf::init(Default::default());
 

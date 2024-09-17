@@ -157,3 +157,7 @@ pub fn get_fw_image_slice<'a>(base_address: u32, len: u32) -> &'a [u8] {
     let slice = unsafe { core::slice::from_raw_parts(base_address as *const u8, len as usize) };
     slice
 }
+
+// pub check_fw() -> bool{
+
+// }

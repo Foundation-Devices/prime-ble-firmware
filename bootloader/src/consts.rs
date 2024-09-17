@@ -16,12 +16,3 @@ pub const FLASH_PAGE: u32 = 4096;
 #[used]
 #[link_section = ".uicr_appprotection"]
 pub static APP_PROTECTION: i32 = 0x00;
-
-#[cfg(feature = "flash-protect")]
-// #[used]
-// #[link_section = ".bprot_config0"]
-// pub static BPROT_CONFIG0: i32 = 0x01;
-// #[cfg(feature = "flash-protect")]
-#[used]
-#[link_section = ".bprot_config1"]
-pub static BPROT_CONFIG1: i32 = 0x0000FF80;
