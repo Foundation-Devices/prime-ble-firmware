@@ -100,19 +100,18 @@ pub fn ack_msg_send(message: HostProtocolMessage, tx: &mut UarteTx<UARTE0>) {
     let _ = tx.blocking_write(cobs_ack);
 }
 
+#[cfg(feature = "flash-protect")]
 // Flash areas protection using https://docs.nordicsemi.com/bundle/ps_nrf52805/page/bprot.html
 fn flash_protect() {
     // Set bprot registers values
     // Nordic MBR area protection
-    let bits_0 = unsafe { &*nrf52805_pac::BPROT::ptr() }.config0.read().bits();
-    info!("CONFIG0_BITS : {}", bits_0);
+    // let bits_0 = unsafe { &*nrf52805_pac::BPROT::ptr() }.config0.read().bits();
     unsafe { &*nrf52805_pac::BPROT::ptr() }.config0.write(|w| w.region0().enabled());
     let bits_0 = unsafe { &*nrf52805_pac::BPROT::ptr() }.config0.read().bits();
     info!("CONFIG0_BITS : {}", bits_0);
 
     // Bootloader area protection
-    let bits_1 = unsafe { &*nrf52805_pac::BPROT::ptr() }.config1.read().bits();
-    info!("CONFIG1_BITS : {}", bits_1);
+    // let bits_1 = unsafe { &*nrf52805_pac::BPROT::ptr() }.config1.read().bits();
     unsafe { &*nrf52805_pac::BPROT::ptr() }.config1.write(|w| {
         w.region47().enabled(); //0x2F000-0x30000
         w.region46().enabled(); //0x2E000-0x2F000
@@ -129,8 +128,7 @@ fn flash_protect() {
     info!("CONFIG1_BITS : {}", bits_1);
 
     // Enable area protection also in debug
-    let disabledebug = unsafe { &*nrf52805_pac::BPROT::ptr() }.disableindebug.read().bits();
-    info!("DISABLE : {}", disabledebug);
+    // let disabledebug = unsafe { &*nrf52805_pac::BPROT::ptr() }.disableindebug.read().bits();
     unsafe { &*nrf52805_pac::BPROT::ptr() }
         .disableindebug
         .write(|w| unsafe { w.bits(0x00) });
@@ -140,6 +138,7 @@ fn flash_protect() {
 
 #[embassy_executor::main]
 async fn main(_spawner: Spawner) {
+    
     #[cfg(feature = "flash-protect")]
     flash_protect();
 
@@ -164,27 +163,25 @@ async fn main(_spawner: Spawner) {
 
     let mut fw_is_valid = false;
 
-    // Get Cosign application header if present
-    let header_slice = get_fw_image_slice(BASE_FLASH_ADDR, HEADER_SIZE);
-    // Check if fw is valid
-    if let Ok(Some(header_unverified)) = Header::parse_unverified(header_slice) {
-        let image_slice = get_fw_image_slice(BASE_ADDRESS_APP, header_unverified.firmware_size());
-        info!("Image size {}", image_slice.len());
-        if let Some(res) = check_fw(image_slice, &mut tx) {
-            fw_is_valid = res;
+    {
+        // Get Cosign application header if present
+        let image_slice = get_fw_image_slice(BASE_FLASH_ADDR, 0xE000);
+        // Check if fw is valid
+        if let Ok(Some(header_unverified)) = Header::parse_unverified(image_slice) {
+            if let Some(res) = check_fw(image_slice, &mut tx) {
+                fw_is_valid = res;
+            } else {
+                ack_msg_send(HostProtocolMessage::Bootloader(Bootloader::NoCosignHeader), &mut tx);
+            }
         } else {
             ack_msg_send(HostProtocolMessage::Bootloader(Bootloader::NoCosignHeader), &mut tx);
         }
-    } else {
-        ack_msg_send(HostProtocolMessage::Bootloader(Bootloader::NoCosignHeader), &mut tx);
     }
-
-    // if check_fw(image_slice)
 
     // Init a GPIO to use as bootloader trigger
     let boot_gpio = Input::new(p.P0_20, Pull::Down);
     // Small delay to have stable GPIO
-    let _ = Timer::after_millis(5).await;
+    let _ = Timer::after_micros(5).await;
     // Check if pin is low to reset - if high go on with bootloader
     if boot_gpio.is_low() && fw_is_valid {
         // Go to app!!
@@ -219,10 +216,8 @@ async fn main(_spawner: Spawner) {
         while let Ok(n) = rx.read_until_idle(&mut raw_buf).await {
             // Finished reading input
             if n == 0 {
-                info!("Read 0 bytes");
                 break;
             }
-            info!("Data incoming {}", n);
 
             let buf = &raw_buf[..n];
             let mut window: &[u8] = buf;
@@ -261,14 +256,14 @@ async fn main(_spawner: Spawner) {
                                     block_idx: idx,
                                     block_data: data,
                                 } => {
-                                    info!("Bootloader pkt recv");
                                     update_chunk(&mut boot_status, idx, data, &mut flash, &mut tx);
                                 }
                                 Bootloader::FirmwareVersion => {
+                                    let header_slice = get_fw_image_slice(BASE_FLASH_ADDR, HEADER_SIZE);
+
                                     if let Ok(Some(header)) = Header::parse_unverified(header_slice) {
                                         let image = get_fw_image_slice(BASE_FLASH_ADDR, header.firmware_size());
                                         if let Ok(Some(header)) = Header::parse_unverified(image) {
-                                            info!("Firmware size - {}", header.firmware_size());
                                             let version = header.version();
                                             ack_msg_send(
                                                 HostProtocolMessage::Bootloader(Bootloader::AckFirmwareVersion { version }),
@@ -287,6 +282,8 @@ async fn main(_spawner: Spawner) {
                                     )
                                 }
                                 Bootloader::VerifyFirmware => {
+                                    let header_slice = get_fw_image_slice(BASE_FLASH_ADDR, HEADER_SIZE);
+
                                     if let Ok(Some(header)) = Header::parse_unverified(header_slice) {
                                         let image_slice = get_fw_image_slice(BASE_FLASH_ADDR, header.firmware_size());
                                         info!("Image slice len dec {} - hex {:02X}", image_slice.len(), image_slice.len());
@@ -312,7 +309,6 @@ async fn main(_spawner: Spawner) {
             embassy_time::Timer::after_millis(1).await;
         }
     }
-    info!("Resetting");
     drop(tx);
     drop(rx);
     unsafe {
