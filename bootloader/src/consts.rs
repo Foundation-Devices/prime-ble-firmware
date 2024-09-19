@@ -9,7 +9,7 @@ pub const BASE_ADDRESS_APP: u32 = 0x19800;
 pub const BASE_ADDRESS_APP: u32 = 0x1000; // SD base address
 
 pub const BASE_APP_ADDR: u32 = 0x19000;
-pub const APP_SIZE : u32 = 0xC800;  // 50K
+pub const APP_SIZE: u32 = 0xC800; // 50K
 pub const BASE_BOOTLOADER_APP: u32 = 0x26000;
 pub const FLASH_PAGE: u32 = 4096;
 

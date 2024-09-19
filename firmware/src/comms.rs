@@ -25,9 +25,7 @@ pub async fn comms_task(mut rx: BufferedUarteRx<'static, 'static, UARTE0, TIMER1
             // if let Some(uart) = uart_in.as_mut() {
             if let Ok(n) = rx.read(&mut raw_buf).await {
                 // Finished reading input
-                // let n = n.unwrap();
                 if n == 0 {
-                    info!("overfull");
                     break;
                 }
                 // info!("Data incoming {} bytes", n);

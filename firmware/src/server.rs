@@ -34,9 +34,8 @@ pub struct Server {
 }
 
 pub async fn stop_bluetooth() {
-    info!("Waiting off");
     while BT_STATE.wait().await {}
-    info!("off");
+    info!("BT off");
 }
 
 pub fn initialize_sd() -> &'static mut Softdevice {
@@ -80,9 +79,6 @@ async fn notify_data_tx<'a>(server: &'a Server, connection: &'a Connection) {
         // This is the way we can notify data when NUS service is up
         {
             let mut buffer = TX_BT_VEC.lock().await;
-            if buffer.len() > 2 {
-                info!("Buffer to BT len {}", buffer.len());
-            }
             if buffer.len() > 0 {
                 match notify_value(connection, server.nus.get_handle(), &buffer[0]) {
                     Ok(_) => {

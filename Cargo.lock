@@ -284,6 +284,8 @@ name = "cosign2"
 version = "0.1.0"
 dependencies = [
  "chrono",
+ "defmt",
+ "defmt-rtt",
 ]
 
 [[package]]

@@ -171,7 +171,7 @@ pub fn check_fw(image_slice: &[u8], tx: &mut UarteTx<UARTE0>) -> Option<bool> {
                 }),
                 tx,
             );
-            return Some(true)
+            return Some(true);
         } else {
             info!("Invalid signature!");
             ack_msg_send(
@@ -181,7 +181,7 @@ pub fn check_fw(image_slice: &[u8], tx: &mut UarteTx<UARTE0>) -> Option<bool> {
                 }),
                 tx,
             );
-            return Some(false)
+            return Some(false);
         }
     }
     None
