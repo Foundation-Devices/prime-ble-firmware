@@ -59,7 +59,6 @@ pub async fn comms_task(mut rx: BufferedUarteRx<'static, 'static, UARTE0, TIMER1
                                 }
                                 HostProtocolMessage::Bootloader(_) => (), // no-op, handled in the bootloader
                                 HostProtocolMessage::Reset => {
-                                    info!("Resetting");
                                     drop(rx);
                                     cortex_m::peripheral::SCB::sys_reset();
                                 }

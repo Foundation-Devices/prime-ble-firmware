@@ -31,9 +31,7 @@ unsafe fn sd_set_signed_fw() {
             irq_forward_address_set: mbr::sd_mbr_command_irq_forward_address_set_t { address: 0x19000 },
         },
     };
-    let ret = mbr::sd_mbr_command(&mut cmd);
-
-    info!("ret SD init result {}", ret);
+    let _ = mbr::sd_mbr_command(&mut cmd);
 }
 
 /// Boots the application assuming softdevice is present.

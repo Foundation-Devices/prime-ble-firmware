@@ -164,7 +164,6 @@ pub fn get_fw_image_slice<'a>(base_address: u32, len: u32) -> &'a [u8] {
 pub fn check_fw(image_slice: &[u8], tx: &mut UarteTx<UARTE0>) -> Option<bool> {
     if let Some((result, hash)) = verify_os_image(image_slice) {
         if result == VerificationResult::Valid {
-            info!("Valid signature!");
             ack_msg_send(
                 HostProtocolMessage::Bootloader(Bootloader::AckVerifyFirmware {
                     result: true,

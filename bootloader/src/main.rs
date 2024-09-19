@@ -56,9 +56,9 @@ pub struct BootState {
 fn update_chunk<'a>(boot_status: &'a mut BootState, idx: usize, data: &'a [u8], flash: &'a mut Nvmc, tx: &mut UarteTx<UARTE0>) {
     // Check what sector we are in now
     // Increase offset with data len
-    let cursor = BASE_FLASH_ADDR + boot_status.offset;
+    let cursor = BASE_APP_ADDR + boot_status.offset;
     match cursor {
-        (BASE_FLASH_ADDR..=BASE_BOOTLOADER_APP) => {}
+        (BASE_APP_ADDR..=BASE_BOOTLOADER_APP) => {}
         _ => {
             ack_msg_send(
                 HostProtocolMessage::Bootloader(Bootloader::FirmwareOutOfBounds { block_idx: idx }),
@@ -72,7 +72,7 @@ fn update_chunk<'a>(boot_status: &'a mut BootState, idx: usize, data: &'a [u8], 
         Ok(()) => {
             boot_status.offset += data.len() as u32;
             // Print some infos on update
-            boot_status.actual_sector = BASE_FLASH_ADDR + (boot_status.offset / FLASH_PAGE) * FLASH_PAGE;
+            boot_status.actual_sector = BASE_APP_ADDR + (boot_status.offset / FLASH_PAGE) * FLASH_PAGE;
             info!("Updating flash page starting at addr: {:02X}", boot_status.actual_sector);
             info!("offset : {:02X}", boot_status.actual_sector + boot_status.offset % FLASH_PAGE);
             let crc = Crc::<u32>::new(&CRC_32_ISCSI);
@@ -165,14 +165,10 @@ async fn main(_spawner: Spawner) {
 
     {
         // Get Cosign application header if present
-        let image_slice = get_fw_image_slice(BASE_FLASH_ADDR, 0xE000);
+        let image_slice = get_fw_image_slice(BASE_APP_ADDR, APP_SIZE);
         // Check if fw is valid
-        if let Ok(Some(header_unverified)) = Header::parse_unverified(image_slice) {
-            if let Some(res) = check_fw(image_slice, &mut tx) {
-                fw_is_valid = res;
-            } else {
-                ack_msg_send(HostProtocolMessage::Bootloader(Bootloader::NoCosignHeader), &mut tx);
-            }
+        if let Some(res) = check_fw(image_slice, &mut tx) {
+            fw_is_valid = res;
         } else {
             ack_msg_send(HostProtocolMessage::Bootloader(Bootloader::NoCosignHeader), &mut tx);
         }
@@ -209,7 +205,7 @@ async fn main(_spawner: Spawner) {
     'exitloop: while !jump_app {
         // Now for testing locally i am looping until command reset
         // Raw buffer - 32 bytes for the accumulator of cobs
-        let mut raw_buf = [0u8; 512];
+        let mut raw_buf = [0u8; 64];
         // Create a cobs accumulator for data incoming
         let mut cobs_buf: CobsAccumulator<512> = CobsAccumulator::new();
         // Getting chars from Uart in a while loop
@@ -245,7 +241,7 @@ async fn main(_spawner: Spawner) {
                                 // Erase all flash application space
                                 Bootloader::EraseFirmware => {
                                     info!("Erase firmware");
-                                    if flash.erase(BASE_FLASH_ADDR, BASE_BOOTLOADER_APP).is_ok() {
+                                    if flash.erase(BASE_APP_ADDR, BASE_BOOTLOADER_APP).is_ok() {
                                         ack_msg_send(HostProtocolMessage::Bootloader(Bootloader::AckEraseFirmware), &mut tx);
                                         //Reset counters
                                         boot_status = Default::default();
@@ -259,19 +255,15 @@ async fn main(_spawner: Spawner) {
                                     update_chunk(&mut boot_status, idx, data, &mut flash, &mut tx);
                                 }
                                 Bootloader::FirmwareVersion => {
-                                    let header_slice = get_fw_image_slice(BASE_FLASH_ADDR, HEADER_SIZE);
-
+                                    let header_slice = get_fw_image_slice(BASE_APP_ADDR, APP_SIZE);
                                     if let Ok(Some(header)) = Header::parse_unverified(header_slice) {
-                                        let image = get_fw_image_slice(BASE_FLASH_ADDR, header.firmware_size());
-                                        if let Ok(Some(header)) = Header::parse_unverified(image) {
-                                            let version = header.version();
-                                            ack_msg_send(
-                                                HostProtocolMessage::Bootloader(Bootloader::AckFirmwareVersion { version }),
-                                                &mut tx,
-                                            )
-                                        } else {
-                                            ack_msg_send(HostProtocolMessage::Bootloader(Bootloader::NoCosignHeader), &mut tx);
-                                        }
+                                        let version = header.version();
+                                        ack_msg_send(
+                                            HostProtocolMessage::Bootloader(Bootloader::AckFirmwareVersion { version }),
+                                            &mut tx,
+                                        )
+                                    } else {
+                                        ack_msg_send(HostProtocolMessage::Bootloader(Bootloader::NoCosignHeader), &mut tx);
                                     }
                                 }
                                 Bootloader::BootloaderVersion => {
@@ -282,16 +274,11 @@ async fn main(_spawner: Spawner) {
                                     )
                                 }
                                 Bootloader::VerifyFirmware => {
-                                    let header_slice = get_fw_image_slice(BASE_FLASH_ADDR, HEADER_SIZE);
-
-                                    if let Ok(Some(header)) = Header::parse_unverified(header_slice) {
-                                        let image_slice = get_fw_image_slice(BASE_FLASH_ADDR, header.firmware_size());
-                                        info!("Image slice len dec {} - hex {:02X}", image_slice.len(), image_slice.len());
-                                        if let Some(res) = check_fw(image_slice, &mut tx) {
-                                            info!("Fw image valid : {}",res)
-                                        }
+                                    let image_slice = get_fw_image_slice(BASE_APP_ADDR, APP_SIZE);
+                                    info!("Image slice len dec {} - hex {:02X}", image_slice.len(), image_slice.len());
+                                    if let Some(res) = check_fw(image_slice, &mut tx) {
+                                        info!("Fw image valid : {}",res)
                                     } else {
-                                        info!("No Header present!");
                                         ack_msg_send(HostProtocolMessage::Bootloader(Bootloader::NoCosignHeader), &mut tx);
                                     }
                                 }
