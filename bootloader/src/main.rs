@@ -27,7 +27,7 @@ use embassy_nrf::uarte::UarteTx;
 use embassy_nrf::{bind_interrupts, uarte};
 use embassy_sync::blocking_mutex::CriticalSectionMutex;
 use embassy_sync::blocking_mutex::Mutex;
-use embedded_storage::nor_flash::NorFlash;
+use embedded_storage::nor_flash::{NorFlash, ReadNorFlash};
 use host_protocol::Bootloader;
 use host_protocol::HostProtocolMessage;
 use jump_app::jump_to_app;
@@ -160,8 +160,16 @@ async fn main(_spawner: Spawner) {
     // FLASH
     let mut flash = Nvmc::new(p.NVMC);
 
+    // Get secret state
+    for i in [0..=4]{
+        if let Ok(uicr_reg) = flash.read(BASE_SECRET_ADDR + (i*4), 4){
+            info!("UICR REG n {} value {:02X}", i, uicr_reg);
+        }
+    }
+
     let mut fw_is_valid = false;
 
+    // Check fw at startup
     {
         // Get Cosign application header if present
         let image_slice = get_fw_image_slice(BASE_APP_ADDR, APP_SIZE);
