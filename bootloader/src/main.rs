@@ -10,6 +10,10 @@ mod verify;
 use defmt_rtt as _;
 use embassy_nrf as _;
 use embassy_time::Timer;
+use nrf52805_pac::generic::Reg;
+use nrf52805_pac::uicr;
+use nrf52805_pac::uicr::customer::{CUSTOMER_R, CUSTOMER_SPEC};
+use nrf52805_pac::uicr::nrfhw::R;
 use panic_probe as _;
 
 use consts::*;
@@ -37,6 +41,8 @@ use postcard::accumulator::{CobsAccumulator, FeedResult};
 use postcard::to_slice_cobs;
 use serde::{Deserialize, Serialize};
 use verify::{check_fw, get_fw_image_slice};
+use nrf52805_pac::NVMC;
+use nrf52805_pac::UICR;
 
 // Mutex for random hw generator to delay in verification
 static RNG_HW: CriticalSectionMutex<RefCell<Option<Rng<'_, RNG>>>> = Mutex::new(RefCell::new(None));
@@ -160,14 +166,44 @@ async fn main(_spawner: Spawner) {
     // FLASH
     let mut flash = Nvmc::new(p.NVMC);
 
+    // Valid firmware flag
+    let mut fw_is_valid = false;
+
     // Get secret state
-    for i in [0..=4]{
-        if let Ok(uicr_reg) = flash.read(BASE_SECRET_ADDR + (i*4), 4){
-            info!("UICR REG n {} value {:02X}", i, uicr_reg);
-        }
+    let mut secret_saved = EMPTY_SECRET;
+    unsafe{
+        let nvmc = &*NVMC::ptr();
+        let uicr = &*UICR::ptr();
+        nvmc.config.write(|w| w.wen().wen());
+        while nvmc.ready.read().ready().is_busy() {}
+        uicr.customer[0].write(|w| unsafe{w.bits(0x5A5A5A5A)});
+        uicr.customer[1].write(|w| unsafe{w.bits(0x5A5A5A5A)});
+        uicr.customer[2].write(|w| unsafe{w.bits(0x5A5A5A5A)});
+        uicr.customer[3].write(|w| unsafe{w.bits(0xAABABAAF)});
+        while nvmc.ready.read().ready().is_busy() {}
+        nvmc.config.reset();
+        while nvmc.ready.read().ready().is_busy() {}
     }
 
-    let mut fw_is_valid = false;
+
+    for i in 0..8{
+        let val = unsafe { &*nrf52805_pac::UICR::ptr() }.customer[i].read().customer().bits();
+        info!("UICR reg : {} has value {:02X}",i,val);
+    }
+
+
+    if let Ok(_) = flash.read(BASE_SECRET_ADDR, &mut secret_saved){
+
+        if secret_saved == EMPTY_SECRET{
+            info!("Secret is empy value {:02X}", secret_saved);
+        }
+        else {
+            info!("Secret is saved value {:02X}", secret_saved);
+        }
+    }
+    else {
+        
+    }
 
     // Check fw at startup
     {
