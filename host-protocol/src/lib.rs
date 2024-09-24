@@ -42,7 +42,7 @@ pub enum Bootloader<'a> {
     BootloaderVersion,
     AckBootloaderVersion { version: &'a str },
     // Challenge cmds
-    ChallengeSet { secret : &'a [u8]}, // better to use an array u8; 32]? 
+    ChallengeSet { secret : [u32;4]}, // better to use an array u8; 32]? 
     AckChallengeSet { result : bool },
     ChallengeRequest {challenge : [u8;4], nonce : u32 }, // TBD 
     ChallengeResult { result : u32 } , // TBD

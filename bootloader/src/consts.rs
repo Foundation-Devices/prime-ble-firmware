@@ -12,9 +12,7 @@ pub const BASE_APP_ADDR: u32 = 0x19000;
 pub const APP_SIZE: u32 = 0xC800; // 50K
 pub const BASE_BOOTLOADER_APP: u32 = 0x26000;
 pub const FLASH_PAGE: u32 = 4096;
-pub const BASE_SECRET_ADDR : u32 = 0x10001080;
-pub const EMPTY_SECRET : [u8;32] = [0xFF;32];
-
+pub const EMPTY_SECRET: [u32; 4] = [0xFFFFFFFF; 4];
 
 #[cfg(feature = "no-dbg-access")]
 #[used]

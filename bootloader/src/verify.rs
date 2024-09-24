@@ -9,6 +9,8 @@ use embassy_nrf::uarte::UarteTx;
 use embassy_time::Delay;
 use host_protocol::{Bootloader, HostProtocolMessage};
 use micro_ecc_sys::{uECC_decompress, uECC_secp256k1, uECC_valid_public_key, uECC_verify};
+use nrf52805_pac::NVMC;
+use nrf52805_pac::UICR;
 use sha2::{Digest, Sha256 as Sha};
 
 // TODO: put well-known public keys here
@@ -185,4 +187,18 @@ pub fn check_fw(image_slice: &[u8], tx: &mut UarteTx<UARTE0>) -> Option<bool> {
         }
     }
     None
+}
+
+pub unsafe fn write_secret(secret: [u32; 4]) {
+    let nvmc = &*NVMC::ptr();
+    let uicr = &*UICR::ptr();
+    nvmc.config.write(|w| w.wen().wen());
+    while nvmc.ready.read().ready().is_busy() {}
+    uicr.customer[0].write(|w| unsafe { w.bits(secret[0]) });
+    uicr.customer[1].write(|w| unsafe { w.bits(secret[1]) });
+    uicr.customer[2].write(|w| unsafe { w.bits(secret[2]) });
+    uicr.customer[3].write(|w| unsafe { w.bits(secret[3]) });
+    while nvmc.ready.read().ready().is_busy() {}
+    nvmc.config.reset();
+    while nvmc.ready.read().ready().is_busy() {}
 }

@@ -10,10 +10,6 @@ mod verify;
 use defmt_rtt as _;
 use embassy_nrf as _;
 use embassy_time::Timer;
-use nrf52805_pac::generic::Reg;
-use nrf52805_pac::uicr;
-use nrf52805_pac::uicr::customer::{CUSTOMER_R, CUSTOMER_SPEC};
-use nrf52805_pac::uicr::nrfhw::R;
 use panic_probe as _;
 
 use consts::*;
@@ -31,7 +27,7 @@ use embassy_nrf::uarte::UarteTx;
 use embassy_nrf::{bind_interrupts, uarte};
 use embassy_sync::blocking_mutex::CriticalSectionMutex;
 use embassy_sync::blocking_mutex::Mutex;
-use embedded_storage::nor_flash::{NorFlash, ReadNorFlash};
+use embedded_storage::nor_flash::NorFlash;
 use host_protocol::Bootloader;
 use host_protocol::HostProtocolMessage;
 use jump_app::jump_to_app;
@@ -40,9 +36,7 @@ use nrf_softdevice::Softdevice;
 use postcard::accumulator::{CobsAccumulator, FeedResult};
 use postcard::to_slice_cobs;
 use serde::{Deserialize, Serialize};
-use verify::{check_fw, get_fw_image_slice};
-use nrf52805_pac::NVMC;
-use nrf52805_pac::UICR;
+use verify::{check_fw, get_fw_image_slice, write_secret};
 
 // Mutex for random hw generator to delay in verification
 static RNG_HW: CriticalSectionMutex<RefCell<Option<Rng<'_, RNG>>>> = Mutex::new(RefCell::new(None));
@@ -128,6 +122,7 @@ fn flash_protect() {
         w.region41().enabled(); //0x29000-0x2A000
         w.region40().enabled(); //0x28000-0x29000
         w.region39().enabled(); //0x27000-0x28000
+        w.region38().enabled(); //0x26000-0x27000
         w
     });
     let bits_1 = unsafe { &*nrf52805_pac::BPROT::ptr() }.config1.read().bits();
@@ -169,42 +164,6 @@ async fn main(_spawner: Spawner) {
     // Valid firmware flag
     let mut fw_is_valid = false;
 
-    // Get secret state
-    let mut secret_saved = EMPTY_SECRET;
-    unsafe{
-        let nvmc = &*NVMC::ptr();
-        let uicr = &*UICR::ptr();
-        nvmc.config.write(|w| w.wen().wen());
-        while nvmc.ready.read().ready().is_busy() {}
-        uicr.customer[0].write(|w| unsafe{w.bits(0x5A5A5A5A)});
-        uicr.customer[1].write(|w| unsafe{w.bits(0x5A5A5A5A)});
-        uicr.customer[2].write(|w| unsafe{w.bits(0x5A5A5A5A)});
-        uicr.customer[3].write(|w| unsafe{w.bits(0xAABABAAF)});
-        while nvmc.ready.read().ready().is_busy() {}
-        nvmc.config.reset();
-        while nvmc.ready.read().ready().is_busy() {}
-    }
-
-
-    for i in 0..8{
-        let val = unsafe { &*nrf52805_pac::UICR::ptr() }.customer[i].read().customer().bits();
-        info!("UICR reg : {} has value {:02X}",i,val);
-    }
-
-
-    if let Ok(_) = flash.read(BASE_SECRET_ADDR, &mut secret_saved){
-
-        if secret_saved == EMPTY_SECRET{
-            info!("Secret is empy value {:02X}", secret_saved);
-        }
-        else {
-            info!("Secret is saved value {:02X}", secret_saved);
-        }
-    }
-    else {
-        
-    }
-
     // Check fw at startup
     {
         // Get Cosign application header if present
@@ -223,16 +182,6 @@ async fn main(_spawner: Spawner) {
     let boot_gpio = Input::new(p.P0_20, Pull::Down);
     // Small delay to have stable GPIO
     let _ = Timer::after_micros(5).await;
-    // Check if pin is low to reset - if high go on with bootloader
-    if boot_gpio.is_low() && fw_is_valid {
-        // Go to app!!
-        info!("Resetting");
-        drop(tx);
-        drop(rx);
-        unsafe {
-            jump_to_app();
-        }
-    }
 
     // // Message must be in SRAM
     let mut buf = [0; 22];
@@ -324,6 +273,29 @@ async fn main(_spawner: Spawner) {
                                         info!("No Header present!");
                                         ack_msg_send(HostProtocolMessage::Bootloader(Bootloader::NoCosignHeader), &mut tx);
                                     }
+                                }
+                                Bootloader::ChallengeSet { secret } => {
+                                    // Buffer for secret value
+                                    let mut val: [u32; 4] = [0xFF; 4];
+                                    // Result of setting challenge
+                                    let mut result = false;
+
+                                    for i in 0..secret.len() {
+                                        val[i] = unsafe { &*nrf52805_pac::UICR::ptr() }.customer[i].read().customer().bits();
+                                        info!("UICR reg : {} has value {:02X}", i, val);
+                                    }
+
+                                    if val == EMPTY_SECRET {
+                                        unsafe {
+                                            write_secret(val);
+                                            result = true;
+                                        }
+                                    }
+                                    // Send result to MCU
+                                    ack_msg_send(HostProtocolMessage::Bootloader(Bootloader::AckChallengeSet { result }), &mut tx);
+                                },
+                                Bootloader::ChallengeRequest { challenge, nonce } =>{
+                                    todo!()
                                 }
                                 _ => (),
                             },
