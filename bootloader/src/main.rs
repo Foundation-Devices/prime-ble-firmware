@@ -195,7 +195,7 @@ async fn main(_spawner: Spawner) {
 
     // Loop for bootloader commands
     // This loop will be a while loop with gpio state as condition to exit...
-    // while boot_gpio.is_high() {
+    // while boot_gpio.is_high() && !fw_is_valid{
     'exitloop: while !jump_app {
         // Now for testing locally i am looping until command reset
         // Raw buffer - 32 bytes for the accumulator of cobs
@@ -268,7 +268,8 @@ async fn main(_spawner: Spawner) {
                                     let image_slice = get_fw_image_slice(BASE_APP_ADDR, APP_SIZE);
                                     info!("Image slice len dec {} - hex {:02X}", image_slice.len(), image_slice.len());
                                     if let Some(res) = check_fw(image_slice, &mut tx) {
-                                        info!("Fw image valid : {}", res)
+                                        info!("Fw image valid : {}", res);
+                                        fw_is_valid = true;
                                     } else {
                                         info!("No Header present!");
                                         ack_msg_send(HostProtocolMessage::Bootloader(Bootloader::NoCosignHeader), &mut tx);
@@ -280,12 +281,13 @@ async fn main(_spawner: Spawner) {
                                     // Result of setting challenge
                                     let mut result = false;
 
+                                    // Read UICR registers
                                     for i in 0..secret.len() {
                                         val[i] = unsafe { &*nrf52805_pac::UICR::ptr() }.customer[i].read().customer().bits();
                                         info!("UICR reg : {} has value {:02X}", i, val);
                                     }
-
-                                    if val == EMPTY_SECRET {
+                                    // Check if empty 
+                                    if EMPTY_SECRET == val {
                                         unsafe {
                                             write_secret(val);
                                             result = true;
