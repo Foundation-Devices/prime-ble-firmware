@@ -36,7 +36,8 @@ use nrf_softdevice::Softdevice;
 use postcard::accumulator::{CobsAccumulator, FeedResult};
 use postcard::to_slice_cobs;
 use serde::{Deserialize, Serialize};
-use verify::{check_fw, get_fw_image_slice, write_secret};
+use verify::{check_fw, get_fw_image_slice, write_secret, Sha256 as sha};
+use cosign2::Sha256;
 
 // Mutex for random hw generator to delay in verification
 static RNG_HW: CriticalSectionMutex<RefCell<Option<Rng<'_, RNG>>>> = Mutex::new(RefCell::new(None));
@@ -276,6 +277,7 @@ async fn main(_spawner: Spawner) {
                                     }
                                 }
                                 Bootloader::ChallengeSet { secret } => {
+                                    info!("Challenge set cmd rx");
                                     // Buffer for secret value
                                     let mut val: [u32; 4] = [0xFF; 4];
                                     // Result of setting challenge
@@ -289,15 +291,23 @@ async fn main(_spawner: Spawner) {
                                     // Check if empty 
                                     if EMPTY_SECRET == val {
                                         unsafe {
-                                            write_secret(val);
+                                            write_secret(secret);
+                                            info!("Saved!");
                                             result = true;
                                         }
+                                    }
+                                    else{
+                                        info!("Not saved");
                                     }
                                     // Send result to MCU
                                     ack_msg_send(HostProtocolMessage::Bootloader(Bootloader::AckChallengeSet { result }), &mut tx);
                                 },
                                 Bootloader::ChallengeRequest { challenge, nonce } =>{
-                                    todo!()
+                                    let a   = sha {sha :  [0;32] } ;
+                                    let mut sum_sha : &dyn Sha256 = &a;
+                                    let val = unsafe { &*nrf52805_pac::UICR::ptr() }.customer[challenge].read().customer().bits();                            
+                                    let result = sum_sha.hash(&val.to_be_bytes());
+                                    ack_msg_send(HostProtocolMessage::Bootloader(Bootloader::ChallengeResult { result }), &mut tx);
                                 }
                                 _ => (),
                             },
