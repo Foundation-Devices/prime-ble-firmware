@@ -12,7 +12,7 @@ use postcard::accumulator::{CobsAccumulator, FeedResult};
 use postcard::to_slice_cobs;
 
 #[embassy_executor::task]
-pub async fn comms_task(mut rx: BufferedUarteRx<'static, 'static, UARTE0, TIMER1>) {
+pub async fn comms_task(rx: &mut BufferedUarteRx<'_,UARTE0,TIMER1>) {
     // Raw buffer - 64 bytes for the accumulator of cobs
     let mut raw_buf = [0u8; 64];
 
@@ -22,15 +22,15 @@ pub async fn comms_task(mut rx: BufferedUarteRx<'static, 'static, UARTE0, TIMER1
         {
             // Getting chars from Uart in a while loop
             // let mut uart_in = BUFFERED_UART.lock().await;
-            // if let Some(uart) = uart_in.as_mut() {
-            if let Ok(n) = rx.read(&mut raw_buf).await {
+            // if let Some(uart) = uart_in.as_mut() {            
+            if let Ok(n) = &rx.read(&mut raw_buf).await {
                 // Finished reading input
-                if n == 0 {
+                if *n == 0 {
                     break;
                 }
                 // info!("Data incoming {} bytes", n);
 
-                let buf = &raw_buf[..n];
+                let buf : &_ = &raw_buf[..n];
                 let mut window = buf;
 
                 'cobs: while !window.is_empty() {
@@ -106,7 +106,7 @@ async fn bluetooth_handler(msg: Bluetooth<'_>) {
 
 /// Sends the data received from the BLE NUS as `host-protocol` encoded data message.
 #[embassy_executor::task]
-pub async fn send_bt_uart(mut uart_tx: BufferedUarteTx<'static, 'static, UARTE0, TIMER1>) {
+pub async fn send_bt_uart(mut uart_tx: &BufferedUarteTx<'static, UARTE0>) {
     let mut send_buf = [0u8; 270];
 
     loop {
@@ -154,7 +154,7 @@ pub async fn send_bt_uart(mut uart_tx: BufferedUarteTx<'static, 'static, UARTE0,
 
 /// Sends the data received from the BLE NUS as `host-protocol` encoded data message.
 #[embassy_executor::task]
-pub async fn send_bt_uart_no_cobs(mut uart_tx: BufferedUarteTx<'static, 'static, UARTE0, TIMER1>) {
+pub async fn send_bt_uart_no_cobs(mut uart_tx: BufferedUarteTx<'static, UARTE0>) {
     let mut send_buf = [0u8; COBS_MAX_MSG_SIZE];
     let mut data_counter: u64 = 0;
     let mut pkt_counter: u64 = 0;

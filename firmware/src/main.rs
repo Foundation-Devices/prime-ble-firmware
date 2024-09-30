@@ -58,10 +58,10 @@ static TX_BT_VEC: Mutex<ThreadModeRawMutex, Vec<Vec<u8, ATT_MTU>, 4>> = Mutex::n
 static RSSI_VALUE: Mutex<ThreadModeRawMutex, u8> = Mutex::new(0);
 static BT_DATA_RX: Channel<ThreadModeRawMutex, Vec<u8, ATT_MTU>, 4> = Channel::new();
 static RSSI_TX: Channel<ThreadModeRawMutex, u8, 1> = Channel::new();
-static BUFFERED_UART: StaticCell<BufferedUarte<'static, UARTE0, TIMER1>> = StaticCell::new();
+static BUFFERED_UART: StaticCell<BufferedUarte<'_, UARTE0, TIMER1>> = StaticCell::new();
 
 /// nRF -> MPU IRQ output pin
-static IRQ_OUT_PIN: Mutex<ThreadModeRawMutex, RefCell<Option<Output<'static, P0_20>>>> = Mutex::new(RefCell::new(None));
+static IRQ_OUT_PIN: Mutex<ThreadModeRawMutex, RefCell<Option<Output>>> = Mutex::new(RefCell::new(None));
 
 #[embassy_executor::task]
 async fn softdevice_task(sd: &'static Softdevice) -> ! {
@@ -121,7 +121,7 @@ async fn main(spawner: Spawner) {
 
     let _ = uart.write_all(b"Hi from app!").await;
 
-    let (rx, tx) = uart.split();
+    let (rx, tx) = uart.split_by_ref();
 
     // Configure the OUT IRQ pin
     {
