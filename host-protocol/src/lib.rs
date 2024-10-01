@@ -43,9 +43,16 @@ pub enum Bootloader<'a> {
     AckBootloaderVersion { version: &'a str },
     // Challenge cmds
     ChallengeSet { secret : [u32;4]}, // better to use an array u8; 32]? 
-    AckChallengeSet { result : bool },
+    AckChallengeSet { result : SecretSaveResponse },
     ChallengeRequest {challenge : usize, nonce : u32 }, // TBD 
     ChallengeResult { result : [u8;32] } , // TBD
+}
+
+#[derive(Serialize, Deserialize,Clone,PartialEq, Eq, Debug)]
+pub enum SecretSaveResponse {
+    NotAllowed,
+    Sealed,
+    Error
 }
 
 /// Host protocol messages.

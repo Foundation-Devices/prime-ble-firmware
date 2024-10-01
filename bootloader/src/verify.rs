@@ -1,6 +1,8 @@
 // use crate::RNG_HW;
 use crate::ack_msg_send;
 use crate::RNG_HW;
+use crate::SEALED_SECRET;
+use crate::SEAL_IDX;
 use cortex_m::prelude::_embedded_hal_blocking_delay_DelayMs;
 use cosign2::{Header, VerificationResult};
 use defmt::info;
@@ -154,7 +156,6 @@ fn read_version_and_build_date(image: &[u8]) -> Option<([u8; 20], [u8; 14])> {
 
         return Some((version_bytes, date_bytes));
     }
-
     None
 }
 
@@ -189,26 +190,46 @@ pub fn check_fw(image_slice: &[u8], tx: &mut UarteTx<UARTE0>) -> Option<bool> {
     None
 }
 
-pub unsafe fn write_secret(secret: [u32; 4]) {
+pub unsafe fn write_secret(secret: [u32; 4]) -> bool {
     let nvmc = &*NVMC::ptr();
     let uicr = &*UICR::ptr();
     nvmc.config.write(|w| w.wen().wen());
     while nvmc.ready.read().ready().is_busy() {}
     uicr.customer[0].write(|w| unsafe { w.bits(secret[0]) });
     info!("secret 0 : {:02X}", secret[0]);
-
     uicr.customer[1].write(|w| unsafe { w.bits(secret[1]) });
     info!("secret 1 : {:02X}", secret[1]);
-
     uicr.customer[2].write(|w| unsafe { w.bits(secret[2]) });
-
     info!("secret 2 : {:02X}", secret[2]);
-
     uicr.customer[3].write(|w| unsafe { w.bits(secret[3]) });
-
     info!("secret 3 : {:02X}", secret[3]);
-
     while nvmc.ready.read().ready().is_busy() {}
     nvmc.config.reset();
     while nvmc.ready.read().ready().is_busy() {}
+
+    // Read back and check secret
+    let tmp = uicr.customer[0].read().bits();
+    if tmp != secret[0] {
+        return false;
+    }
+    let tmp = uicr.customer[1].read().bits();
+    if tmp != secret[1] {
+        return false;
+    }
+    let tmp = uicr.customer[2].read().bits();
+    if tmp != secret[2] {
+        return false;
+    }
+    let tmp = uicr.customer[3].read().bits();
+    if tmp != secret[3] {
+        return false;
+    }
+    nvmc.config.write(|w| w.wen().wen());
+    while nvmc.ready.read().ready().is_busy() {}
+    uicr.customer[SEAL_IDX].write(|w| unsafe { w.bits(SEALED_SECRET) });
+    while nvmc.ready.read().ready().is_busy() {}
+    nvmc.config.reset();
+    while nvmc.ready.read().ready().is_busy() {}
+
+    true
 }

@@ -15,6 +15,7 @@ use panic_probe as _;
 use consts::*;
 use core::cell::RefCell;
 use cosign2::Header;
+use cosign2::Sha256;
 use crc::{Crc, CRC_32_ISCSI};
 use defmt::info;
 use embassy_executor::Spawner;
@@ -28,16 +29,16 @@ use embassy_nrf::{bind_interrupts, uarte};
 use embassy_sync::blocking_mutex::CriticalSectionMutex;
 use embassy_sync::blocking_mutex::Mutex;
 use embedded_storage::nor_flash::NorFlash;
-use host_protocol::Bootloader;
 use host_protocol::HostProtocolMessage;
+use host_protocol::{Bootloader, SecretSaveResponse};
 use jump_app::jump_to_app;
 #[allow(unused_imports)]
 use nrf_softdevice::Softdevice;
 use postcard::accumulator::{CobsAccumulator, FeedResult};
 use postcard::to_slice_cobs;
 use serde::{Deserialize, Serialize};
+use sha2::digest::consts::False;
 use verify::{check_fw, get_fw_image_slice, write_secret, Sha256 as sha};
-use cosign2::Sha256;
 
 // Mutex for random hw generator to delay in verification
 static RNG_HW: CriticalSectionMutex<RefCell<Option<Rng<'_, RNG>>>> = Mutex::new(RefCell::new(None));
@@ -179,6 +180,9 @@ async fn main(_spawner: Spawner) {
         }
     }
 
+    // Check secret seal
+    let seal = unsafe { &*nrf52805_pac::UICR::ptr() }.customer[SEAL_IDX].read().customer().bits();
+
     // Init a GPIO to use as bootloader trigger
     let boot_gpio = Input::new(p.P0_20, Pull::Down);
     // Small delay to have stable GPIO
@@ -278,35 +282,29 @@ async fn main(_spawner: Spawner) {
                                 }
                                 Bootloader::ChallengeSet { secret } => {
                                     info!("Challenge set cmd rx");
-                                    // Buffer for secret value
-                                    let mut val: [u32; 4] = [0xFF; 4];
-                                    // Result of setting challenge
-                                    let mut result = false;
-
-                                    // Read UICR registers
-                                    for i in 0..secret.len() {
-                                        val[i] = unsafe { &*nrf52805_pac::UICR::ptr() }.customer[i].read().customer().bits();
-                                        info!("UICR reg : {} has value {:02X}", i, val);
-                                    }
-                                    // Check if empty 
-                                    if EMPTY_SECRET == val {
+                                    // Check if we yet sealed the secret
+                                    let result = if seal == SEALED_SECRET {
+                                        SecretSaveResponse::NotAllowed
+                                    } else {
+                                        // Save secret!
                                         unsafe {
-                                            write_secret(secret);
-                                            info!("Saved!");
-                                            result = true;
+                                            match write_secret(secret) {
+                                                true => {
+                                                    info!("Saved!");
+                                                    SecretSaveResponse::Sealed
+                                                }
+                                                false => SecretSaveResponse::Error,
+                                            }
                                         }
-                                    }
-                                    else{
-                                        info!("Not saved");
-                                    }
+                                    };
                                     // Send result to MCU
                                     ack_msg_send(HostProtocolMessage::Bootloader(Bootloader::AckChallengeSet { result }), &mut tx);
-                                },
-                                Bootloader::ChallengeRequest { challenge, nonce } =>{
-                                    let a   = sha {sha :  [0;32] } ;
-                                    let mut sum_sha : &dyn Sha256 = &a;
-                                    let val = unsafe { &*nrf52805_pac::UICR::ptr() }.customer[challenge].read().customer().bits();                            
-                                    let result = sum_sha.hash(&val.to_be_bytes());
+                                }
+                                Bootloader::ChallengeRequest { challenge, nonce } => {
+                                    let data = sha { sha: [0; 32] };
+                                    let challenge_sha: &dyn Sha256 = &data;
+                                    let val = unsafe { &*nrf52805_pac::UICR::ptr() }.customer[challenge].read().customer().bits();
+                                    let result = challenge_sha.hash(&val.to_be_bytes());
                                     ack_msg_send(HostProtocolMessage::Bootloader(Bootloader::ChallengeResult { result }), &mut tx);
                                 }
                                 _ => (),
