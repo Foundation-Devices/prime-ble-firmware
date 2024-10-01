@@ -12,7 +12,7 @@ use postcard::accumulator::{CobsAccumulator, FeedResult};
 use postcard::to_slice_cobs;
 
 #[embassy_executor::task]
-pub async fn comms_task(rx: &mut BufferedUarteRx<'_,UARTE0,TIMER1>) {
+pub async fn comms_task(rx: &'static mut BufferedUarteRx<'_, UARTE0, TIMER1>) {
     // Raw buffer - 64 bytes for the accumulator of cobs
     let mut raw_buf = [0u8; 64];
 
@@ -22,7 +22,7 @@ pub async fn comms_task(rx: &mut BufferedUarteRx<'_,UARTE0,TIMER1>) {
         {
             // Getting chars from Uart in a while loop
             // let mut uart_in = BUFFERED_UART.lock().await;
-            // if let Some(uart) = uart_in.as_mut() {            
+            // if let Some(uart) = uart_in.as_mut() {
             if let Ok(n) = &rx.read(&mut raw_buf).await {
                 // Finished reading input
                 if *n == 0 {
@@ -30,7 +30,7 @@ pub async fn comms_task(rx: &mut BufferedUarteRx<'_,UARTE0,TIMER1>) {
                 }
                 // info!("Data incoming {} bytes", n);
 
-                let buf : &_ = &raw_buf[..n];
+                let buf = &raw_buf[..raw_buf.len()];
                 let mut window = buf;
 
                 'cobs: while !window.is_empty() {
@@ -57,11 +57,9 @@ pub async fn comms_task(rx: &mut BufferedUarteRx<'_,UARTE0,TIMER1>) {
                                 }
                                 HostProtocolMessage::Bootloader(_) => (), // no-op, handled in the bootloader
                                 HostProtocolMessage::Reset => {
-                                    drop(rx);
                                     cortex_m::peripheral::SCB::sys_reset();
                                 }
                             };
-
                             remaining
                         }
                     };
@@ -106,7 +104,7 @@ async fn bluetooth_handler(msg: Bluetooth<'_>) {
 
 /// Sends the data received from the BLE NUS as `host-protocol` encoded data message.
 #[embassy_executor::task]
-pub async fn send_bt_uart(mut uart_tx: &BufferedUarteTx<'static, UARTE0>) {
+pub async fn send_bt_uart(uart_tx: &'static mut BufferedUarteTx<'static, UARTE0>) {
     let mut send_buf = [0u8; 270];
 
     loop {
@@ -119,8 +117,8 @@ pub async fn send_bt_uart(mut uart_tx: &BufferedUarteTx<'static, UARTE0>) {
             let cobs_tx = to_slice_cobs(&msg, &mut send_buf).unwrap();
             info!("{}", cobs_tx);
 
-            let _ = uart_tx.write_all(cobs_tx).await;
-            let _ = uart_tx.flush().await;
+            let _ = &uart_tx.write_all(cobs_tx).await;
+            let _ = &uart_tx.flush().await;
             assert_out_irq().await; // Ask the MP
         }
 
@@ -142,8 +140,8 @@ pub async fn send_bt_uart(mut uart_tx: &BufferedUarteTx<'static, UARTE0>) {
                 info!("Data rx from BT --> UART - data len {}", cobs_tx.len());
                 let now = Instant::now();
                 // Getting chars from Uart in a while loop
-                let _ = uart_tx.write_all(cobs_tx).await;
-                let _ = uart_tx.flush().await;
+                let _ = &uart_tx.write_all(cobs_tx).await;
+                let _ = &uart_tx.flush().await;
                 info!("Elapsed for packet to UART - {}", now.elapsed().as_micros());
                 assert_out_irq().await; // Ask the MPU to process a new packet we just sent
             }
@@ -179,10 +177,10 @@ pub async fn send_bt_uart_no_cobs(mut uart_tx: BufferedUarteTx<'static, UARTE0>)
 
         if timer_pkt.elapsed().as_millis() > 1500 && rx_packet {
             info!("Total packet number: {}", pkt_counter);
-            info!("Total packet time: {}", timer_tot.elapsed().as_millis()-1500);
+            info!("Total packet time: {}", timer_tot.elapsed().as_millis() - 1500);
             info!("Total data incoming: {}", data_counter);
             if (timer_tot.elapsed().as_secs()) > 0 {
-                let rate = ((data_counter as f32 / (timer_tot.elapsed().as_millis()-1500) as f32)) * 1000.0;
+                let rate = (data_counter as f32 / (timer_tot.elapsed().as_millis() - 1500) as f32) * 1000.0;
                 info!("Rough data rate : {}", rate);
             }
             data_counter = 0;
@@ -195,7 +193,7 @@ pub async fn send_bt_uart_no_cobs(mut uart_tx: BufferedUarteTx<'static, UARTE0>)
         {
             // If data is present from BT send to serial with Cobs format
             if let Ok(data) = BT_DATA_RX.try_receive() {
-                if !rx_packet{
+                if !rx_packet {
                     rx_packet = true;
                     timer_tot = Instant::now();
                 }
@@ -203,7 +201,7 @@ pub async fn send_bt_uart_no_cobs(mut uart_tx: BufferedUarteTx<'static, UARTE0>)
                 timer_pkt = Instant::now();
                 data_counter += data.len() as u64;
                 pkt_counter += 1;
-                
+
                 let now = Instant::now();
                 // Getting chars from Uart in a while loop
                 let _ = uart_tx.write_all(data.as_slice()).await;

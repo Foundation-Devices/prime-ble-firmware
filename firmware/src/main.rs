@@ -157,10 +157,10 @@ async fn main(spawner: Spawner) {
         Timer::after_millis(100).await;
         let state = BT_STATE.wait().await;
         if state {
-             info!("BT state ON");
+            info!("BT state ON");
         }
         if !state {
-             info!("BT state OFF");
+            info!("BT state OFF");
         }
 
         if state {
