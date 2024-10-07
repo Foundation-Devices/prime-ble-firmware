@@ -13,6 +13,7 @@ use embassy_time::Timer;
 use panic_probe as _;
 
 use consts::*;
+use host_protocol::COBS_MAX_MSG_SIZE;
 use core::cell::RefCell;
 use cosign2::Header;
 use cosign2::Sha256;
@@ -204,9 +205,9 @@ async fn main(_spawner: Spawner) {
     'exitloop: while !jump_app {
         // Now for testing locally i am looping until command reset
         // Raw buffer - 32 bytes for the accumulator of cobs
-        let mut raw_buf = [0u8; 512];
+        let mut raw_buf = [0u8; 64];
         // Create a cobs accumulator for data incoming
-        let mut cobs_buf: CobsAccumulator<512> = CobsAccumulator::new();
+        let mut cobs_buf: CobsAccumulator<COBS_MAX_MSG_SIZE> = CobsAccumulator::new();
         // Getting chars from Uart in a while loop
         while let Ok(n) = rx.read_until_idle(&mut raw_buf).await {
             // Finished reading input

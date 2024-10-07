@@ -22,6 +22,8 @@ pub enum Bluetooth<'a> {
 
     SendData(&'a [u8]),
     ReceivedData(&'a [u8]),
+    GetFirmwareVersion,
+    AckFirmwareVersion{ version: &'a str }
 }
 
 /// Bootloader-specific messages.

@@ -1,5 +1,5 @@
 use crate::consts::{BT_MAX_NUM_PKT, MTU};
-use crate::{BT_DATA_RX, BT_STATE, RSSI_TX, RSSI_VALUE};
+use crate::{BT_DATA_RX, BT_STATE, FIRMWARE_VER, RSSI_TX, RSSI_VALUE};
 use crate::{IRQ_OUT_PIN, TX_BT_VEC};
 use defmt::info;
 use embassy_nrf::buffered_uarte::{BufferedUarteRx, BufferedUarteTx};
@@ -21,8 +21,6 @@ pub async fn comms_task(mut rx: BufferedUarteRx<'static, 'static, UARTE0, TIMER1
     loop {
         {
             // Getting chars from Uart in a while loop
-            // let mut uart_in = BUFFERED_UART.lock().await;
-            // if let Some(uart) = uart_in.as_mut() {
             if let Ok(n) = rx.read(&mut raw_buf).await {
                 // Finished reading input
                 if n == 0 {
@@ -88,6 +86,10 @@ async fn bluetooth_handler(msg: Bluetooth<'_>) {
             // Send value to channel
             let _ = RSSI_TX.try_send(rssi);
         }
+        Bluetooth::GetFirmwareVersion => {
+            let version = env!("CARGO_PKG_VERSION");
+            let _ = FIRMWARE_VER.try_send(version);
+        }
         Bluetooth::SignalStrength(_) => (), // no-op, host-side packet
         Bluetooth::SendData(data) => {
             // info!("Sending BLE data: {:?}", data);
@@ -100,7 +102,8 @@ async fn bluetooth_handler(msg: Bluetooth<'_>) {
                 }
             }
         }
-        Bluetooth::ReceivedData(_) => {} // no-op, host-side packet
+        Bluetooth::ReceivedData(_) => {}, // no-op, host-side packet
+        Bluetooth::AckFirmwareVersion{..} => {} // no-op, host-side packet
     }
 }
 
@@ -110,6 +113,21 @@ pub async fn send_bt_uart(mut uart_tx: BufferedUarteTx<'static, 'static, UARTE0,
     let mut send_buf = [0u8; 270];
 
     loop {
+
+        if let Ok(version) = FIRMWARE_VER.try_receive() {
+            send_buf.fill(0); // Clear the buffer from any previous data
+
+            info!("Sending back FW version: {}", version);
+
+            let msg = HostProtocolMessage::Bluetooth(Bluetooth::AckFirmwareVersion{ version });
+            let cobs_tx = to_slice_cobs(&msg, &mut send_buf).unwrap();
+            info!("{}", cobs_tx);
+
+            let _ = uart_tx.write_all(cobs_tx).await;
+            let _ = uart_tx.flush().await;
+            assert_out_irq().await; // Ask the MP
+        }
+
         if let Ok(rssi) = RSSI_TX.try_receive() {
             send_buf.fill(0); // Clear the buffer from any previous data
 
