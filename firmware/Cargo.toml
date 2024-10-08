@@ -11,6 +11,7 @@ publish = false
 [features]
 default = [
     "uart-pins-mpu",
+    "uart-cobs-mcu",
     "ble-gatt-server",
     "ble-gatt-client",
     "ble-sec",
@@ -26,6 +27,12 @@ nrf52805 = [
     "nrf-softdevice/nrf52805",
     "nrf-softdevice/s112",
 ]
+
+# Cobs format for MCU
+uart-cobs-mcu = []
+
+# No cobs format for MCU
+uart-no-cobs-mcu = []
 
 # Target comm protocol to the UART console (used for developing)
 uart-pins-console = []

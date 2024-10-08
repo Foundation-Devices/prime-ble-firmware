@@ -16,7 +16,7 @@ pub(crate) const NUS_UUID: u128 = 0x6E400001_B5A3_F393_E0A9_E50E24DCCA9E;
 
 #[gatt_service(uuid = "6E400001-B5A3-F393-E0A9-E50E24DCCA9E")]
 pub struct Nus {
-    #[characteristic(uuid = "6E400002-B5A3-F393-E0A9-E50E24DCCA9E", write)]
+    #[characteristic(uuid = "6E400002-B5A3-F393-E0A9-E50E24DCCA9E", write_without_response)]
     rx: Vec<u8, ATT_MTU>,
 
     #[characteristic(uuid = "6E400003-B5A3-F393-E0A9-E50E24DCCA9E", notify)]
@@ -30,8 +30,13 @@ impl Nus {
                 info!("Enable UART: {}", notifications);
             }
             NusEvent::RxWrite(data) => {
-                info!("Received: {} bytes {:?}", data.len(), data);
-                let _ = BT_DATA_RX.try_send(data);
+                // If we receive something bigger for some reasons discard it
+                if data.len() <= ATT_MTU && !BT_DATA_RX.is_full() {
+                    // info!("Received: {} bytes {:?}", data.len(), data);
+                    if BT_DATA_RX.try_send(data).is_err() {
+                        info!("Error BT_DATA_RX");
+                    }
+                }
             }
         }
     }

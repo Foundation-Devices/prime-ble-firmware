@@ -1,17 +1,25 @@
 // use crate::RNG_HW;
+use crate::ack_msg_send;
 use crate::RNG_HW;
+use crate::SEALED_SECRET;
+use crate::SEAL_IDX;
 use cortex_m::prelude::_embedded_hal_blocking_delay_DelayMs;
 use cosign2::{Header, VerificationResult};
 use defmt::info;
+use embassy_nrf::peripherals::UARTE0;
+use embassy_nrf::uarte::UarteTx;
 use embassy_time::Delay;
+use host_protocol::{Bootloader, HostProtocolMessage};
 use micro_ecc_sys::{uECC_decompress, uECC_secp256k1, uECC_valid_public_key, uECC_verify};
+use nrf52805_pac::NVMC;
+use nrf52805_pac::UICR;
 use sha2::{Digest, Sha256 as Sha};
 
 // TODO: put well-known public keys here
-const KNOWN_SIGNERS: [[u8; 33]; 0] = [
-    // [0; 33],
-];
-
+const KNOWN_SIGNERS: [[u8; 33]; 1] = [[
+    0x03, 129, 12, 122, 122, 122, 65, 228, 183, 129, 52, 56, 71, 10, 150, 103, 66, 200, 6, 209, 224, 28, 160, 234, 138, 182, 222, 152, 240,
+    216, 242, 176, 35,
+]];
 struct EccVerifier {}
 
 impl EccVerifier {
@@ -89,7 +97,6 @@ fn random_delay() {
             rng.as_mut().unwrap().blocking_fill_bytes(&mut bytes);
             // Get 0 - 200 ms
             bytes[0] %= 200;
-            defmt::info!("random delay: {:?} ms", bytes);
             delay.delay_ms(bytes[0]);
         }
     });
@@ -149,11 +156,80 @@ fn read_version_and_build_date(image: &[u8]) -> Option<([u8; 20], [u8; 14])> {
 
         return Some((version_bytes, date_bytes));
     }
-
     None
 }
 
 pub fn get_fw_image_slice<'a>(base_address: u32, len: u32) -> &'a [u8] {
     let slice = unsafe { core::slice::from_raw_parts(base_address as *const u8, len as usize) };
     slice
+}
+
+pub fn check_fw(image_slice: &[u8], tx: &mut UarteTx<UARTE0>) -> Option<bool> {
+    if let Some((result, hash)) = verify_os_image(image_slice) {
+        if result == VerificationResult::Valid {
+            ack_msg_send(
+                HostProtocolMessage::Bootloader(Bootloader::AckVerifyFirmware {
+                    result: true,
+                    hash: hash.sha,
+                }),
+                tx,
+            );
+            return Some(true);
+        } else {
+            info!("Invalid signature!");
+            ack_msg_send(
+                HostProtocolMessage::Bootloader(Bootloader::AckVerifyFirmware {
+                    result: false,
+                    hash: hash.sha,
+                }),
+                tx,
+            );
+            return Some(false);
+        }
+    }
+    None
+}
+
+pub unsafe fn write_secret(secret: [u32; 4]) -> bool {
+    let nvmc = &*NVMC::ptr();
+    let uicr = &*UICR::ptr();
+    nvmc.config.write(|w| w.wen().wen());
+    while nvmc.ready.read().ready().is_busy() {}
+    uicr.customer[0].write(|w| unsafe { w.bits(secret[0]) });
+    info!("secret 0 : {:02X}", secret[0]);
+    uicr.customer[1].write(|w| unsafe { w.bits(secret[1]) });
+    info!("secret 1 : {:02X}", secret[1]);
+    uicr.customer[2].write(|w| unsafe { w.bits(secret[2]) });
+    info!("secret 2 : {:02X}", secret[2]);
+    uicr.customer[3].write(|w| unsafe { w.bits(secret[3]) });
+    info!("secret 3 : {:02X}", secret[3]);
+    while nvmc.ready.read().ready().is_busy() {}
+    nvmc.config.reset();
+    while nvmc.ready.read().ready().is_busy() {}
+
+    // Read back and check secret
+    let tmp = uicr.customer[0].read().bits();
+    if tmp != secret[0] {
+        return false;
+    }
+    let tmp = uicr.customer[1].read().bits();
+    if tmp != secret[1] {
+        return false;
+    }
+    let tmp = uicr.customer[2].read().bits();
+    if tmp != secret[2] {
+        return false;
+    }
+    let tmp = uicr.customer[3].read().bits();
+    if tmp != secret[3] {
+        return false;
+    }
+    nvmc.config.write(|w| w.wen().wen());
+    while nvmc.ready.read().ready().is_busy() {}
+    uicr.customer[SEAL_IDX].write(|w| unsafe { w.bits(SEALED_SECRET) });
+    while nvmc.ready.read().ready().is_busy() {}
+    nvmc.config.reset();
+    while nvmc.ready.read().ready().is_busy() {}
+
+    true
 }

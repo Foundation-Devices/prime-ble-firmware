@@ -12,6 +12,8 @@ publish = false
 default = [
     "nrf52805",
     "boot-signed-fw",
+    # "flash-protect"
+    # "no-dbg-access"
 ]
 
 nrf52805 = [
@@ -20,6 +22,13 @@ nrf52805 = [
     "nrf-softdevice/s112",
     "nrf-softdevice/critical-section-impl"
 ]
+
+# Activate APP Protection on nrf MCU
+# https://infocenter.nordicsemi.com/topic/ps_nrf52805/uicr.html?cp=5_6_0_3_4_0_5#register.APPROTECT
+# We should check for this part code to check version
+# https://infocenter.nordicsemi.com/pdf/in_153_v1.0.pdf?cp=18_4
+no-dbg-access = []
+flash-protect = []
 
 # Bootloader jumps to application with cosign2 header
 boot-signed-fw = []
@@ -31,7 +40,7 @@ boot-unsigned-fw = []
 embassy-executor = { version = "0.5.0", features = ["arch-cortex-m", "executor-thread", "executor-interrupt", "defmt", "integrated-timers"]}
 embassy-time = { version = "0.3.0", features = ["defmt", "defmt-timestamp-uptime"]}
 embassy-sync = { version = "0.6.0" }
-embassy-nrf = { version = "0.1.0", features = ["defmt", "gpiote", "time-driver-rtc1" ]}
+embassy-nrf = { version = "0.2.0", features = ["defmt", "gpiote", "time-driver-rtc1" ]}
 embedded-io-async = { version = "0.6.1", features = ["defmt-03"] }
 cortex-m = "0.7.7"
 cortex-m-rt = "0.7.3"
@@ -54,6 +63,7 @@ cosign2 = { path = "../../cosign2/cosign2", default-features = false }
 critical-section = "1.1"
 nrf-softdevice-s112 = { git = "https://github.com/embassy-rs/nrf-softdevice.git" }
 nrf-softdevice = { git = "https://github.com/embassy-rs/nrf-softdevice.git", features = ["defmt", "evt-max-size-256", "ble-peripheral"] }
+nrf52805-pac = "0.12.2"
 
 
 [build-dependencies]
