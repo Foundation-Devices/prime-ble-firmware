@@ -37,20 +37,64 @@ fn main() {
 
     match args.command {
         Commands::BuildFirmwareImage  => {
-            let status = Command::new(cargo())
-            .current_dir(project_root())
-            .status()
-            .expect("Running Cargo failed");
-            if !status.success() {
-                panic!("Local build failed");
-            }
 
-            let ls = Command::new(cargo())
+            eprintln!("Building application...");
+            let status = Command::new(cargo())
             .current_dir(project_root().join("firmware"))
             .arg("build")
             .arg("-r")
+            .arg("-q")
             .status()
-            .expect("sdsd");
+            .expect("Running Cargo failed");
+            if !status.success() {
+                panic!("Firmware build failed");
+            }
+
+            eprintln!("Creating BT application hex file");
+            let status = Command::new(cargo())
+            .current_dir(project_root().join("firmware"))
+            .args(["objcopy", "--release", "--", "-O", "ihex", "btapp.hex"])
+            .status()
+            .expect("Running Cargo objcopy failed");
+            if !status.success() {
+                panic!("Firmware build failed");
+            }
+
+            //cargo objcopy --release -- -O binary app.bin
+
+            eprintln!("Building bootloader....");
+            let status = Command::new(cargo())
+            .current_dir(project_root().join("bootloader"))
+            .arg("build")
+            .arg("-r")
+            .arg("-q")
+            .status()
+            .expect("Running Cargo failed");
+            if !status.success() {
+                panic!("Bootloader build failed");
+            }
+
+            eprintln!("Generating bootloader hex file...");
+            let status = Command::new(cargo())
+            .current_dir(project_root().join("bootloader"))
+            .args(["objcopy", "--release", "--", "-O", "ihex", "bootloader.hex"])
+            .status()
+            .expect("Running Cargo objcopy failed");
+            if !status.success() {
+                panic!("Bootloader build failed");
+            }
+
+            eprintln!("Merging softdevice bootloader and BT application in single hex");
+            let status = Command::new("srec_cat")
+            .current_dir(project_root().join("misc"))
+            .args(["../firmware/btapp.hex","-Intel","../bootloader/bootloader.hex","-Intel","./s112_nrf52_7.2.0_softdevice.hex","-Intel","-o","full.hex","-Intel"])
+            .status()
+            .expect("Running Cargo failed");
+            if !status.success() {
+                panic!("Bootloader build failed");
+            }
+
+
 
 
             
