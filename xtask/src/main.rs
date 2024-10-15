@@ -1,9 +1,11 @@
 use clap::{Parser, Subcommand};
 use std::{env, fs};
 use std::path::{Path, PathBuf};
-use std::process::{Command,Stdio};
+use std::process::{exit, Command, Stdio};
 use cargo_metadata::semver::Version;
+use tracing_subscriber::{fmt, prelude::*, EnvFilter};
 
+const FIRMWARE_VERSION: &str = "0.1.0";
 
 #[derive(Parser)]
 #[command(version, about, long_about = None)]
@@ -19,11 +21,6 @@ enum Commands {
     /// Build a full flashable firmware image, combining the bootloader and the softdevice hex fi
     #[command(verbatim_doc_comment)]
     BuildFirmwareImage
-    // BuildFirmwareImage {
-    //     /// Set to false if you want a test
-    //     #[arg(long, default_value = "true")]
-    //     sign: bool,
-    // },
 }
 
 fn project_root() -> PathBuf {
@@ -32,8 +29,27 @@ fn project_root() -> PathBuf {
 
 pub fn cargo() -> String { env::var("CARGO").unwrap_or_else(|_| "cargo".to_string()) }
 
+fn build_tools_check(){
+    tracing::info!("Checking cargo binutils install state");
+    let status = Command::new(cargo())
+    .stdout(Stdio::null())
+    .stderr(Stdio::null())        
+    .current_dir(project_root().join("firmware"))
+    .args(["objcopy", "--version"])
+    .status()
+    .expect("Running Cargo objcopy version failes");
+    if !status.success() {
+        tracing::info!("Cargo binutils are missing, to install do");
+        tracing::info!("cargo install cargo-binutils");
+        tracing::info!("rustup component add llvm-tools");
+    
+        exit(0);
+    }
+
+}
+
 fn build_bt_bootloader(){
-    eprintln!("Building bootloader....");
+    tracing::info!("Building bootloader....");
     let status = Command::new(cargo())
     .stdout(Stdio::null())
     .stderr(Stdio::null())
@@ -47,7 +63,7 @@ fn build_bt_bootloader(){
         panic!("Bootloader build failed");
     }
 
-    eprintln!("Generating bootloader hex file...");
+    tracing::info!("Generating bootloader hex file...");
     let status = Command::new(cargo())
     .stdout(Stdio::null())
     .stderr(Stdio::null())
@@ -62,8 +78,10 @@ fn build_bt_bootloader(){
 
 
 fn build_bt_firmware(){
-            eprintln!("Building application...");
+            tracing::info!("Building application...");
             let status = Command::new(cargo())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())                    
             .current_dir(project_root().join("firmware"))
             .arg("build")
             .arg("-r")
@@ -74,8 +92,10 @@ fn build_bt_firmware(){
                 panic!("Firmware build failed");
             }
 
-            eprintln!("Creating BT application hex file");
+            tracing::info!("Creating BT application hex file");
             let status = Command::new(cargo())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())        
             .current_dir(project_root().join("firmware"))
             .args(["objcopy", "--release", "--", "-O", "ihex", "btapp.hex"])
             .status()
@@ -87,8 +107,8 @@ fn build_bt_firmware(){
     // Created a full populated flash image to avoid the signed fw is different from the slice to check.
     // We will always get the full slice of flash where app is flashed ( 0x19000 up to 0x25800 ) 
     // Then signing we will have from 0x19000 up to 0x19800 the cosign2 header.
-    eprintln!("Creating BT application bin file");
-            let status = Command::new(cargo())
+    tracing::info!("Creating BT application bin file");
+    let status = Command::new(cargo())
     .stdout(Stdio::null())
     .stderr(Stdio::null())
     .current_dir(project_root().join("firmware"))
@@ -105,31 +125,37 @@ fn sign_bt_firmware(){
     let cosign2_config_path_str = cosign2_config_path.to_str().unwrap();
 
     if let Err(e) = fs::File::open(&cosign2_config_path) {
-        eprintln!("Cosign2 config not found at {cosign2_config_path_str}: {}", e);
+        tracing::info!("Cosign2 config not found at {cosign2_config_path_str}: {}", e);
         panic!("cosign2.toml not found at project root");
     }
 
     // Verify that cosign2 exists
     if Command::new("cosign2").stdout(Stdio::null()).stderr(Stdio::null()).spawn().is_err() {
-        eprintln!("Couldn't run `cosign2`. Is `cosign2` tool installed.unwrap()");
-        eprintln!("Visit https://github.com/Foundation-Devices/cosign2 for more info");
-        panic!("cosign2 presence check failed");
+        tracing::info!("Installing cosign2 bin...");
+        let status = Command::new(cargo())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .current_dir(project_root().join("cosign2/cosign2-bin"))
+        .args(["install","--path",".","--bin","cosign2"])
+        .status()
+        .unwrap();
+        if !status.success() {
+            tracing::error!("Cosign2 install process failed");
+            exit(0)
+        }
     }
 
-    // let mut args = match signing_mode {
-    //     SigningMode::None => panic!("invalid signing mode"),
-    //     SigningMode::Developer => vec!["sign", "--developer"],
-    //     SigningMode::Official => vec!["sign"],
-    // };
-    // let mut args : &[u8] = ["-i", "btapp.bin","-c", "cosign2.toml","--firmware-version", "0.1.0"];
-    // args.extend_from_slice(&["--in-place"]);
-    // args.extend_from_slice(&["--firmware-version", "0.1.0"]);
+    let version = Version::parse(FIRMWARE_VERSION).expect("Wrong version format").to_string();
+
+    let mut args = vec!["sign", "-i", "./firmware/btapp.bin","-c", "cosign2.toml","-o","FwSigned.bin"];
+    args.extend_from_slice(&["--firmware-version", &version]);
+    tracing::info!("{:?}",args);
+
 
     if !Command::new("cosign2")
     .stdout(Stdio::null())
-    .stderr(Stdio::null())
     .current_dir(project_root())
-    .args(["sign", "-i", "./firmware/btapp.bin","-c", "cosign2.toml","--firmware-version", "0.1.0","-o","FwSigned.bin"])
+    .args(&args)
     .status()
     .unwrap()
     .success() {
@@ -139,7 +165,7 @@ fn sign_bt_firmware(){
 }
 
 fn build_bt_package(){
-    eprintln!("Converting bin signed package to hex file with starting offset 0x19000");
+    tracing::info!("Converting bin signed package to hex file with starting offset 0x19000");
     let status = Command::new("srec_cat")
     .current_dir(project_root().join("misc"))
     .args(["../FwSigned.bin","-Binary","-o","../BtSignedPackage.hex","-Intel"])
@@ -158,7 +184,7 @@ fn build_bt_package(){
         panic!("Converting bin to hex failed");
             }
 
-    eprintln!("Merging softdevice bootloader and BT signed application in single hex");
+    tracing::info!("Merging softdevice bootloader and BT signed application in single hex");
             let status = Command::new("srec_cat")
             .current_dir(project_root().join("misc"))
     .args(["../BtSignedPackage.hex","-Intel","../bootloader.hex","-Intel","./s112_nrf52_7.2.0_softdevice.hex","-Intel","-o","../BtFwSignedFullImg.hex","-Intel"])
@@ -171,6 +197,15 @@ fn build_bt_package(){
 
 
 fn main() {
+
+    env::set_var("RUST_LOG", "info");
+
+    // Tracing using RUST_LOG
+    tracing_subscriber::registry()
+    .with(fmt::layer())
+    .with(EnvFilter::from_default_env())
+    .init();
+
     let args = XtaskArgs::parse();
 
     match args.command {
