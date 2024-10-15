@@ -13,7 +13,6 @@ use embassy_time::Timer;
 use panic_probe as _;
 
 use consts::*;
-use host_protocol::COBS_MAX_MSG_SIZE;
 use core::cell::RefCell;
 use cosign2::Header;
 use cosign2::Sha256;
@@ -31,6 +30,7 @@ use embassy_sync::blocking_mutex::CriticalSectionMutex;
 use embassy_sync::blocking_mutex::Mutex;
 use embedded_storage::nor_flash::NorFlash;
 use host_protocol::HostProtocolMessage;
+use host_protocol::COBS_MAX_MSG_SIZE;
 use host_protocol::{Bootloader, SecretSaveResponse};
 use jump_app::jump_to_app;
 #[allow(unused_imports)]
@@ -282,7 +282,6 @@ async fn main(_spawner: Spawner) {
                                         info!("No Header present!");
                                         ack_msg_send(HostProtocolMessage::Bootloader(Bootloader::NoCosignHeader), &mut tx);
                                         let _ = tx.blocking_write(b"No header");
-
                                     }
                                 }
                                 Bootloader::ChallengeSet { secret } => {

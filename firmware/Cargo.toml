@@ -10,13 +10,21 @@ publish = false
 
 [features]
 default = [
-    "uart-pins-console",
+    "uart-pins-mpu",
     "uart-cobs-mcu",
     "ble-gatt-server",
     "ble-gatt-client",
     "ble-sec",
     "nrf52805",
 ]
+debug = [
+    "uart-pins-console",
+    "uart-no-cobs-mcu",
+    "ble-gatt-server",
+    "ble-gatt-client",
+    "ble-sec",
+    "nrf52805",
+    ]
 
 ble-gatt-server = ["nrf-softdevice/ble-gatt-server"]
 ble-gatt-client = ["nrf-softdevice/ble-gatt-client"]
