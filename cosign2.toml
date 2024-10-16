@@ -1,3 +1,0 @@
-pubkey = "03b72bada7b2a06f931b60b1bfdd6f935870c77e254fe8b241c008b9472ad73055"
-secret = "/home/pinballwizard/rust_prj/Foundation/prime-ble-firmware/cosign2-priv.pem" # NOTE: the path must be absolute
-target = "atsama5d27-keyos"

@@ -5,3 +5,4 @@
 *.bin
 *.hex
 *.txt
+cosign2.toml
