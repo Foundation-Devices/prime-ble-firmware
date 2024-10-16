@@ -1,0 +1,3 @@
+[workspace]
+members = ["cosign2", "cosign2-bin"]
+resolver = "2"

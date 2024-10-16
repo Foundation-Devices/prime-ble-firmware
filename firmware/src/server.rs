@@ -19,7 +19,6 @@ use nrf_softdevice::gatt_server;
 use nrf_softdevice::{raw, Softdevice};
 use raw::ble_gap_conn_params_t;
 
-
 // Get connection interval with macro
 // to get 15ms just call ci_ms!(15)
 macro_rules! ci_ms {
@@ -144,7 +143,6 @@ pub async fn run_bluetooth(sd: &'static Softdevice, server: &Server) {
     };
 
     loop {
-        
         set_data_event_ext();
 
         // Set advertising timer in units of 625us (about 50ms with 75 units)
@@ -160,8 +158,8 @@ pub async fn run_bluetooth(sd: &'static Softdevice, server: &Server) {
         // Request connection interval - trying to request a short one.
         let conn_params = ble_gap_conn_params_t {
             conn_sup_timeout: 500,
-            max_conn_interval:ci_ms!(25),
-            min_conn_interval:ci_ms!(12),
+            max_conn_interval: ci_ms!(25),
+            min_conn_interval: ci_ms!(12),
             slave_latency: 0,
         };
 

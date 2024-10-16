@@ -12,8 +12,13 @@ publish = false
 default = [
     "nrf52805",
     "boot-signed-fw",
-    # "flash-protect"
-    # "no-dbg-access"
+    "flash-protect",
+    "no-dbg-access",
+]
+
+debug =[
+    "nrf52805",
+    "boot-signed-fw",
 ]
 
 nrf52805 = [

@@ -102,8 +102,8 @@ async fn bluetooth_handler(msg: Bluetooth<'_>) {
                 }
             }
         }
-        Bluetooth::ReceivedData(_) => {}, // no-op, host-side packet
-        Bluetooth::AckFirmwareVersion{..} => {} // no-op, host-side packet
+        Bluetooth::ReceivedData(_) => {}           // no-op, host-side packet
+        Bluetooth::AckFirmwareVersion { .. } => {} // no-op, host-side packet
     }
 }
 
@@ -113,13 +113,12 @@ pub async fn send_bt_uart(mut uart_tx: BufferedUarteTx<'static, 'static, UARTE0,
     let mut send_buf = [0u8; 270];
 
     loop {
-
         if let Ok(version) = FIRMWARE_VER.try_receive() {
             send_buf.fill(0); // Clear the buffer from any previous data
 
             info!("Sending back FW version: {}", version);
 
-            let msg = HostProtocolMessage::Bluetooth(Bluetooth::AckFirmwareVersion{ version });
+            let msg = HostProtocolMessage::Bluetooth(Bluetooth::AckFirmwareVersion { version });
             let cobs_tx = to_slice_cobs(&msg, &mut send_buf).unwrap();
             info!("{}", cobs_tx);
 
@@ -197,10 +196,10 @@ pub async fn send_bt_uart_no_cobs(mut uart_tx: BufferedUarteTx<'static, 'static,
 
         if timer_pkt.elapsed().as_millis() > 1500 && rx_packet {
             info!("Total packet number: {}", pkt_counter);
-            info!("Total packet time: {}", timer_tot.elapsed().as_millis()-1500);
+            info!("Total packet time: {}", timer_tot.elapsed().as_millis() - 1500);
             info!("Total data incoming: {}", data_counter);
             if (timer_tot.elapsed().as_secs()) > 0 {
-                let rate = ((data_counter as f32 / (timer_tot.elapsed().as_millis()-1500) as f32)) * 1000.0;
+                let rate = (data_counter as f32 / (timer_tot.elapsed().as_millis() - 1500) as f32) * 1000.0;
                 info!("Rough data rate : {}", rate);
             }
             data_counter = 0;
@@ -213,7 +212,7 @@ pub async fn send_bt_uart_no_cobs(mut uart_tx: BufferedUarteTx<'static, 'static,
         {
             // If data is present from BT send to serial with Cobs format
             if let Ok(data) = BT_DATA_RX.try_receive() {
-                if !rx_packet{
+                if !rx_packet {
                     rx_packet = true;
                     timer_tot = Instant::now();
                 }
@@ -221,7 +220,7 @@ pub async fn send_bt_uart_no_cobs(mut uart_tx: BufferedUarteTx<'static, 'static,
                 timer_pkt = Instant::now();
                 data_counter += data.len() as u64;
                 pkt_counter += 1;
-                
+
                 let now = Instant::now();
                 // Getting chars from Uart in a while loop
                 let _ = uart_tx.write_all(data.as_slice()).await;

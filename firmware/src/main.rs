@@ -57,7 +57,7 @@ static BT_STATE: Signal<ThreadModeRawMutex, bool> = Signal::new();
 static TX_BT_VEC: Mutex<ThreadModeRawMutex, Vec<Vec<u8, ATT_MTU>, 4>> = Mutex::new(Vec::new());
 static RSSI_VALUE: Mutex<ThreadModeRawMutex, u8> = Mutex::new(0);
 static BT_DATA_RX: Channel<ThreadModeRawMutex, Vec<u8, ATT_MTU>, 4> = Channel::new();
-static FIRMWARE_VER: Channel<ThreadModeRawMutex, &str,1> = Channel::new();
+static FIRMWARE_VER: Channel<ThreadModeRawMutex, &str, 1> = Channel::new();
 static RSSI_TX: Channel<ThreadModeRawMutex, u8, 1> = Channel::new();
 static BUFFERED_UART: StaticCell<BufferedUarte<'static, UARTE0, TIMER1>> = StaticCell::new();
 
@@ -96,7 +96,7 @@ async fn main(spawner: Spawner) {
 
     let mut config_uart = uarte::Config::default();
     config_uart.parity = uarte::Parity::EXCLUDED;
-    config_uart.baudrate = uarte::Baudrate::BAUD1M;
+    config_uart.baudrate = uarte::Baudrate::BAUD115200;
 
     static TX_BUFFER: StaticCell<[u8; COBS_MAX_MSG_SIZE]> = StaticCell::new();
     static RX_BUFFER: StaticCell<[u8; COBS_MAX_MSG_SIZE]> = StaticCell::new();
@@ -159,10 +159,10 @@ async fn main(spawner: Spawner) {
         Timer::after_millis(100).await;
         let state = BT_STATE.wait().await;
         if state {
-             info!("BT state ON");
+            info!("BT state ON");
         }
         if !state {
-             info!("BT state OFF");
+            info!("BT state OFF");
         }
 
         if state {
