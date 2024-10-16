@@ -96,7 +96,11 @@ async fn main(spawner: Spawner) {
 
     let mut config_uart = uarte::Config::default();
     config_uart.parity = uarte::Parity::EXCLUDED;
+    #[cfg(feature = "uart-pins-console")]
     config_uart.baudrate = uarte::Baudrate::BAUD115200;
+    #[cfg(feature = "uart-pins-mpu")]
+    config_uart.baudrate = uarte::Baudrate::BAUD1M;
+
 
     static TX_BUFFER: StaticCell<[u8; COBS_MAX_MSG_SIZE]> = StaticCell::new();
     static RX_BUFFER: StaticCell<[u8; COBS_MAX_MSG_SIZE]> = StaticCell::new();
