@@ -7,6 +7,12 @@ use tracing_subscriber::{fmt, prelude::*, EnvFilter};
 
 const FIRMWARE_VERSION: &str = "0.1.0";
 
+#[cfg(target_os = "linux")]
+const SRECORD_PATH: &str = "misc/srecord_linux";
+
+#[cfg(target_os = "windows")]
+const SRECORD_PATH: &str = "misc\\srecord_win";
+
 #[derive(Parser)]
 #[command(version, about, long_about = None)]
 #[command(propagate_version = true)]
@@ -51,11 +57,23 @@ fn build_tools_check() {
         .stdout(Stdio::null())
         .stderr(Stdio::null())
         .current_dir(project_root())
-        .arg("clean")
+        .args(["clean", "-r", "-p", "firmware", "-p", "bootloader"])
         .status()
         .expect("Running Cargo clean fails");
     if !status.success() {
+        tracing::info!("Cargo clean not working");
         exit(0);
+    }
+
+    tracing::info!("Removing package folder...");
+    let status = Command::new("rm")
+        .current_dir(project_root())
+        .arg("-rf")
+        .arg("BtPackage")
+        .status()
+        .expect("Running rm failed");
+    if !status.success() {
+        exit(0)
     }
 
     let build_dir = project_root().join("BtPackage");
@@ -197,14 +215,20 @@ fn sign_bt_firmware() {
 }
 
 fn build_bt_package() {
+    #[cfg(target_os = "linux")]
+    let srecord: PathBuf = project_root().join(SRECORD_PATH).join("srec_cat");
+
+    #[cfg(target_os = "windows")]
+    let srecord: PathBuf = project_root().join(SRECORD_PATH).join("srec_cat");
+
     tracing::info!("Converting bin signed package to hex file with starting offset 0x19000");
-    let status = Command::new("srec_cat")
-        .current_dir(project_root().join("misc"))
+    let status = Command::new(srecord.clone())
+        .current_dir(project_root().join(SRECORD_PATH))
         .args([
-            "../BtPackage/BT_application_signed.bin",
+            "../../BtPackage/BT_application_signed.bin",
             "-Binary",
             "-o",
-            "../BtPackage/BT_application_signed.hex",
+            "../../BtPackage/BT_application_signed.hex",
             "-Intel",
         ])
         .status()
@@ -213,15 +237,15 @@ fn build_bt_package() {
         panic!("Converting bin to hex failed");
     }
 
-    let status = Command::new("srec_cat")
-        .current_dir(project_root().join("misc"))
+    let status = Command::new(srecord.clone())
+        .current_dir(project_root().join(SRECORD_PATH))
         .args([
-            "../BtPackage/BT_application_signed.hex",
+            "../../BtPackage/BT_application_signed.hex",
             "-Intel",
             "-offset",
             "0x19000",
             "-o",
-            "../BtPackage/BT_application_signed.hex",
+            "../../BtPackage/BT_application_signed.hex",
             "-Intel",
         ])
         .status()
@@ -231,17 +255,17 @@ fn build_bt_package() {
     }
 
     tracing::info!("Merging softdevice bootloader and BT signed application in single hex");
-    let status = Command::new("srec_cat")
-        .current_dir(project_root().join("misc"))
+    let status = Command::new(srecord.clone())
+        .current_dir(project_root().join(SRECORD_PATH))
         .args([
-            "../BtPackage/BT_application_signed.hex",
+            "../../BtPackage/BT_application_signed.hex",
             "-Intel",
-            "../BtPackage/bootloader.hex",
+            "../../BtPackage/bootloader.hex",
             "-Intel",
-            "./s112_nrf52_7.2.0_softdevice.hex",
+            "../s112_nrf52_7.2.0_softdevice.hex",
             "-Intel",
             "-o",
-            "../BtPackage/BTApp_Full_Image.hex",
+            "../../BtPackage/BTApp_Full_Image.hex",
             "-Intel",
         ])
         .status()
