@@ -80,7 +80,8 @@ pub enum HostProtocolMessage<'a> {
     Bluetooth(#[serde(borrow)] Bluetooth<'a>),
     Bootloader(#[serde(borrow)] Bootloader<'a>),
     Reset,
-    GetState(State),
+    GetState,
+    AckState(State),
     ChallengeRequest { challenge: u128, nonce: u32 },
     ChallengeResult { result: [u8; 32] },
 }
