@@ -7,7 +7,7 @@ use embassy_nrf::peripherals::{TIMER1, UARTE0};
 use embassy_time::Instant;
 use embedded_io_async::Write;
 use heapless::Vec;
-use host_protocol::{Bluetooth, HostProtocolMessage, COBS_MAX_MSG_SIZE};
+use host_protocol::{Bluetooth, HostProtocolMessage, COBS_MAX_MSG_SIZE, State};
 use postcard::accumulator::{CobsAccumulator, FeedResult};
 use postcard::to_slice_cobs;
 
@@ -57,6 +57,18 @@ pub async fn comms_task(rx: &'static mut BufferedUarteRx<'_, UARTE0, TIMER1>) {
                                 HostProtocolMessage::Reset => {
                                     cortex_m::peripheral::SCB::sys_reset();
                                 }
+                                HostProtocolMessage::ChallengeRequest { challenge, nonce } => {
+                                    todo!()
+                                }
+                                HostProtocolMessage::ChallengeResult { result } => {
+                                    todo!()
+                                }
+                                HostProtocolMessage::GetState => {
+                                    if let Some(bt_state) = BT_STATE.try_take(){
+                                        todo!()
+                                    }
+                                },
+                                _ => ()
                             };
                             remaining
                         }

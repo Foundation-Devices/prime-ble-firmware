@@ -10,6 +10,7 @@ mod verify;
 use defmt_rtt as _;
 use embassy_nrf as _;
 use embassy_time::Timer;
+use host_protocol::State;
 use panic_probe as _;
 
 use consts::*;
@@ -104,17 +105,16 @@ pub fn ack_msg_send(message: HostProtocolMessage, tx: &mut UarteTx<UARTE0>) {
 }
 
 #[cfg(feature = "flash-protect")]
-// Flash areas protection using https://docs.nordicsemi.com/bundle/ps_nrf52805/page/bprot.html
+/// Flash areas protection using https://docs.nordicsemi.com/bundle/ps_nrf52805/page/bprot.html
+/// This function will protect bootloader region and Softdevice MBR flash address.
 fn flash_protect() {
     // Set bprot registers values
     // Nordic MBR area protection
-    // let bits_0 = unsafe { &*nrf52805_pac::BPROT::ptr() }.config0.read().bits();
     unsafe { &*nrf52805_pac::BPROT::ptr() }.config0.write(|w| w.region0().enabled());
     let bits_0 = unsafe { &*nrf52805_pac::BPROT::ptr() }.config0.read().bits();
     info!("CONFIG0_BITS : {}", bits_0);
 
     // Bootloader area protection
-    // let bits_1 = unsafe { &*nrf52805_pac::BPROT::ptr() }.config1.read().bits();
     unsafe { &*nrf52805_pac::BPROT::ptr() }.config1.write(|w| {
         w.region47().enabled(); //0x2F000-0x30000
         w.region46().enabled(); //0x2E000-0x2F000
@@ -132,7 +132,6 @@ fn flash_protect() {
     info!("CONFIG1_BITS : {}", bits_1);
 
     // Enable area protection also in debug
-    // let disabledebug = unsafe { &*nrf52805_pac::BPROT::ptr() }.disableindebug.read().bits();
     unsafe { &*nrf52805_pac::BPROT::ptr() }
         .disableindebug
         .write(|w| unsafe { w.bits(0x00) });
@@ -310,19 +309,26 @@ async fn main(_spawner: Spawner) {
                                     // Send result to MCU
                                     ack_msg_send(HostProtocolMessage::Bootloader(Bootloader::AckChallengeSet { result }), &mut tx);
                                 }
-                                Bootloader::ChallengeRequest { challenge, nonce } => {
-                                    let data = sha { sha: [0; 32] };
-                                    let challenge_sha: &dyn Sha256 = &data;
-                                    let val = unsafe { &*nrf52805_pac::UICR::ptr() }.customer[challenge].read().customer().bits();
-                                    let result = challenge_sha.hash(&val.to_be_bytes());
-                                    ack_msg_send(HostProtocolMessage::Bootloader(Bootloader::ChallengeResult { result }), &mut tx);
-                                }
                                 _ => (),
                             },
                             HostProtocolMessage::Reset => {
                                 jump_app = true;
                                 break 'exitloop;
                             }
+                            HostProtocolMessage::ChallengeRequest { challenge, nonce } =>{
+                                let data = sha { sha: [0; 32] };
+                                let challenge_sha: &dyn Sha256 = &data;
+                                let mut val = unsafe { &*nrf52805_pac::UICR::ptr() }.customer[0].read().customer().bits();
+                                val |= unsafe { &*nrf52805_pac::UICR::ptr() }.customer[1].read().customer().bits()<<32;
+                                val |= unsafe { &*nrf52805_pac::UICR::ptr() }.customer[2].read().customer().bits()<<64;
+                                val |= unsafe { &*nrf52805_pac::UICR::ptr() }.customer[3].read().customer().bits()<<128;
+                                let result = challenge_sha.hash(&val.to_be_bytes());
+                                ack_msg_send(HostProtocolMessage::ChallengeResult { result }, &mut tx);
+                            }
+                            HostProtocolMessage::GetState => {
+                                ack_msg_send(HostProtocolMessage::AckState(State::FirmwareUpgrade), &mut tx);
+                            },
+                            _ => (),
                         };
                         remaining
                     }
