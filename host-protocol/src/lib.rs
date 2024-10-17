@@ -11,6 +11,9 @@ use serde::{Deserialize, Serialize};
 /// Maximum supported message size to be serialized or deserialized by `postcard`.
 pub const COBS_MAX_MSG_SIZE: usize = 512;
 
+/// Number of UICR registers for secret value
+pub const SECRET_UICR_SIZE: u16 = 4;
+
 /// Bluetooth-specific messages.
 #[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq)]
 pub enum Bluetooth<'a> {
@@ -46,15 +49,29 @@ pub enum Bootloader<'a> {
     // Challenge cmds
     ChallengeSet { secret: [u32; 4] }, // better to use an array u8; 32]?
     AckChallengeSet { result: SecretSaveResponse },
-    ChallengeRequest { challenge: usize, nonce: u32 }, // TBD
-    ChallengeResult { result: [u8; 32] },              // TBD
 }
 
 #[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
 pub enum SecretSaveResponse {
+    /// Secret have been saved previously - no more allowed to write it again
     NotAllowed,
+    /// Secret has been correctly saved
     Sealed,
+    /// Error during saving secret
     Error,
+}
+
+/// BLE controller state.
+#[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq)]
+pub enum State {
+    /// BLE is enabled and ready to send/receive data.
+    Enabled,
+    /// BLE is disabled. No wireless data transfer is possible.
+    Disabled,
+    /// BLE is in the process of upgrading its firmware (bootloader mode).
+    FirmwareUpgrade,
+    /// BLE is in an unknown, transient state.
+    Unknown,
 }
 
 /// Host protocol messages.
@@ -63,4 +80,7 @@ pub enum HostProtocolMessage<'a> {
     Bluetooth(#[serde(borrow)] Bluetooth<'a>),
     Bootloader(#[serde(borrow)] Bootloader<'a>),
     Reset,
+    GetState(State),
+    ChallengeRequest { challenge: u128, nonce: u32 },
+    ChallengeResult { result: [u8; 32] },
 }
