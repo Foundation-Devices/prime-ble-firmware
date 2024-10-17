@@ -19,18 +19,36 @@ use std::path::PathBuf;
 fn main() {
     // Put `memory.x` in our output directory and ensure it's
     // on the linker search path.
+    #[cfg(feature = "debug")]
+    let linker_file = r#"memory unsigned_fw.x"#;
+
+    #[cfg(feature = "default")]
+    let linker_file = r#"memory.x"#;
+
     let out = &PathBuf::from(env::var_os("OUT_DIR").unwrap());
-    File::create(out.join("memory.x"))
+    // #[cfg(feature = "default")]
+    File::create(out.join(linker_file))
         .unwrap()
         .write_all(include_bytes!("./memory.x"))
         .unwrap();
+
+    #[cfg(feature = "debug")]
+    File::create(out.join(linker_file))
+        .unwrap()
+        .write_all(include_bytes!("./memory_unsigned_fw.x"))
+        .unwrap();
+
     println!("cargo:rustc-link-search={}", out.display());
 
     // By default, Cargo will re-run a build script whenever
     // any file in the project changes. By specifying `memory.x`
     // here, we ensure the build script is only re-run when
     // `memory.x` is changed.
+    #[cfg(feature = "default")]
     println!("cargo:rerun-if-changed=./memory.x");
+
+    #[cfg(feature = "debug")]
+    println!("cargo:rerun-if-changed=./memory_unsigned_fw.x");
 
     println!("cargo:rustc-link-arg-bins=--nmagic");
     println!("cargo:rustc-link-arg-bins=-Tlink.x");

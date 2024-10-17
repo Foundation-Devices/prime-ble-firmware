@@ -11,7 +11,7 @@ mod server;
 
 use core::cell::RefCell;
 use defmt_rtt as _;
-use embassy_nrf::peripherals::{P0_20, TIMER1, UARTE0};
+use embassy_nrf::peripherals::{TIMER1, UARTE0};
 // global logger
 use embassy_nrf as _;
 use embassy_time::Timer;
@@ -96,13 +96,13 @@ async fn main(spawner: Spawner) {
 
     #[cfg(feature = "uart-pins-console")]
     let baud_rate = uarte::Baudrate::BAUD115200;
+
     #[cfg(feature = "uart-pins-mpu")]
     let baud_rate = uarte::Baudrate::BAUD1M;
 
     let mut config_uart = uarte::Config::default();
     config_uart.parity = uarte::Parity::EXCLUDED;
     config_uart.baudrate = baud_rate;
-
 
     static TX_BUFFER: StaticCell<[u8; COBS_MAX_MSG_SIZE]> = StaticCell::new();
     static RX_BUFFER: StaticCell<[u8; COBS_MAX_MSG_SIZE]> = StaticCell::new();

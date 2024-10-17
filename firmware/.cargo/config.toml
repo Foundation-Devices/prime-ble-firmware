@@ -10,3 +10,5 @@ target = "thumbv7em-none-eabi"   # Cortex-M4 and Cortex-M7 (no FPU)
 [env]
 DEFMT_LOG = "debug"
 
+[alias]
+deb = "run -r --no-default-features --features debug"
