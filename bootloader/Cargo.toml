@@ -15,11 +15,13 @@ default = [
     "boot-signed-fw",
     "flash-protect",
     "no-dbg-access",
+    "uart-pins-mpu"
 ]
 
 debug =[
     "nrf52805",
-    "boot-signed-fw",
+    "boot-unsigned-fw",
+    "uart-pins-console"
 ]
 
 nrf52805 = [
@@ -41,6 +43,12 @@ boot-signed-fw = []
 
 # Bootloader jumps to application without cosign2 header
 boot-unsigned-fw = []
+
+# Target comm protocol to the UART console (used for developing)
+uart-pins-console = []
+
+# Target comm protocol to the MPU (used for production)
+uart-pins-mpu = []
 
 [dependencies]
 embassy-executor = { version = "0.5.0", features = ["arch-cortex-m", "executor-thread", "executor-interrupt", "defmt", "integrated-timers"]}

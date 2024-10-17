@@ -151,8 +151,14 @@ async fn main(_spawner: Spawner) {
     config_uart.parity = uarte::Parity::EXCLUDED;
     config_uart.baudrate = uarte::Baudrate::BAUD115200;
 
+    #[cfg(feature = "uart-pins-mpu")]
+    let (rxd, txd) = (p.P0_14, p.P0_12);
+
+    #[cfg(feature = "uart-pins-console")]
+    let (rxd, txd) = (p.P0_16, p.P0_18);
+
     // Uarte config
-    let uart = uarte::Uarte::new(p.UARTE0, Irqs, p.P0_16, p.P0_18, config_uart);
+    let uart = uarte::Uarte::new(p.UARTE0, Irqs, rxd, txd, config_uart);
     let (mut tx, mut rx) = uart.split_with_idle(p.TIMER0, p.PPI_CH0, p.PPI_CH1);
 
     // RNG - sync

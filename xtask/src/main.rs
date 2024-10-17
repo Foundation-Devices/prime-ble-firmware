@@ -23,9 +23,17 @@ struct XtaskArgs {
 
 #[derive(Subcommand)]
 enum Commands {
-    /// Build a full flashable firmware image, combining the bootloader and the softdevice hex fi
+    /// Build a full flashable firmware image with:
+    /// Softdevice - s112_nrf52_7.2.0_softdevice.hex
+    /// Bootloader in release version ( Mpu uart pins - BAUD rate 115200)
+    /// Memory protection ( no probe access and bootloader and SD MBR area protected )
     #[command(verbatim_doc_comment)]
-    BuildFirmwareImage,
+    BuildFwImage,
+    /// Build a full package image with SD, bootloader and application without:
+    /// Flash protection
+    /// UART mpu pins ( just console ones )
+    #[command(verbatim_doc_comment)]
+    BuildFwDebugImage
 }
 
 fn project_root() -> PathBuf {
@@ -37,6 +45,7 @@ pub fn cargo() -> String {
 }
 
 fn build_tools_check() {
+    tracing::info!("BUILDING PRODUCTION PACKAGE");
     tracing::info!("Checking cargo binutils install state");
     let status = Command::new(cargo())
         .stdout(Stdio::null())
@@ -82,6 +91,53 @@ fn build_tools_check() {
     }
 }
 
+fn build_tools_check_debug() {
+    tracing::warn!("BUILDING DEBUG PACKAGE!!!");
+    tracing::info!("Checking cargo binutils install state");
+    let status = Command::new(cargo())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .current_dir(project_root())
+        .args(["objcopy", "--version"])
+        .status()
+        .expect("Running Cargo objcopy version fails");
+    if !status.success() {
+        tracing::info!("Please install cargo binutils with these commands:");
+        tracing::info!("cargo install cargo-binutils");
+        tracing::info!("rustup component add llvm-tools");
+        exit(0);
+    }
+
+    tracing::info!("Cargo clean...");
+    let status = Command::new(cargo())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .current_dir(project_root())
+        .args(["clean", "-r", "-p", "firmware", "-p", "bootloader"])
+        .status()
+        .expect("Running Cargo clean fails");
+    if !status.success() {
+        tracing::info!("Cargo clean not working");
+        exit(0);
+    }
+
+    tracing::info!("Removing package folder...");
+    let status = Command::new("rm")
+        .current_dir(project_root())
+        .arg("-rf")
+        .arg("BtPackageDebug")
+        .status()
+        .expect("Running rm failed");
+    if !status.success() {
+        exit(0)
+    }
+
+    let build_dir = project_root().join("BtPackageDebug");
+    if !build_dir.exists() {
+        fs::create_dir(build_dir).unwrap();
+    }
+}
+
 fn build_bt_bootloader() {
     tracing::info!("Building bootloader....");
     let status = Command::new(cargo())
@@ -110,6 +166,37 @@ fn build_bt_bootloader() {
     }
 }
 
+fn build_bt_bootloader_debug() {
+    tracing::info!("Building debug bootloader....");
+    let status = Command::new(cargo())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .current_dir(project_root().join("bootloader"))
+        .arg("build")
+        .arg("-r")
+        .arg("-q")
+        .arg("--no-default-features")
+        .arg("--features")
+        .arg("debug")
+        .status()
+        .expect("Running Cargo failed");
+    if !status.success() {
+        panic!("Bootloader build failed");
+    }
+
+    tracing::info!("Generating bootloader hex file...");
+    let status = Command::new(cargo())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .current_dir(project_root().join("bootloader"))
+        .args(["objcopy", "--release","--no-default-features","--features","debug", "--", "-O", "ihex", "../BtPackageDebug/bootloaderDebug.hex"])
+        .status()
+        .expect("Running Cargo objcopy failed");
+    if !status.success() {
+        panic!("Bootloader hex generation failed");
+    }
+}
+
 fn build_bt_firmware() {
     tracing::info!("Building application...");
     let status = Command::new(cargo())
@@ -130,7 +217,7 @@ fn build_bt_firmware() {
         .stdout(Stdio::null())
         .stderr(Stdio::null())
         .current_dir(project_root().join("firmware"))
-        .args(["objcopy", "--release", "--", "-O", "ihex", "../BtPackage/btapp.hex"])
+        .args(["objcopy", "--release", "--", "-O", "ihex", "../BtPackage/BtApp.hex"])
         .status()
         .expect("Running Cargo objcopy failed");
     if !status.success() {
@@ -157,6 +244,38 @@ fn build_bt_firmware() {
             "binary",
             "../BtPackage/BT_application.bin",
         ])
+        .status()
+        .expect("Running Cargo objcopy failed");
+    if !status.success() {
+        panic!("Firmware build failed");
+    }
+}
+
+
+fn build_bt_debug_firmware() {
+    tracing::info!("Building debug application...");
+    let status = Command::new(cargo())
+        // .stdout(Stdio::null())
+        // .stderr(Stdio::null())
+        .current_dir(project_root().join("firmware"))
+        .arg("build")
+        .arg("-r")
+        // .arg("-q")
+        .arg("--no-default-features")
+        .arg("--features")
+        .arg("debug")
+        .status()
+        .expect("Running Cargo failed");
+    if !status.success() {
+        panic!("Firmware build failed");
+    }
+
+    tracing::info!("Creating BT application hex file");
+    let status = Command::new(cargo())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .current_dir(project_root().join("firmware"))
+        .args(["objcopy", "--release","--no-default-features", "--features","debug", "--", "-O", "ihex", "../BtPackageDebug/BtappDebug.hex"])
         .status()
         .expect("Running Cargo objcopy failed");
     if !status.success() {
@@ -280,13 +399,54 @@ fn build_bt_package() {
         .arg("-rf")
         .arg("bootloader.hex")
         .arg("BT_application_signed.hex")
-        .arg("btapp.hex")
+        .arg("BtApp.hex")
         .status()
         .expect("Running rm failed");
     if !status.success() {
         exit(0)
     }
 }
+
+fn build_bt_package_debug() {
+    #[cfg(target_os = "linux")]
+    let srecord: PathBuf = project_root().join(SRECORD_PATH).join("srec_cat");
+
+    #[cfg(target_os = "windows")]
+    let srecord: PathBuf = project_root().join(SRECORD_PATH).join("srec_cat");
+
+    tracing::info!("Merging softdevice bootloader and BT signed application in single hex");
+    let status = Command::new(srecord.clone())
+        .current_dir(project_root().join(SRECORD_PATH))
+        .args([
+            "../../BtPackageDebug/BtappDebug.hex",
+            "-Intel",
+            "../../BtPackageDebug/bootloaderDebug.hex",
+            "-Intel",
+            "../s112_nrf52_7.2.0_softdevice.hex",
+            "-Intel",
+            "-o",
+            "../../BtPackageDebug/BTApp_Full_Image_debug.hex",
+            "-Intel",
+        ])
+        .status()
+        .expect("Running Cargo failed");
+    if !status.success() {
+        panic!("Merging signed package failed");
+    }
+
+    tracing::info!("Removing single hex files");
+    let status = Command::new("rm")
+        .current_dir(project_root().join("BtPackageDebug"))
+        .arg("-rf")
+        .arg("bootloaderDebug.hex")
+        .arg("BtappDebug.hex")
+        .status()
+        .expect("Running rm failed");
+    if !status.success() {
+        exit(0)
+    }
+}
+
 
 fn main() {
     // Adding some info tracing just for logging activity
@@ -301,12 +461,18 @@ fn main() {
     let args = XtaskArgs::parse();
 
     match args.command {
-        Commands::BuildFirmwareImage => {
+        Commands::BuildFwImage => {
             build_tools_check();
             build_bt_bootloader();
             build_bt_firmware();
             sign_bt_firmware();
             build_bt_package();
-        }
+        },
+        Commands::BuildFwDebugImage => {
+            build_tools_check_debug();
+            build_bt_bootloader_debug();
+            build_bt_debug_firmware();
+            build_bt_package_debug();
+        },
     }
 }
