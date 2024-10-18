@@ -489,12 +489,14 @@ pub enum Signer {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Magic {
     Atsama5d27KeyOs,
+    Nrf52Ble,
 }
 
 impl Magic {
     pub fn from_bytes(b: [u8; 4]) -> Option<Self> {
         match b {
             [0x50, 0x52, 0x4D, 0x31] => Some(Self::Atsama5d27KeyOs),
+            [0x62, 0x6c, 0x65, 0x66] => Some(Self::Nrf52Ble),
             _ => None,
         }
     }
@@ -502,6 +504,7 @@ impl Magic {
     pub fn to_bytes(&self) -> [u8; 4] {
         match self {
             Self::Atsama5d27KeyOs => [0x50, 0x52, 0x4D, 0x31],
+            Self::Nrf52Ble => [0x62, 0x6c, 0x65, 0x66],
         }
     }
 }

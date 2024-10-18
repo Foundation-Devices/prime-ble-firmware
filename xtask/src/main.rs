@@ -255,8 +255,8 @@ fn build_bt_firmware() {
 fn build_bt_debug_firmware() {
     tracing::info!("Building debug application...");
     let status = Command::new(cargo())
-        // .stdout(Stdio::null())
-        // .stderr(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
         .current_dir(project_root().join("firmware"))
         .arg("build")
         .arg("-r")

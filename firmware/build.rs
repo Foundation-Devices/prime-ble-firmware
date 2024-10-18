@@ -21,15 +21,14 @@ fn main() {
     // on the linker search path.
     let out = &PathBuf::from(env::var_os("OUT_DIR").unwrap());
     #[cfg(feature = "default")]
+    let _ = std::fs::copy("./memory_signed.x", "./memory.x");
+
+    #[cfg(feature = "debug")]
+    let _ = std::fs::copy("./memory_unsigned.x", "./memory.x");
+
     File::create(out.join("./memory.x"))
         .unwrap()
         .write_all(include_bytes!("./memory.x"))
-        .unwrap();
-
-    #[cfg(feature = "debug")]
-    File::create(out.join("./memory_unsigned.x"))
-        .unwrap()
-        .write_all(include_bytes!("./memory_unsigned.x"))
         .unwrap();
 
     println!("cargo:rustc-link-search={}", out.display());
@@ -38,11 +37,7 @@ fn main() {
     // any file in the project changes. By specifying `memory.x`
     // here, we ensure the build script is only re-run when
     // `memory.x` is changed.
-    #[cfg(feature = "default")]
     println!("cargo:rerun-if-changed=./memory.x");
-
-    #[cfg(feature = "debug")]
-    println!("cargo:rerun-if-changed=./memory_unsigned.x");
 
     println!("cargo:rustc-link-arg-bins=--nmagic");
     println!("cargo:rustc-link-arg-bins=-Tlink.x");

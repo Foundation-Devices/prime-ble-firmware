@@ -315,19 +315,19 @@ async fn main(_spawner: Spawner) {
                                 jump_app = true;
                                 break 'exitloop;
                             }
-                            HostProtocolMessage::ChallengeRequest { challenge, nonce } =>{
+                            HostProtocolMessage::ChallengeRequest { challenge, nonce } => {
                                 let data = sha { sha: [0; 32] };
                                 let challenge_sha: &dyn Sha256 = &data;
                                 let mut val = unsafe { &*nrf52805_pac::UICR::ptr() }.customer[0].read().customer().bits();
-                                val |= unsafe { &*nrf52805_pac::UICR::ptr() }.customer[1].read().customer().bits()<<32;
-                                val |= unsafe { &*nrf52805_pac::UICR::ptr() }.customer[2].read().customer().bits()<<64;
-                                val |= unsafe { &*nrf52805_pac::UICR::ptr() }.customer[3].read().customer().bits()<<128;
+                                val |= unsafe { &*nrf52805_pac::UICR::ptr() }.customer[1].read().customer().bits() << 32;
+                                val |= unsafe { &*nrf52805_pac::UICR::ptr() }.customer[2].read().customer().bits() << 64;
+                                val |= unsafe { &*nrf52805_pac::UICR::ptr() }.customer[3].read().customer().bits() << 128;
                                 let result = challenge_sha.hash(&val.to_be_bytes());
                                 ack_msg_send(HostProtocolMessage::ChallengeResult { result }, &mut tx);
                             }
                             HostProtocolMessage::GetState => {
                                 ack_msg_send(HostProtocolMessage::AckState(State::FirmwareUpgrade), &mut tx);
-                            },
+                            }
                             _ => (),
                         };
                         remaining

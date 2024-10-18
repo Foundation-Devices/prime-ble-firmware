@@ -32,6 +32,7 @@ pub enum Output {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Target {
     Atsama5d27KeyOs,
+    Nrf52Ble,
 }
 
 pub fn args<I, T>(args: I) -> Result<Args, Error>
@@ -130,6 +131,7 @@ where
             let target = target
                 .map(|t| match t.as_str() {
                     "atsama5d27-keyos" => Ok(Target::Atsama5d27KeyOs),
+                    "nrf52-ble" => Ok(Target::Nrf52Ble),
                     _ => Err(Error::InvalidTarget(t)),
                 })
                 .transpose()?;

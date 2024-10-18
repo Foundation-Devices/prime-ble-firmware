@@ -58,6 +58,7 @@ where
                 Some(header) => {
                     let magic = match header.magic() {
                         cosign2::Magic::Atsama5d27KeyOs => "atsama5d27-keyos",
+                        cosign2::Magic::Nrf52Ble => "nrf52-ble",
                     };
                     let timestamp = chrono::DateTime::from_timestamp(header.timestamp().into(), 0)
                         .expect("valid timestamp");
@@ -158,6 +159,7 @@ where
 
             let magic = target.map(|t| match t {
                 args::Target::Atsama5d27KeyOs => cosign2::Magic::Atsama5d27KeyOs,
+                args::Target::Nrf52Ble => cosign2::Magic::Nrf52Ble,
             });
             let mut input_options = std::fs::OpenOptions::new();
             input_options.read(true);
