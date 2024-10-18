@@ -6,3 +6,4 @@
 *.hex
 *.txt
 cosign2.toml
+/firmware/memory.x
