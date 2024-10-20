@@ -195,7 +195,7 @@ dependencies = [
  "critical-section",
  "defmt",
  "defmt-rtt",
- "embassy-executor 0.5.0",
+ "embassy-executor",
  "embassy-nrf",
  "embassy-sync",
  "embassy-time",
@@ -622,21 +622,6 @@ dependencies = [
 
 [[package]]
 name = "embassy-executor"
-version = "0.5.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ec648daedd2143466eff4b3e8002024f9f6c1de4ab7666bb679688752624c925"
-dependencies = [
- "cortex-m",
- "critical-section",
- "defmt",
- "document-features",
- "embassy-executor-macros 0.4.1",
- "embassy-time-driver",
- "embassy-time-queue-driver",
-]
-
-[[package]]
-name = "embassy-executor"
 version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "09ed0e24bdd4a5f4ff1b72ee4f264b1d23e179ea71a77d984b5fd24877a2bbe1"
@@ -645,21 +630,9 @@ dependencies = [
  "critical-section",
  "defmt",
  "document-features",
- "embassy-executor-macros 0.5.0",
+ "embassy-executor-macros",
  "embassy-time-driver",
  "embassy-time-queue-driver",
-]
-
-[[package]]
-name = "embassy-executor-macros"
-version = "0.4.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ad454accf80050e9cf7a51e994132ba0e56286b31f9317b68703897c328c59b5"
-dependencies = [
- "darling 0.20.10",
- "proc-macro2",
- "quote",
- "syn 2.0.71",
 ]
 
 [[package]]
@@ -869,7 +842,7 @@ dependencies = [
  "cortex-m-rt",
  "defmt",
  "defmt-rtt",
- "embassy-executor 0.6.0",
+ "embassy-executor",
  "embassy-nrf",
  "embassy-sync",
  "embassy-time",
