@@ -47,7 +47,7 @@ pub enum Bootloader<'a> {
     BootloaderVersion,
     AckBootloaderVersion { version: &'a str },
     // Challenge cmds
-    ChallengeSet { secret: [u32; 4] }, // better to use an array u8; 32]?
+    ChallengeSet { secret: [u32; 4] },
     AckChallengeSet { result: SecretSaveResponse },
 }
 
@@ -82,6 +82,6 @@ pub enum HostProtocolMessage<'a> {
     Reset,
     GetState,
     AckState(State),
-    ChallengeRequest { challenge: u128, nonce: u32 },
+    ChallengeRequest { challenge: [u32; 4], nonce: u64 },
     ChallengeResult { result: [u8; 32] },
 }

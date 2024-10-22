@@ -10,10 +10,14 @@ mod verify;
 use defmt_rtt as _;
 use embassy_nrf as _;
 use embassy_time::Timer;
+use hmac::digest::KeyInit;
+use hmac::digest::Update;
+use hmac::Mac;
 use host_protocol::State;
 use panic_probe as _;
 
 use consts::*;
+use sha2::Sha256 as ShaChallenge;
 use core::cell::RefCell;
 use cosign2::Header;
 use cosign2::Sha256;
@@ -41,6 +45,7 @@ use postcard::to_slice_cobs;
 use serde::{Deserialize, Serialize};
 use sha2::digest::consts::False;
 use verify::{check_fw, get_fw_image_slice, write_secret, Sha256 as sha};
+use hmac::Hmac;
 
 // Mutex for random hw generator to delay in verification
 static RNG_HW: CriticalSectionMutex<RefCell<Option<Rng<'_, RNG>>>> = Mutex::new(RefCell::new(None));
@@ -156,7 +161,7 @@ async fn main(_spawner: Spawner) {
     #[cfg(feature = "uart-pins-console")]
     let (rxd, txd) = (p.P0_16, p.P0_18);
 
-    // Uarte config
+    // Uarte configuration
     let uart = uarte::Uarte::new(p.UARTE0, Irqs, rxd, txd, config_uart);
     let (mut tx, mut rx) = uart.split_with_idle(p.TIMER0, p.PPI_CH0, p.PPI_CH1);
 
@@ -316,13 +321,28 @@ async fn main(_spawner: Spawner) {
                                 break 'exitloop;
                             }
                             HostProtocolMessage::ChallengeRequest { challenge, nonce } => {
+                                // Create alias for HMAC-SHA256
+                                type HmacSha256 = Hmac<ShaChallenge>;
+
                                 let data = sha { sha: [0; 32] };
                                 let challenge_sha: &dyn Sha256 = &data;
-                                let mut val = unsafe { &*nrf52805_pac::UICR::ptr() }.customer[0].read().customer().bits();
-                                val |= unsafe { &*nrf52805_pac::UICR::ptr() }.customer[1].read().customer().bits() << 32;
-                                val |= unsafe { &*nrf52805_pac::UICR::ptr() }.customer[2].read().customer().bits() << 64;
-                                val |= unsafe { &*nrf52805_pac::UICR::ptr() }.customer[3].read().customer().bits() << 128;
-                                let result = challenge_sha.hash(&val.to_be_bytes());
+
+                                let secret_as_slice = get_fw_image_slice(0x10001080, 0x10001090);
+                                let res = if let Ok(mac) = HmacSha256::new_from_slice(secret_as_slice){
+                                    // Update mac with nonce
+                                    mac.update(nonce);
+                                    mac.finalize().into_bytes()
+                                };
+                                
+                                // // let mut val  = unsafe m{ &*nrf52805_pac::UICR::ptr() }.customer[0].read().customer().bits();
+                                // let mut arr : [u8;32] = [0;32];
+                                // arr[..4]  = unsafe { &*nrf52805_pac::UICR::ptr() }.customer[0].read().customer().bits().to_be_bytes();;
+                                // arr[4..8]  = unsafe { &*nrf52805_pac::UICR::ptr() }.customer[1].read().customer().bits().to_be_bytes();;
+                                // arr[8..12]  = unsafe { &*nrf52805_pac::UICR::ptr() }.customer[2].read().customer().bits().to_be_bytes();
+
+                                
+                                // let a = val;
+                                // let result = challenge_sha.hash(&val.to_be_bytes());
                                 ack_msg_send(HostProtocolMessage::ChallengeResult { result }, &mut tx);
                             }
                             HostProtocolMessage::GetState => {
