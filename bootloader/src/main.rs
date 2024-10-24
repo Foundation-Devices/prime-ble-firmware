@@ -10,9 +10,6 @@ mod verify;
 use defmt_rtt as _;
 use embassy_nrf as _;
 use embassy_time::Timer;
-use hmac::digest::KeyInit;
-use hmac::digest::Update;
-use hmac::Mac;
 use host_protocol::State;
 use panic_probe as _;
 
@@ -20,7 +17,6 @@ use consts::*;
 use sha2::Sha256 as ShaChallenge;
 use core::cell::RefCell;
 use cosign2::Header;
-use cosign2::Sha256;
 use crc::{Crc, CRC_32_ISCSI};
 use defmt::info;
 use embassy_executor::Spawner;
@@ -43,9 +39,9 @@ use nrf_softdevice::Softdevice;
 use postcard::accumulator::{CobsAccumulator, FeedResult};
 use postcard::to_slice_cobs;
 use serde::{Deserialize, Serialize};
-use sha2::digest::consts::False;
-use verify::{check_fw, get_fw_image_slice, write_secret, Sha256 as sha};
-use hmac::Hmac;
+use verify::{check_fw, get_fw_image_slice, write_secret};
+use hmac::{Hmac,Mac};
+
 
 // Mutex for random hw generator to delay in verification
 static RNG_HW: CriticalSectionMutex<RefCell<Option<Rng<'_, RNG>>>> = Mutex::new(RefCell::new(None));
@@ -323,27 +319,16 @@ async fn main(_spawner: Spawner) {
                             HostProtocolMessage::ChallengeRequest { challenge, nonce } => {
                                 // Create alias for HMAC-SHA256
                                 type HmacSha256 = Hmac<ShaChallenge>;
-
-                                let data = sha { sha: [0; 32] };
-                                let challenge_sha: &dyn Sha256 = &data;
-
-                                let secret_as_slice = get_fw_image_slice(0x10001080, 0x10001090);
-                                let res = if let Ok(mac) = HmacSha256::new_from_slice(secret_as_slice){
+                                let secret_as_slice = get_fw_image_slice(UICR_SECRET_START, UICR_SECRET_END);
+                                let result = if let Ok(mut mac) = HmacSha256::new_from_slice(secret_as_slice){
                                     // Update mac with nonce
-                                    mac.update(nonce);
-                                    mac.finalize().into_bytes()
+                                    mac.update(&nonce.to_be_bytes());
+                                    let result = mac.finalize().into_bytes();
+                                    HostProtocolMessage::ChallengeResult { result : result.into() }
+                                } else{
+                                    HostProtocolMessage::ChallengeResult { result : [0xFF;32] }
                                 };
-                                
-                                // // let mut val  = unsafe m{ &*nrf52805_pac::UICR::ptr() }.customer[0].read().customer().bits();
-                                // let mut arr : [u8;32] = [0;32];
-                                // arr[..4]  = unsafe { &*nrf52805_pac::UICR::ptr() }.customer[0].read().customer().bits().to_be_bytes();;
-                                // arr[4..8]  = unsafe { &*nrf52805_pac::UICR::ptr() }.customer[1].read().customer().bits().to_be_bytes();;
-                                // arr[8..12]  = unsafe { &*nrf52805_pac::UICR::ptr() }.customer[2].read().customer().bits().to_be_bytes();
-
-                                
-                                // let a = val;
-                                // let result = challenge_sha.hash(&val.to_be_bytes());
-                                ack_msg_send(HostProtocolMessage::ChallengeResult { result }, &mut tx);
+                                ack_msg_send(result, &mut tx);
                             }
                             HostProtocolMessage::GetState => {
                                 ack_msg_send(HostProtocolMessage::AckState(State::FirmwareUpgrade), &mut tx);
