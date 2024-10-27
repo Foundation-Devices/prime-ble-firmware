@@ -1,5 +1,5 @@
 use crate::consts::{BT_MAX_NUM_PKT, MTU};
-use crate::{BT_DATA_RX, BT_STATE, FIRMWARE_VER, RSSI_TX, RSSI_VALUE};
+use crate::{BT_DATA_RX, BT_STATE, BT_STATE_MPU, BT_STATE_MPU_TX, FIRMWARE_VER, RSSI_TX, RSSI_VALUE};
 use crate::{IRQ_OUT_PIN, TX_BT_VEC};
 use defmt::info;
 use embassy_nrf::buffered_uarte::{BufferedUarteRx, BufferedUarteTx};
@@ -7,7 +7,7 @@ use embassy_nrf::peripherals::{TIMER1, UARTE0};
 use embassy_time::Instant;
 use embedded_io_async::Write;
 use heapless::Vec;
-use host_protocol::{Bluetooth, HostProtocolMessage, COBS_MAX_MSG_SIZE, State};
+use host_protocol::{Bluetooth, HostProtocolMessage, State, COBS_MAX_MSG_SIZE};
 use postcard::accumulator::{CobsAccumulator, FeedResult};
 use postcard::to_slice_cobs;
 
@@ -64,11 +64,11 @@ pub async fn comms_task(rx: &'static mut BufferedUarteRx<'_, UARTE0, TIMER1>) {
                                     todo!()
                                 }
                                 HostProtocolMessage::GetState => {
-                                    if let Some(bt_state) = BT_STATE.try_take(){
-                                        todo!()
-                                    }
-                                },
-                                _ => ()
+                                    info!("Send BT state to MPUenabled");
+                                    let state_bt_mpu = BT_STATE_MPU.lock().await;
+                                    let _ = BT_STATE_MPU_TX.try_send(*state_bt_mpu);
+                                }
+                                _ => (),
                             };
                             remaining
                         }
@@ -123,6 +123,24 @@ pub async fn send_bt_uart(uart_tx: &'static mut BufferedUarteTx<'static, UARTE0>
     let mut send_buf = [0u8; 270];
 
     loop {
+        if let Ok(bt_state) = BT_STATE_MPU_TX.try_receive() {
+            send_buf.fill(0); // Clear the buffer from any previous data
+
+            info!("Sending back BT state: {}", bt_state);
+
+            let msg = match bt_state {
+                true => HostProtocolMessage::AckState(State::Enabled),
+                false => HostProtocolMessage::AckState(State::Disabled),
+            };
+
+            let cobs_tx = to_slice_cobs(&msg, &mut send_buf).unwrap();
+            info!("{}", cobs_tx);
+
+            let _ = uart_tx.write_all(cobs_tx).await;
+            let _ = uart_tx.flush().await;
+            assert_out_irq().await; // Ask the MP
+        }
+
         if let Ok(version) = FIRMWARE_VER.try_receive() {
             send_buf.fill(0); // Clear the buffer from any previous data
 
@@ -190,6 +208,24 @@ pub async fn send_bt_uart_no_cobs(uart_tx: &'static mut BufferedUarteTx<'static,
     let mut timer_tot: Instant = Instant::now();
 
     loop {
+        if let Ok(bt_state) = BT_STATE_MPU_TX.try_receive() {
+            send_buf.fill(0); // Clear the buffer from any previous data
+
+            info!("Sending back BT state: {}", bt_state);
+
+            let msg = match bt_state {
+                true => HostProtocolMessage::AckState(State::Enabled),
+                false => HostProtocolMessage::AckState(State::Disabled),
+            };
+
+            let cobs_tx = to_slice_cobs(&msg, &mut send_buf).unwrap();
+            info!("{}", cobs_tx);
+
+            let _ = uart_tx.write_all(cobs_tx).await;
+            let _ = uart_tx.flush().await;
+            assert_out_irq().await; // Ask the MP
+        }
+
         if let Ok(rssi) = RSSI_TX.try_receive() {
             send_buf.fill(0); // Clear the buffer from any previous data
 

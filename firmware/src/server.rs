@@ -4,7 +4,7 @@
 use crate::consts::{ATT_MTU, DEVICE_NAME, SERVICES_LIST, SHORT_NAME};
 use crate::nus::*;
 use crate::TX_BT_VEC;
-use crate::{BT_STATE, RSSI_VALUE};
+use crate::{BT_STATE, BT_STATE_MPU, RSSI_VALUE};
 use core::mem;
 use defmt::{info, *};
 use embassy_time::{Duration, Timer};
@@ -35,6 +35,8 @@ pub struct Server {
 pub async fn stop_bluetooth() {
     while BT_STATE.wait().await {}
     info!("BT off");
+    let mut mpu_state = BT_STATE_MPU.lock().await;
+    *mpu_state = false;
 }
 
 pub fn initialize_sd() -> &'static mut Softdevice {

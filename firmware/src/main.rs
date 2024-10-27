@@ -54,6 +54,8 @@ bind_interrupts!(struct Irqs {
 
 // Signal for BT state
 static BT_STATE: Signal<ThreadModeRawMutex, bool> = Signal::new();
+static BT_STATE_MPU: Mutex<ThreadModeRawMutex, bool> = Mutex::new(false);
+static BT_STATE_MPU_TX: Channel<ThreadModeRawMutex, bool, 1> = Channel::new();
 static TX_BT_VEC: Mutex<ThreadModeRawMutex, Vec<Vec<u8, ATT_MTU>, 4>> = Mutex::new(Vec::new());
 static RSSI_VALUE: Mutex<ThreadModeRawMutex, u8> = Mutex::new(0);
 static BT_DATA_RX: Channel<ThreadModeRawMutex, Vec<u8, ATT_MTU>, 4> = Channel::new();
@@ -162,10 +164,12 @@ async fn main(spawner: Spawner) {
     info!("Init tasks");
 
     loop {
-        Timer::after_millis(100).await;
+        Timer::after_millis(1).await;
         let state = BT_STATE.wait().await;
         if state {
             info!("BT state ON");
+            let mut mpu_state = BT_STATE_MPU.lock().await;
+            *mpu_state = true;
         }
         if !state {
             info!("BT state OFF");

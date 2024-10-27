@@ -180,13 +180,9 @@ pub fn check_fw(image_slice: &[u8], tx: &mut UarteTx<UARTE0>) -> Option<bool> {
                 }),
                 tx,
             );
-            let _ = tx.blocking_write(b"Fw image valid");
-
             return Some(true);
         } else {
             info!("Invalid signature!");
-            let _ = tx.blocking_write(b"Fw image not valid");
-
             ack_msg_send(
                 HostProtocolMessage::Bootloader(Bootloader::AckVerifyFirmware {
                     result: false,
