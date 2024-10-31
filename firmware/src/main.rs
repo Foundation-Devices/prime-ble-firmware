@@ -43,7 +43,6 @@ use nrf_softdevice::Softdevice;
 use server::{initialize_sd, run_bluetooth, stop_bluetooth, Server};
 use static_cell::StaticCell;
 
-
 #[cfg(all(feature = "uart-pins-console", feature = "uart-pins-mpu"))]
 compile_error!("Only one of the features `uart-pins-console` or `uart-pins-mpu` can be enabled.");
 

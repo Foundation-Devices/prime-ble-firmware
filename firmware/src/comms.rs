@@ -1,7 +1,7 @@
 use core::sync::atomic::AtomicPtr;
 
-use crate::consts::{BT_MAX_NUM_PKT, MTU,UICR_SECRET_START,UICR_SECRET_SIZE};
-use crate::{BT_DATA_RX, BT_STATE, BT_STATE_MPU_TX, FIRMWARE_VER, RSSI_VALUE_MPU_TX, RSSI_VALUE,CHALLENGE_REQUEST};
+use crate::consts::{BT_MAX_NUM_PKT, MTU, UICR_SECRET_SIZE, UICR_SECRET_START};
+use crate::{BT_DATA_RX, BT_STATE, BT_STATE_MPU_TX, CHALLENGE_REQUEST, FIRMWARE_VER, RSSI_VALUE, RSSI_VALUE_MPU_TX};
 use crate::{IRQ_OUT_PIN, TX_BT_VEC};
 use defmt::info;
 use embassy_nrf::buffered_uarte::{BufferedUarteRx, BufferedUarteTx};
@@ -9,12 +9,11 @@ use embassy_nrf::peripherals::{TIMER1, UARTE0};
 use embassy_time::Instant;
 use embedded_io_async::Write;
 use heapless::Vec;
+use hmac::{Hmac, Mac};
 use host_protocol::{Bluetooth, HostProtocolMessage, State, COBS_MAX_MSG_SIZE};
 use postcard::accumulator::{CobsAccumulator, FeedResult};
 use postcard::to_slice_cobs;
 use sha2::Sha256 as ShaChallenge;
-use hmac::{Hmac,Mac};
-
 
 #[embassy_executor::task]
 pub async fn comms_task(rx: &'static mut BufferedUarteRx<'_, UARTE0, TIMER1>) {
@@ -147,7 +146,7 @@ pub async fn send_bt_uart(uart_tx: &'static mut BufferedUarteTx<'static, UARTE0>
             }
         }
 
-        if CHALLENGE_REQUEST.load(core::sync::atomic::Ordering::Relaxed){
+        if CHALLENGE_REQUEST.load(core::sync::atomic::Ordering::Relaxed) {
             // Reset challeng request flag
             CHALLENGE_REQUEST.store(falseflase, core::sync::atomic::Ordering::Relaxed);
 
@@ -156,14 +155,14 @@ pub async fn send_bt_uart(uart_tx: &'static mut BufferedUarteTx<'static, UARTE0>
             let secret_as_slice = unsafe { core::slice::from_raw_parts(UICR_SECRET_START as *const u8, UICR_SECRET_SIZE as usize) };
             info!("Secret saved {:02X}", secret_as_slice);
 
-            let result = if let Ok(mut mac) = HmacSha256::new_from_slice(secret_as_slice){
+            let result = if let Ok(mut mac) = HmacSha256::new_from_slice(secret_as_slice) {
                 // Update mac with nonce
                 mac.update(&nonce.to_be_bytes());
                 let result = mac.finalize().into_bytes();
-                info!("{=[u8;32]:#X}",result.into());
-                HostProtocolMessage::ChallengeResult { result : result.into() }
-            } else{
-                HostProtocolMessage::ChallengeResult { result : [0xFF;32] }
+                info!("{=[u8;32]:#X}", result.into());
+                HostProtocolMessage::ChallengeResult { result: result.into() }
+            } else {
+                HostProtocolMessage::ChallengeResult { result: [0xFF; 32] }
             };
             let now = Instant::now();
             let cobs_tx = to_slice_cobs(&result, &mut send_buf).unwrap();

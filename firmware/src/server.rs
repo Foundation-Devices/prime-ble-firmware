@@ -94,7 +94,7 @@ async fn notify_data_tx<'a>(server: &'a Server, connection: &'a Connection) {
             if connection.rssi().is_some() && buffer.len() == 0 {
                 // Get as u8 rssi - receiver side will take care of cast to i8
                 let rssi_as_u8 = connection.rssi().unwrap() as u8;
-                RSSI_VALUE.store(rssi_as_u8, core::sync::atomic::Ordering::Relaxed);                
+                RSSI_VALUE.store(rssi_as_u8, core::sync::atomic::Ordering::Relaxed);
             }
         }
 
