@@ -10,6 +10,7 @@ mod nus;
 mod server;
 
 use core::cell::RefCell;
+use core::sync::atomic::{AtomicBool, AtomicU8};
 use defmt_rtt as _;
 use embassy_nrf::peripherals::{TIMER1, UARTE0};
 // global logger
@@ -42,6 +43,7 @@ use nrf_softdevice::Softdevice;
 use server::{initialize_sd, run_bluetooth, stop_bluetooth, Server};
 use static_cell::StaticCell;
 
+
 #[cfg(all(feature = "uart-pins-console", feature = "uart-pins-mpu"))]
 compile_error!("Only one of the features `uart-pins-console` or `uart-pins-mpu` can be enabled.");
 
@@ -53,15 +55,15 @@ bind_interrupts!(struct Irqs {
 });
 
 // Signal for BT state
-static BT_STATE: Signal<ThreadModeRawMutex, bool> = Signal::new();
-static BT_STATE_MPU: Mutex<ThreadModeRawMutex, bool> = Mutex::new(false);
-static BT_STATE_MPU_TX: Channel<ThreadModeRawMutex, bool, 1> = Channel::new();
+static BT_STATE: AtomicBool = AtomicBool::new(false);
+static BT_STATE_MPU_TX: AtomicBool = AtomicBool::new(false);
 static TX_BT_VEC: Mutex<ThreadModeRawMutex, Vec<Vec<u8, ATT_MTU>, 4>> = Mutex::new(Vec::new());
-static RSSI_VALUE: Mutex<ThreadModeRawMutex, u8> = Mutex::new(0);
+static RSSI_VALUE: AtomicU8 = AtomicU8::new(0);
+static RSSI_VALUE_MPU_TX: AtomicBool = AtomicBool::new(false);
 static BT_DATA_RX: Channel<ThreadModeRawMutex, Vec<u8, ATT_MTU>, 4> = Channel::new();
 static FIRMWARE_VER: Channel<ThreadModeRawMutex, &str, 1> = Channel::new();
-static RSSI_TX: Channel<ThreadModeRawMutex, u8, 1> = Channel::new();
 static BUFFERED_UART: StaticCell<BufferedUarte<'_, UARTE0, TIMER1>> = StaticCell::new();
+static CHALLENGE_REQUEST: AtomicBool = AtomicBool::new(false);
 
 /// nRF -> MPU IRQ output pin
 static IRQ_OUT_PIN: Mutex<ThreadModeRawMutex, RefCell<Option<Output>>> = Mutex::new(RefCell::new(None));
@@ -165,17 +167,8 @@ async fn main(spawner: Spawner) {
 
     loop {
         Timer::after_millis(1).await;
-        let state = BT_STATE.wait().await;
-        if state {
-            info!("BT state ON");
-            let mut mpu_state = BT_STATE_MPU.lock().await;
-            *mpu_state = true;
-        }
-        if !state {
-            info!("BT state OFF");
-        }
 
-        if state {
+        if BT_STATE.load(core::sync::atomic::Ordering::Relaxed) {
             let run_bluetooth_fut = run_bluetooth(sd, &server);
             let stop_bluetooth_fut = stop_bluetooth();
             pin_mut!(run_bluetooth_fut);

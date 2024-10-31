@@ -39,8 +39,6 @@ Leaving here both probe-rs-cli solution and probe-rs ( which is the new one), be
       ```
    At the end of the process a *BtPackage* folder will be created in project root folder with 1 file inside
       * BTApp_Full_Image_debug.hex_- Full debug image Intel hex format ( No signed, uart console, no flash protection )
-
-TBD!!
    
 4. Modify in .cargo folder of firmware:
    ```bash

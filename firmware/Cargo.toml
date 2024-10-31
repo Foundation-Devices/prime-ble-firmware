@@ -71,7 +71,8 @@ nrf-softdevice-s112 = { git = "https://github.com/embassy-rs/nrf-softdevice.git"
 postcard                = { version = "1.0.8" }
 serde = { version = "1.0.200", default-features = false }
 cobs = { version = "0.2.3", default-features = false }
-
+sha2 = { version = "0.10.8", default-features = false }
+hmac = "0.12.1"
 
 [dependencies.host-protocol]
 path = "../host-protocol"

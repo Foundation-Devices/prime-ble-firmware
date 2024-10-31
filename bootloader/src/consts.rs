@@ -15,7 +15,7 @@ pub const FLASH_PAGE: u32 = 4096;
 pub const SEAL_IDX: usize = 5;
 pub const SEALED_SECRET: u32 = 0x5A5A5A5A;
 pub const UICR_SECRET_START: u32 = 0x10001080;
-pub const UICR_SECRET_END: u32 = 0x10001090;
+pub const UICR_SECRET_SIZE: u32 = 0x10;
 
 
 

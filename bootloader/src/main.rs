@@ -297,7 +297,7 @@ async fn main(_spawner: Spawner) {
                                         unsafe {
                                             match write_secret(secret) {
                                                 true => {
-                                                    info!("Saved!");
+                                                    info!("Challenge secret is saved");
                                                     SecretSaveResponse::Sealed
                                                 }
                                                 false => SecretSaveResponse::Error,
@@ -315,12 +315,16 @@ async fn main(_spawner: Spawner) {
                             }
                             HostProtocolMessage::ChallengeRequest { challenge, nonce } => {
                                 // Create alias for HMAC-SHA256
+                                info!("Challenge recv {}  nonce {}",challenge,nonce);
                                 type HmacSha256 = Hmac<ShaChallenge>;
-                                let secret_as_slice = get_fw_image_slice(UICR_SECRET_START, UICR_SECRET_END);
+                                let secret_as_slice = get_fw_image_slice(UICR_SECRET_START, UICR_SECRET_SIZE);
+                                info!("sliec {:02X}", secret_as_slice);
+
                                 let result = if let Ok(mut mac) = HmacSha256::new_from_slice(secret_as_slice){
                                     // Update mac with nonce
                                     mac.update(&nonce.to_be_bytes());
                                     let result = mac.finalize().into_bytes();
+                                    info!("{=[u8;32]:#X}",result.into());
                                     HostProtocolMessage::ChallengeResult { result : result.into() }
                                 } else{
                                     HostProtocolMessage::ChallengeResult { result : [0xFF;32] }

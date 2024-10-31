@@ -11,9 +11,6 @@ use serde::{Deserialize, Serialize};
 /// Maximum supported message size to be serialized or deserialized by `postcard`.
 pub const COBS_MAX_MSG_SIZE: usize = 512;
 
-/// Number of UICR registers for secret value
-pub const SECRET_UICR_SIZE: u16 = 4;
-
 /// Bluetooth-specific messages.
 #[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq)]
 pub enum Bluetooth<'a> {

@@ -854,12 +854,14 @@ dependencies = [
  "fixed",
  "futures",
  "heapless 0.8.0",
+ "hmac",
  "host-protocol",
  "nrf-softdevice",
  "nrf-softdevice-s112",
  "panic-probe",
  "postcard",
  "serde",
+ "sha2",
  "static_cell",
 ]
 

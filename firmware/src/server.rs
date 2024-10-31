@@ -4,7 +4,7 @@
 use crate::consts::{ATT_MTU, DEVICE_NAME, SERVICES_LIST, SHORT_NAME};
 use crate::nus::*;
 use crate::TX_BT_VEC;
-use crate::{BT_STATE, BT_STATE_MPU, RSSI_VALUE};
+use crate::{BT_STATE, RSSI_VALUE};
 use core::mem;
 use defmt::{info, *};
 use embassy_time::{Duration, Timer};
@@ -33,10 +33,11 @@ pub struct Server {
 }
 
 pub async fn stop_bluetooth() {
-    while BT_STATE.wait().await {}
+    while BT_STATE.load(core::sync::atomic::Ordering::Relaxed) {
+        // Do nothing
+        Timer::after_millis(200).await;
+    }
     info!("BT off");
-    let mut mpu_state = BT_STATE_MPU.lock().await;
-    *mpu_state = false;
 }
 
 pub fn initialize_sd() -> &'static mut Softdevice {
@@ -93,8 +94,7 @@ async fn notify_data_tx<'a>(server: &'a Server, connection: &'a Connection) {
             if connection.rssi().is_some() && buffer.len() == 0 {
                 // Get as u8 rssi - receiver side will take care of cast to i8
                 let rssi_as_u8 = connection.rssi().unwrap() as u8;
-                let mut rssi_val = RSSI_VALUE.lock().await;
-                *rssi_val = rssi_as_u8;
+                RSSI_VALUE.store(rssi_as_u8, core::sync::atomic::Ordering::Relaxed);                
             }
         }
 
@@ -201,7 +201,7 @@ pub async fn run_bluetooth(sd: &'static Softdevice, server: &Server) {
             }
         }
         // Force false
-        BT_STATE.signal(false);
+        BT_STATE.store(true, core::sync::atomic::Ordering::Relaxed);
     }
 }
 
