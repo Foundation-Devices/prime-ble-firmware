@@ -340,6 +340,8 @@ fn sign_bt_firmware() {
     ];
     args.extend_from_slice(&["--firmware-version", &version]);
 
+    tracing::info!("Signing binary Bt application with Cosign2...");
+
     if !Command::new("cosign2")
         .stdout(Stdio::null())
         .current_dir(project_root())
@@ -359,7 +361,7 @@ fn build_bt_package() {
     #[cfg(target_os = "windows")]
     let srecord: PathBuf = project_root().join(SRECORD_PATH).join("srec_cat");
 
-    tracing::info!("Converting bin signed package to hex file with starting offset 0x19000");
+    tracing::info!("Converting bin signed package to hex file with starting offset 0x19800");
     let status = Command::new(srecord.clone())
         .current_dir(project_root().join(SRECORD_PATH))
         .args([
