@@ -35,7 +35,6 @@ use embassy_nrf::{bind_interrupts, peripherals, uarte};
 use embassy_sync::blocking_mutex::raw::ThreadModeRawMutex;
 use embassy_sync::channel::Channel;
 use embassy_sync::mutex::Mutex;
-use embassy_sync::signal::Signal;
 use futures::pin_mut;
 use heapless::Vec;
 use host_protocol::COBS_MAX_MSG_SIZE;
@@ -56,13 +55,14 @@ bind_interrupts!(struct Irqs {
 // Signal for BT state
 static BT_STATE: AtomicBool = AtomicBool::new(false);
 static BT_STATE_MPU_TX: AtomicBool = AtomicBool::new(false);
-static TX_BT_VEC: Mutex<ThreadModeRawMutex, Vec<Vec<u8, ATT_MTU>, 4>> = Mutex::new(Vec::new());
+static BT_DATA_TX: Mutex<ThreadModeRawMutex, Vec<Vec<u8, ATT_MTU>, 4>> = Mutex::new(Vec::new());
 static RSSI_VALUE: AtomicU8 = AtomicU8::new(0);
 static RSSI_VALUE_MPU_TX: AtomicBool = AtomicBool::new(false);
 static BT_DATA_RX: Channel<ThreadModeRawMutex, Vec<u8, ATT_MTU>, 4> = Channel::new();
 static FIRMWARE_VER: Channel<ThreadModeRawMutex, &str, 1> = Channel::new();
 static BUFFERED_UART: StaticCell<BufferedUarte<'_, UARTE0, TIMER1>> = StaticCell::new();
 static CHALLENGE_REQUEST: AtomicBool = AtomicBool::new(false);
+static CHALLENGE_NONCE: Mutex<ThreadModeRawMutex, u64> = Mutex::new(0);
 
 /// nRF -> MPU IRQ output pin
 static IRQ_OUT_PIN: Mutex<ThreadModeRawMutex, RefCell<Option<Output>>> = Mutex::new(RefCell::new(None));

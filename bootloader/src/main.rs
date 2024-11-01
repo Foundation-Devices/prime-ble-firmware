@@ -14,7 +14,6 @@ use host_protocol::State;
 use panic_probe as _;
 
 use consts::*;
-use sha2::Sha256 as ShaChallenge;
 use core::cell::RefCell;
 use cosign2::Header;
 use crc::{Crc, CRC_32_ISCSI};
@@ -30,6 +29,7 @@ use embassy_nrf::{bind_interrupts, uarte};
 use embassy_sync::blocking_mutex::CriticalSectionMutex;
 use embassy_sync::blocking_mutex::Mutex;
 use embedded_storage::nor_flash::NorFlash;
+use hmac::{Hmac, Mac};
 use host_protocol::HostProtocolMessage;
 use host_protocol::COBS_MAX_MSG_SIZE;
 use host_protocol::{Bootloader, SecretSaveResponse};
@@ -39,9 +39,8 @@ use nrf_softdevice::Softdevice;
 use postcard::accumulator::{CobsAccumulator, FeedResult};
 use postcard::to_slice_cobs;
 use serde::{Deserialize, Serialize};
+use sha2::Sha256 as ShaChallenge;
 use verify::{check_fw, get_fw_image_slice, write_secret};
-use hmac::{Hmac,Mac};
-
 
 // Mutex for random hw generator to delay in verification
 static RNG_HW: CriticalSectionMutex<RefCell<Option<Rng<'_, RNG>>>> = Mutex::new(RefCell::new(None));
@@ -313,21 +312,21 @@ async fn main(_spawner: Spawner) {
                                 jump_app = true;
                                 break 'exitloop;
                             }
-                            HostProtocolMessage::ChallengeRequest { challenge, nonce } => {
+                            HostProtocolMessage::ChallengeRequest { nonce } => {
                                 // Create alias for HMAC-SHA256
-                                info!("Challenge recv {}  nonce {}",challenge,nonce);
+                                info!("Challenge recv nonce {}", nonce);
                                 type HmacSha256 = Hmac<ShaChallenge>;
                                 let secret_as_slice = get_fw_image_slice(UICR_SECRET_START, UICR_SECRET_SIZE);
                                 info!("sliec {:02X}", secret_as_slice);
 
-                                let result = if let Ok(mut mac) = HmacSha256::new_from_slice(secret_as_slice){
+                                let result = if let Ok(mut mac) = HmacSha256::new_from_slice(secret_as_slice) {
                                     // Update mac with nonce
                                     mac.update(&nonce.to_be_bytes());
                                     let result = mac.finalize().into_bytes();
-                                    info!("{=[u8;32]:#X}",result.into());
-                                    HostProtocolMessage::ChallengeResult { result : result.into() }
-                                } else{
-                                    HostProtocolMessage::ChallengeResult { result : [0xFF;32] }
+                                    info!("{=[u8;32]:#X}", result.into());
+                                    HostProtocolMessage::ChallengeResult { result: result.into() }
+                                } else {
+                                    HostProtocolMessage::ChallengeResult { result: [0xFF; 32] }
                                 };
                                 ack_msg_send(result, &mut tx);
                             }

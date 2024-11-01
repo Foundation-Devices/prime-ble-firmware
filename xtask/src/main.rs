@@ -33,7 +33,7 @@ enum Commands {
     /// Flash protection
     /// UART mpu pins ( just console ones )
     #[command(verbatim_doc_comment)]
-    BuildFwDebugImage
+    BuildFwDebugImage,
 }
 
 fn project_root() -> PathBuf {
@@ -189,7 +189,17 @@ fn build_bt_bootloader_debug() {
         .stdout(Stdio::null())
         .stderr(Stdio::null())
         .current_dir(project_root().join("bootloader"))
-        .args(["objcopy", "--release","--no-default-features","--features","debug", "--", "-O", "ihex", "../BtPackageDebug/bootloaderDebug.hex"])
+        .args([
+            "objcopy",
+            "--release",
+            "--no-default-features",
+            "--features",
+            "debug",
+            "--",
+            "-O",
+            "ihex",
+            "../BtPackageDebug/bootloaderDebug.hex",
+        ])
         .status()
         .expect("Running Cargo objcopy failed");
     if !status.success() {
@@ -251,7 +261,6 @@ fn build_bt_firmware() {
     }
 }
 
-
 fn build_bt_debug_firmware() {
     tracing::info!("Building debug application...");
     let status = Command::new(cargo())
@@ -275,7 +284,17 @@ fn build_bt_debug_firmware() {
         .stdout(Stdio::null())
         .stderr(Stdio::null())
         .current_dir(project_root().join("firmware"))
-        .args(["objcopy", "--release","--no-default-features", "--features","debug", "--", "-O", "ihex", "../BtPackageDebug/BtappDebug.hex"])
+        .args([
+            "objcopy",
+            "--release",
+            "--no-default-features",
+            "--features",
+            "debug",
+            "--",
+            "-O",
+            "ihex",
+            "../BtPackageDebug/BtappDebug.hex",
+        ])
         .status()
         .expect("Running Cargo objcopy failed");
     if !status.success() {
@@ -447,7 +466,6 @@ fn build_bt_package_debug() {
     }
 }
 
-
 fn main() {
     // Adding some info tracing just for logging activity
     env::set_var("RUST_LOG", "info");
@@ -467,12 +485,12 @@ fn main() {
             build_bt_firmware();
             sign_bt_firmware();
             build_bt_package();
-        },
+        }
         Commands::BuildFwDebugImage => {
             build_tools_check_debug();
             build_bt_bootloader_debug();
             build_bt_debug_firmware();
             build_bt_package_debug();
-        },
+        }
     }
 }

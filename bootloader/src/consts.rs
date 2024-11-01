@@ -17,8 +17,6 @@ pub const SEALED_SECRET: u32 = 0x5A5A5A5A;
 pub const UICR_SECRET_START: u32 = 0x10001080;
 pub const UICR_SECRET_SIZE: u32 = 0x10;
 
-
-
 #[cfg(feature = "no-dbg-access")]
 #[used]
 #[link_section = ".uicr_appprotection"]

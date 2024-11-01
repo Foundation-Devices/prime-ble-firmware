@@ -3,7 +3,7 @@
 
 use crate::consts::{ATT_MTU, DEVICE_NAME, SERVICES_LIST, SHORT_NAME};
 use crate::nus::*;
-use crate::TX_BT_VEC;
+use crate::BT_DATA_TX;
 use crate::{BT_STATE, RSSI_VALUE};
 use core::mem;
 use defmt::{info, *};
@@ -80,7 +80,7 @@ async fn notify_data_tx<'a>(server: &'a Server, connection: &'a Connection) {
     loop {
         // This is the way we can notify data when NUS service is up
         {
-            let mut buffer = TX_BT_VEC.lock().await;
+            let mut buffer = BT_DATA_TX.lock().await;
             if buffer.len() > 0 {
                 match notify_value(connection, server.nus.get_handle(), &buffer[0]) {
                     Ok(_) => {

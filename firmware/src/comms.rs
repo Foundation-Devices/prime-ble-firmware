@@ -1,8 +1,6 @@
-use core::sync::atomic::AtomicPtr;
-
 use crate::consts::{BT_MAX_NUM_PKT, MTU, UICR_SECRET_SIZE, UICR_SECRET_START};
-use crate::{BT_DATA_RX, BT_STATE, BT_STATE_MPU_TX, CHALLENGE_REQUEST, FIRMWARE_VER, RSSI_VALUE, RSSI_VALUE_MPU_TX};
-use crate::{IRQ_OUT_PIN, TX_BT_VEC};
+use crate::{BT_DATA_RX, BT_STATE, BT_STATE_MPU_TX, CHALLENGE_NONCE, CHALLENGE_REQUEST, FIRMWARE_VER, RSSI_VALUE, RSSI_VALUE_MPU_TX};
+use crate::{BT_DATA_TX, IRQ_OUT_PIN};
 use defmt::info;
 use embassy_nrf::buffered_uarte::{BufferedUarteRx, BufferedUarteTx};
 use embassy_nrf::peripherals::{TIMER1, UARTE0};
@@ -26,7 +24,6 @@ pub async fn comms_task(rx: &'static mut BufferedUarteRx<'_, UARTE0, TIMER1>) {
         {
             // Getting chars from Uart in a while loop
             if let Ok(n) = &rx.read(&mut raw_buf).await {
-                info!("Uart data incoming");
                 // Finished reading input
                 if *n == 0 {
                     break;
@@ -61,8 +58,10 @@ pub async fn comms_task(rx: &'static mut BufferedUarteRx<'_, UARTE0, TIMER1>) {
                                 HostProtocolMessage::Reset => {
                                     cortex_m::peripheral::SCB::sys_reset();
                                 }
-                                HostProtocolMessage::ChallengeRequest { challenge, nonce } => {
+                                HostProtocolMessage::ChallengeRequest { nonce } => {
+                                    info!("Challenge request nonce {}", nonce);
                                     CHALLENGE_REQUEST.store(true, core::sync::atomic::Ordering::Relaxed);
+                                    *CHALLENGE_NONCE.lock().await = nonce;
                                 }
                                 HostProtocolMessage::GetState => {
                                     info!("Send BT state to MPU enabled");
@@ -103,7 +102,7 @@ async fn bluetooth_handler(msg: Bluetooth<'_>) {
             // info!("Sending BLE data: {:?}", data);
             // Error if data length is greater than max MTU size
             if data.len() <= MTU {
-                let mut buffer_tx_bt = TX_BT_VEC.lock().await;
+                let mut buffer_tx_bt = BT_DATA_TX.lock().await;
                 // info!("Buffer to BT len {:?}", buffer_tx_bt.len());
                 if buffer_tx_bt.len() < BT_MAX_NUM_PKT {
                     let _ = buffer_tx_bt.push(Vec::from_slice(data).unwrap());
@@ -147,29 +146,32 @@ pub async fn send_bt_uart(uart_tx: &'static mut BufferedUarteTx<'static, UARTE0>
         }
 
         if CHALLENGE_REQUEST.load(core::sync::atomic::Ordering::Relaxed) {
-            // Reset challeng request flag
-            CHALLENGE_REQUEST.store(falseflase, core::sync::atomic::Ordering::Relaxed);
+            CHALLENGE_REQUEST.store(false, core::sync::atomic::Ordering::Relaxed);
 
-            // Create alias for HMAC-SHA256
             type HmacSha256 = Hmac<ShaChallenge>;
+
+            // SAFETY: UICR_SECRET_START points to valid read-only memory containing the secret
             let secret_as_slice = unsafe { core::slice::from_raw_parts(UICR_SECRET_START as *const u8, UICR_SECRET_SIZE as usize) };
+            let nonce = *CHALLENGE_NONCE.lock().await;
+
             info!("Secret saved {:02X}", secret_as_slice);
+            info!("Nonce: {}", nonce);
 
             let result = if let Ok(mut mac) = HmacSha256::new_from_slice(secret_as_slice) {
-                // Update mac with nonce
                 mac.update(&nonce.to_be_bytes());
                 let result = mac.finalize().into_bytes();
                 info!("{=[u8;32]:#X}", result.into());
                 HostProtocolMessage::ChallengeResult { result: result.into() }
             } else {
+                info!("HMAC initialization failed");
                 HostProtocolMessage::ChallengeResult { result: [0xFF; 32] }
             };
+
             let now = Instant::now();
             let cobs_tx = to_slice_cobs(&result, &mut send_buf).unwrap();
-            // Getting chars from Uart in a while loop
             let _ = &uart_tx.write_all(cobs_tx).await;
             let _ = &uart_tx.flush().await;
-            info!("Elapsed for packet to UART - {}", now.elapsed().as_micros());
+            info!("Elapsed time to send HMAC challenge answer - {}", now.elapsed().as_millis());
         }
 
         if BT_STATE_MPU_TX.load(core::sync::atomic::Ordering::Relaxed) {
@@ -258,13 +260,39 @@ pub async fn send_bt_uart_no_cobs(uart_tx: &'static mut BufferedUarteTx<'static,
 
             // Reset atomic flag
             BT_STATE_MPU_TX.store(true, core::sync::atomic::Ordering::Relaxed);
-
             let cobs_tx = to_slice_cobs(&msg, &mut send_buf).unwrap();
-            info!("{}", cobs_tx);
-
             let _ = uart_tx.write_all(cobs_tx).await;
             let _ = uart_tx.flush().await;
             assert_out_irq().await; // Ask the MP
+        }
+
+        if CHALLENGE_REQUEST.load(core::sync::atomic::Ordering::Relaxed) {
+            CHALLENGE_REQUEST.store(false, core::sync::atomic::Ordering::Relaxed);
+
+            type HmacSha256 = Hmac<ShaChallenge>;
+
+            // SAFETY: UICR_SECRET_START points to valid read-only memory containing the secret
+            let secret_as_slice = unsafe { core::slice::from_raw_parts(UICR_SECRET_START as *const u8, UICR_SECRET_SIZE as usize) };
+            let nonce = *CHALLENGE_NONCE.lock().await;
+
+            info!("Nonce: {}", nonce);
+            let mut now = Instant::now();
+            let result = if let Ok(mut mac) = HmacSha256::new_from_slice(secret_as_slice) {
+                mac.update(&nonce.to_be_bytes());
+                let result = mac.finalize().into_bytes();
+                info!("{=[u8;32]:#X}", result.into());
+                HostProtocolMessage::ChallengeResult { result: result.into() }
+            } else {
+                info!("HMAC initialization failed");
+                HostProtocolMessage::ChallengeResult { result: [0xFF; 32] }
+            };
+            info!("Elapsed time to calculate HMAC challenge answer - {}", now.elapsed().as_micros());
+
+            now = Instant::now();
+            let cobs_tx = to_slice_cobs(&result, &mut send_buf).unwrap();
+            let _ = &uart_tx.write_all(cobs_tx).await;
+            let _ = &uart_tx.flush().await;
+            info!("Elapsed time to send HMAC challenge answer - {}", now.elapsed().as_micros());
         }
 
         if RSSI_VALUE_MPU_TX.load(core::sync::atomic::Ordering::Relaxed) {

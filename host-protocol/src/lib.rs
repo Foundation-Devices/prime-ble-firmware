@@ -79,6 +79,6 @@ pub enum HostProtocolMessage<'a> {
     Reset,
     GetState,
     AckState(State),
-    ChallengeRequest { challenge: [u32; 4], nonce: u64 },
+    ChallengeRequest { nonce: u64 },
     ChallengeResult { result: [u8; 32] },
 }
