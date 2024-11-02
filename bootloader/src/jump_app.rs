@@ -1,12 +1,20 @@
 // SPDX-FileCopyrightText: 2024 Foundation Devices, Inc. <hello@foundationdevices.com>
 // SPDX-License-Identifier: GPL-3.0-or-later
-use crate::consts::BASE_ADDRESS_APP;
+
+//! This module handles jumping to and executing the main application firmware
+//! after bootloader operations are complete.
+
+use crate::consts::INT_VECTOR_TABLE_BASE;
 use cortex_m::peripheral::NVIC;
 use defmt::info;
 use embassy_nrf::interrupt::Interrupt;
 use nrf_softdevice_mbr as mbr;
 use nrf_softdevice_s112::sd_softdevice_vector_table_base_set;
 
+/// Sets up the SoftDevice IRQ forwarding for unsigned firmware
+/// 
+/// This configures the Master Boot Record (MBR) to forward interrupts to the 
+/// SoftDevice at address 0x1000, which is required for unsigned firmware.
 #[cfg(feature = "boot-unsigned-fw")]
 unsafe fn sd_set_unsigned_fw() {
     // Set SD base address in case fw is just above
@@ -22,6 +30,10 @@ unsafe fn sd_set_unsigned_fw() {
     info!("ret forward irq mbr result {}", ret);
 }
 
+/// Sets up the SoftDevice for signed firmware
+/// 
+/// This initializes the SoftDevice at address 0x19000, which is required
+/// for signed firmware that is placed at a specific location in flash.
 #[cfg(feature = "boot-signed-fw")]
 unsafe fn sd_set_signed_fw() {
     // Set SD base address in case fw is in a specific location
@@ -36,9 +48,21 @@ unsafe fn sd_set_signed_fw() {
 
 /// Boots the application assuming softdevice is present.
 ///
+/// This function performs the following steps:
+/// 1. Sets up the SoftDevice based on firmware type (signed/unsigned)
+/// 2. Disables active interrupts that could interfere with the jump
+/// 3. Updates the vector table base address for signed firmware
+/// 4. Retrieves the Main Stack Pointer (MSP) and Reset Vector (RV) from the vector table
+/// 5. Executes assembly code to:
+///    - Switch to MSP as the active stack pointer
+///    - Initialize the stack pointer
+///    - Set link register to prevent returns
+///    - Jump to the application reset vector
+///
 /// # Safety
 ///
 /// This modifies the stack pointer and reset vector and will run code placed in the active partition.
+/// This function never returns as it jumps directly to the application code.
 pub unsafe fn jump_to_app() -> ! {
     #[cfg(feature = "boot-signed-fw")]
     sd_set_signed_fw();
@@ -53,9 +77,9 @@ pub unsafe fn jump_to_app() -> ! {
     // Probably this critical section is redundant, but keepin it for softdevice.
     critical_section::with(|_| {
         #[cfg(feature = "boot-signed-fw")]
-        sd_softdevice_vector_table_base_set(BASE_ADDRESS_APP);
+        sd_softdevice_vector_table_base_set(INT_VECTOR_TABLE_BASE);
 
-        let addr_header = BASE_ADDRESS_APP;
+        let addr_header = INT_VECTOR_TABLE_BASE;
         let msp = *(addr_header as *const u32);
         let rv = *((addr_header + 4) as *const u32);
 

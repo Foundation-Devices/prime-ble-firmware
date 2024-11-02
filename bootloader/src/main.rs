@@ -1,6 +1,15 @@
 // SPDX-FileCopyrightText: 2024 Foundation Devices, Inc. <hello@foundationdevices.com>
 // SPDX-License-Identifier: GPL-3.0-or-later
 
+//! Bootloader implementation for Foundation Devices hardware
+//! 
+//! This bootloader provides:
+//! - Firmware update capabilities over UART
+//! - Firmware verification using cosign signatures
+//! - Secret storage and challenge-response authentication
+//! - Flash memory protection
+//! - Secure boot process
+
 #![no_std]
 #![no_main]
 mod consts;
@@ -42,25 +51,35 @@ use serde::{Deserialize, Serialize};
 use sha2::Sha256 as ShaChallenge;
 use verify::{check_fw, get_fw_image_slice, write_secret};
 
-// Mutex for random hw generator to delay in verification
+// Global mutex for hardware RNG access
 static RNG_HW: CriticalSectionMutex<RefCell<Option<Rng<'_, RNG>>>> = Mutex::new(RefCell::new(None));
 
+// Bind hardware interrupts to their handlers
 bind_interrupts!(struct Irqs {
     UARTE0_UART0 => uarte::InterruptHandler<peripherals::UARTE0>;
     RNG => rng::InterruptHandler<peripherals::RNG>;
 });
 
+/// Tracks the state of firmware updates
 #[derive(Debug, Serialize, Deserialize, Default)]
 pub struct BootState {
+    /// Current offset into flash memory
     pub offset: u32,
+    /// Current flash sector being written
     pub actual_sector: u32,
+    /// Index of the last successfully written packet
     pub actual_pkt_idx: u32,
 }
 
+/// Updates a chunk of flash memory with new firmware data
+/// 
+/// Validates that the write is within bounds and sends acknowledgement messages
+/// back over UART with CRC verification
 fn update_chunk<'a>(boot_status: &'a mut BootState, idx: usize, data: &'a [u8], flash: &'a mut Nvmc, tx: &mut UarteTx<UARTE0>) {
-    // Check what sector we are in now
-    // Increase offset with data len
+    // Calculate target flash address
     let cursor = BASE_APP_ADDR + boot_status.offset;
+    
+    // Validate write is within application area
     match cursor {
         (BASE_APP_ADDR..=BASE_BOOTLOADER_APP) => {}
         _ => {
@@ -75,15 +94,18 @@ fn update_chunk<'a>(boot_status: &'a mut BootState, idx: usize, data: &'a [u8], 
     match flash.write(cursor, data) {
         Ok(()) => {
             boot_status.offset += data.len() as u32;
-            // Print some infos on update
+            // Update status and sector tracking
             boot_status.actual_sector = BASE_APP_ADDR + (boot_status.offset / FLASH_PAGE) * FLASH_PAGE;
             info!("Updating flash page starting at addr: {:02X}", boot_status.actual_sector);
             info!("offset : {:02X}", boot_status.actual_sector + boot_status.offset % FLASH_PAGE);
+            
+            // Calculate CRC of written data
             let crc = Crc::<u32>::new(&CRC_32_ISCSI);
             let crc_pkt = crc.checksum(data);
-            // Align packet index to avoid double send of yet flashed packet
+            
             boot_status.actual_pkt_idx = idx as u32;
-            // If write chunck is ok ack
+            
+            // Send success acknowledgement with CRC
             ack_msg_send(
                 HostProtocolMessage::Bootloader(Bootloader::AckWithIdxCrc {
                     block_idx: idx,
@@ -96,25 +118,24 @@ fn update_chunk<'a>(boot_status: &'a mut BootState, idx: usize, data: &'a [u8], 
     };
 }
 
+/// Sends a message over UART using COBS encoding
 pub fn ack_msg_send(message: HostProtocolMessage, tx: &mut UarteTx<UARTE0>) {
-    // Prepare cobs buffer
     let mut buf_cobs = [0_u8; 64];
     let cobs_ack = to_slice_cobs(&message, &mut buf_cobs).unwrap();
-
     let _ = tx.blocking_write(cobs_ack);
 }
 
 #[cfg(feature = "flash-protect")]
-/// Flash areas protection using https://docs.nordicsemi.com/bundle/ps_nrf52805/page/bprot.html
-/// This function will protect bootloader region and Softdevice MBR flash address.
+/// Configures flash memory protection for bootloader and MBR regions
+/// 
+/// Uses Nordic's BPROT peripheral to prevent modification of critical code regions
 fn flash_protect() {
-    // Set bprot registers values
-    // Nordic MBR area protection
+    // Protect Nordic MBR area
     unsafe { &*nrf52805_pac::BPROT::ptr() }.config0.write(|w| w.region0().enabled());
     let bits_0 = unsafe { &*nrf52805_pac::BPROT::ptr() }.config0.read().bits();
     info!("CONFIG0_BITS : {}", bits_0);
 
-    // Bootloader area protection
+    // Protect bootloader area (0x26000-0x30000)
     unsafe { &*nrf52805_pac::BPROT::ptr() }.config1.write(|w| {
         w.region47().enabled(); //0x2F000-0x30000
         w.region46().enabled(); //0x2E000-0x2F000
@@ -131,7 +152,7 @@ fn flash_protect() {
     let bits_1 = unsafe { &*nrf52805_pac::BPROT::ptr() }.config1.read().bits();
     info!("CONFIG1_BITS : {}", bits_1);
 
-    // Enable area protection also in debug
+    // Enable protection even in debug mode
     unsafe { &*nrf52805_pac::BPROT::ptr() }
         .disableindebug
         .write(|w| unsafe { w.bits(0x00) });
@@ -139,6 +160,7 @@ fn flash_protect() {
     info!("DISABLE : {}", disabledebug);
 }
 
+/// Main bootloader entry point
 #[embassy_executor::main]
 async fn main(_spawner: Spawner) {
     #[cfg(feature = "flash-protect")]
@@ -146,6 +168,7 @@ async fn main(_spawner: Spawner) {
 
     let p = embassy_nrf::init(Default::default());
 
+    // Configure UART
     let mut config_uart = uarte::Config::default();
     config_uart.parity = uarte::Parity::EXCLUDED;
     config_uart.baudrate = uarte::Baudrate::BAUD115200;
@@ -156,27 +179,24 @@ async fn main(_spawner: Spawner) {
     #[cfg(feature = "uart-pins-console")]
     let (rxd, txd) = (p.P0_16, p.P0_18);
 
-    // Uarte configuration
     let uart = uarte::Uarte::new(p.UARTE0, Irqs, rxd, txd, config_uart);
     let (mut tx, mut rx) = uart.split_with_idle(p.TIMER0, p.PPI_CH0, p.PPI_CH1);
 
-    // RNG - sync
+    // Initialize hardware RNG
     let rng = Rng::new(p.RNG, Irqs);
     {
         RNG_HW.lock(|f| f.borrow_mut().replace(rng));
     }
 
-    // FLASH
+    // Initialize flash controller
     let mut flash = Nvmc::new(p.NVMC);
 
-    // Valid firmware flag
+    // Track firmware validity
     let mut fw_is_valid = false;
 
-    // Check fw at startup
+    // Verify firmware on startup
     {
-        // Get Cosign application header if present
         let image_slice = get_fw_image_slice(BASE_APP_ADDR, APP_SIZE);
-        // Check if fw is valid
         if let Some(res) = check_fw(image_slice, &mut tx) {
             fw_is_valid = res;
             info!("fw is : {}", res);
@@ -186,36 +206,29 @@ async fn main(_spawner: Spawner) {
         }
     }
 
-    // Check secret seal
+    // Check if secrets are sealed
     let seal = unsafe { &*nrf52805_pac::UICR::ptr() }.customer[SEAL_IDX].read().customer().bits();
 
-    // Init a GPIO to use as bootloader trigger
+    // Configure bootloader trigger GPIO
     let boot_gpio = Input::new(p.P0_20, Pull::Down);
-    // Small delay to have stable GPIO
     let _ = Timer::after_micros(5).await;
 
-    // // Message must be in SRAM
+    // Send startup message
     let mut buf = [0; 22];
     buf.copy_from_slice(b"Hello from bootloader!");
     let _ = tx.write(&buf).await;
 
-    // Keep track of update of flash Application
     let mut boot_status: BootState = Default::default();
 
     let mut jump_app = false;
 
-    // Loop for bootloader commands
-    // This loop will be a while loop with gpio state as condition to exit...
-    // while boot_gpio.is_high() && !fw_is_valid{
+    // Main command processing loop
     'exitloop: while !jump_app {
-        // Now for testing locally i am looping until command reset
-        // Raw buffer - 32 bytes for the accumulator of cobs
         let mut raw_buf = [0u8; 64];
-        // Create a cobs accumulator for data incoming
         let mut cobs_buf: CobsAccumulator<COBS_MAX_MSG_SIZE> = CobsAccumulator::new();
-        // Getting chars from Uart in a while loop
+        
+        // Read and process UART data
         while let Ok(n) = rx.read_until_idle(&mut raw_buf).await {
-            // Finished reading input
             if n == 0 {
                 break;
             }
@@ -241,24 +254,24 @@ async fn main(_spawner: Spawner) {
                         info!("Remaining {} bytes", remaining.len());
 
                         match data {
-                            HostProtocolMessage::Bluetooth(_) => (), // Message for application
+                            HostProtocolMessage::Bluetooth(_) => (), // Pass through to app
                             HostProtocolMessage::Bootloader(boot_msg) => match boot_msg {
-                                // Erase all flash application space
+                                // Handle firmware erase command
                                 Bootloader::EraseFirmware => {
                                     info!("Erase firmware");
                                     if flash.erase(BASE_APP_ADDR, BASE_BOOTLOADER_APP).is_ok() {
                                         ack_msg_send(HostProtocolMessage::Bootloader(Bootloader::AckEraseFirmware), &mut tx);
-                                        //Reset counters
                                         boot_status = Default::default();
                                     }
                                 }
-                                // Write chunks of firmware
+                                // Handle firmware block write
                                 Bootloader::WriteFirmwareBlock {
                                     block_idx: idx,
                                     block_data: data,
                                 } => {
                                     update_chunk(&mut boot_status, idx, data, &mut flash, &mut tx);
                                 }
+                                // Get firmware version from header
                                 Bootloader::FirmwareVersion => {
                                     let header_slice = get_fw_image_slice(BASE_APP_ADDR, APP_SIZE);
                                     if let Ok(Some(header)) = Header::parse_unverified(header_slice) {
@@ -268,6 +281,7 @@ async fn main(_spawner: Spawner) {
                                         ack_msg_send(HostProtocolMessage::Bootloader(Bootloader::NoCosignHeader), &mut tx);
                                     }
                                 }
+                                // Get bootloader version
                                 Bootloader::BootloaderVersion => {
                                     let version = env!("CARGO_PKG_VERSION");
                                     ack_msg_send(
@@ -275,6 +289,7 @@ async fn main(_spawner: Spawner) {
                                         &mut tx,
                                     )
                                 }
+                                // Verify firmware signature
                                 Bootloader::VerifyFirmware => {
                                     let image_slice = get_fw_image_slice(BASE_APP_ADDR, APP_SIZE);
                                     info!("Image slice len dec {} - hex {:02X}", image_slice.len(), image_slice.len());
@@ -286,13 +301,12 @@ async fn main(_spawner: Spawner) {
                                         ack_msg_send(HostProtocolMessage::Bootloader(Bootloader::NoCosignHeader), &mut tx);
                                     }
                                 }
+                                // Set challenge secret
                                 Bootloader::ChallengeSet { secret } => {
                                     info!("Challenge set cmd rx");
-                                    // Check if we yet sealed the secret
                                     let result = if seal == SEALED_SECRET {
                                         SecretSaveResponse::NotAllowed
                                     } else {
-                                        // Save secret!
                                         unsafe {
                                             match write_secret(secret) {
                                                 true => {
@@ -303,24 +317,23 @@ async fn main(_spawner: Spawner) {
                                             }
                                         }
                                     };
-                                    // Send result to MCU
                                     ack_msg_send(HostProtocolMessage::Bootloader(Bootloader::AckChallengeSet { result }), &mut tx);
                                 }
                                 _ => (),
                             },
+                            // Handle reset command
                             HostProtocolMessage::Reset => {
                                 jump_app = true;
                                 break 'exitloop;
                             }
+                            // Handle challenge-response authentication
                             HostProtocolMessage::ChallengeRequest { nonce } => {
-                                // Create alias for HMAC-SHA256
                                 info!("Challenge recv nonce {}", nonce);
                                 type HmacSha256 = Hmac<ShaChallenge>;
                                 let secret_as_slice = get_fw_image_slice(UICR_SECRET_START, UICR_SECRET_SIZE);
                                 info!("sliec {:02X}", secret_as_slice);
 
                                 let result = if let Ok(mut mac) = HmacSha256::new_from_slice(secret_as_slice) {
-                                    // Update mac with nonce
                                     mac.update(&nonce.to_be_bytes());
                                     let result = mac.finalize().into_bytes();
                                     info!("{=[u8;32]:#X}", result.into());
@@ -330,6 +343,7 @@ async fn main(_spawner: Spawner) {
                                 };
                                 ack_msg_send(result, &mut tx);
                             }
+                            // Report bootloader state
                             HostProtocolMessage::GetState => {
                                 ack_msg_send(HostProtocolMessage::AckState(State::FirmwareUpgrade), &mut tx);
                             }
@@ -342,6 +356,8 @@ async fn main(_spawner: Spawner) {
             embassy_time::Timer::after_millis(1).await;
         }
     }
+    
+    // Clean up and jump to application
     drop(tx);
     drop(rx);
     unsafe {
