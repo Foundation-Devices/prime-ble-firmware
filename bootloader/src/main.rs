@@ -294,18 +294,14 @@ async fn main(_spawner: Spawner) {
                                 // Verify firmware signature
                                 Bootloader::VerifyFirmware => {
                                     let image_slice = get_fw_image_slice(BASE_APP_ADDR, APP_SIZE);
-                                    info!("Image slice len dec {} - hex {:02X}", image_slice.len(), image_slice.len());
                                     if let Some(res) = check_fw(image_slice, &mut tx) {
-                                        info!("Fw image valid : {}", res);
                                         fw_is_valid = true;
                                     } else {
-                                        info!("No Header present!");
                                         ack_msg_send(HostProtocolMessage::Bootloader(Bootloader::NoCosignHeader), &mut tx);
                                     }
                                 }
                                 // Set challenge secret
                                 Bootloader::ChallengeSet { secret } => {
-                                    info!("Challenge set cmd rx");
                                     let result = if seal == SEALED_SECRET {
                                         SecretSaveResponse::NotAllowed
                                     } else {
@@ -321,7 +317,32 @@ async fn main(_spawner: Spawner) {
                                     };
                                     ack_msg_send(HostProtocolMessage::Bootloader(Bootloader::AckChallengeSet { result }), &mut tx);
                                 }
-                                _ => (),
+                                // Handle request to boot into firmware
+                                Bootloader::BootFirmware => {
+                                    // Double check firmware validity before jumping
+                                    let image_slice = get_fw_image_slice(BASE_APP_ADDR, APP_SIZE);
+                                    if let Some(is_valid) = check_fw(image_slice, &mut tx) {
+                                        if is_valid && fw_is_valid {                                        
+                                            // Clean up UART resources before jumping
+                                            drop(tx);
+                                            drop(rx);                                   
+                                        // Jump to application code if firmware is valid
+                                        unsafe {
+                                            jump_to_app();
+                                        }
+                                    }
+                                }
+                                
+                                // If we get here, firmware verification failed
+                                ack_msg_send(
+                                    HostProtocolMessage::Bootloader(Bootloader::AckVerifyFirmware {
+                                        result: false,
+                                        hash: [0xFF; 32],
+                                    }),
+                                    &mut tx,
+                                );
+                            }
+                            _ => (),
                             },
                             // Handle reset command
                             HostProtocolMessage::Reset => {
@@ -330,10 +351,9 @@ async fn main(_spawner: Spawner) {
                             }
                             // Handle challenge-response authentication
                             HostProtocolMessage::ChallengeRequest { nonce } => {
-                                info!("Challenge recv nonce {}", nonce);
                                 type HmacSha256 = Hmac<ShaChallenge>;
-                                let secret_as_slice = get_fw_image_slice(UICR_SECRET_START, UICR_SECRET_SIZE);
-                                info!("sliec {:02X}", secret_as_slice);
+                                let secret_as_slice = unsafe { core::slice::from_raw_parts(UICR_SECRET_START as *const u8, UICR_SECRET_SIZE as usize) };
+                                info!("slice {:02X}", secret_as_slice);
 
                                 let result = if let Ok(mut mac) = HmacSha256::new_from_slice(secret_as_slice) {
                                     mac.update(&nonce.to_be_bytes());
@@ -359,10 +379,5 @@ async fn main(_spawner: Spawner) {
         }
     }
     
-    // Clean up and jump to application
-    drop(tx);
-    drop(rx);
-    unsafe {
-        jump_to_app();
-    }
+    
 }

@@ -12,8 +12,8 @@ use nrf_softdevice_mbr as mbr;
 use nrf_softdevice_s112::sd_softdevice_vector_table_base_set;
 
 /// Sets up the SoftDevice IRQ forwarding for unsigned firmware
-/// 
-/// This configures the Master Boot Record (MBR) to forward interrupts to the 
+///
+/// This configures the Master Boot Record (MBR) to forward interrupts to the
 /// SoftDevice at address 0x1000, which is required for unsigned firmware.
 #[cfg(feature = "boot-unsigned-fw")]
 unsafe fn sd_set_unsigned_fw() {
@@ -31,7 +31,7 @@ unsafe fn sd_set_unsigned_fw() {
 }
 
 /// Sets up the SoftDevice for signed firmware
-/// 
+///
 /// This initializes the SoftDevice at address 0x19000, which is required
 /// for signed firmware that is placed at a specific location in flash.
 #[cfg(feature = "boot-signed-fw")]

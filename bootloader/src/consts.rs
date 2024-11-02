@@ -4,7 +4,7 @@
 pub static BOOTLOADER_ADDR: u32 = 0x26000;
 
 /// Base address of the interrupt vector table for signed firmware
-#[cfg(feature = "boot-signed-fw")] 
+#[cfg(feature = "boot-signed-fw")]
 pub const INT_VECTOR_TABLE_BASE: u32 = 0x19800;
 
 /// Base address of the interrupt vector table for unsigned firmware

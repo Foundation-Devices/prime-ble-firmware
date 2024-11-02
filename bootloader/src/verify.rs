@@ -46,16 +46,16 @@ impl cosign2::Secp256k1Verify for EccVerifier {
         const CF2: u32 = 7;
         let mut control_flow_integrity_counter = 0;
         let mut uncompressed_pk = [0; 64];
-        
+
         // Decompress the public key from compressed format
         unsafe { uECC_decompress(pubkey.as_ptr(), uncompressed_pk.as_mut_ptr(), uECC_secp256k1()) };
-        
+
         // Validate the public key
         let res = unsafe { uECC_valid_public_key(uncompressed_pk.as_ptr(), micro_ecc_sys::uECC_secp256k1()) };
         if res == UECC_SUCCESS {
             control_flow_integrity_counter += CF1;
             random_delay(); // Random delay against glitch or timing attacks
-            
+
             // Verify the signature
             let res = unsafe {
                 uECC_verify(
@@ -67,7 +67,7 @@ impl cosign2::Secp256k1Verify for EccVerifier {
                 )
             };
             random_delay(); // Random delay against glitch or timing attacks
-            
+
             // Additional control flow integrity checks
             if res == UECC_SUCCESS {
                 control_flow_integrity_counter += CF2;
@@ -142,10 +142,10 @@ fn verify_image(image: &[u8]) -> (VerificationResult, Sha256) {
     const CF6: u32 = 17;
     let ecc = EccVerifier::new();
     let sha = Sha256 { sha: [0; 32] };
-    
+
     // Random delay to thwart glitching the condition
     random_delay();
-    
+
     // Parse and verify firmware signatures with multiple integrity checks
     let res = Header::parse(image, &KNOWN_SIGNERS, &sha, &ecc);
     if res.is_ok() {
@@ -201,8 +201,7 @@ fn read_version_and_build_date(image: &[u8]) -> Option<([u8; 20], [u8; 14])> {
 /// Creates a slice from raw memory at the given base address
 pub fn get_fw_image_slice<'a>(base_address: u32, len: u32) -> &'a [u8] {
     // Validate address range is within allowed bounds
-    if base_address < crate::consts::BASE_APP_ADDR || 
-       base_address + len > crate::consts::BASE_APP_ADDR + crate::consts::APP_SIZE {
+    if base_address < crate::consts::BASE_APP_ADDR || base_address + len > crate::consts::BASE_APP_ADDR + crate::consts::APP_SIZE {
         return &[];
     }
     let slice = unsafe { core::slice::from_raw_parts(base_address as *const u8, len as usize) };
@@ -222,7 +221,6 @@ pub fn check_fw(image_slice: &[u8], tx: &mut UarteTx<UARTE0>) -> Option<bool> {
             );
             return Some(true);
         } else {
-            info!("Invalid signature!");
             ack_msg_send(
                 HostProtocolMessage::Bootloader(Bootloader::AckVerifyFirmware {
                     result: false,
@@ -240,11 +238,11 @@ pub fn check_fw(image_slice: &[u8], tx: &mut UarteTx<UARTE0>) -> Option<bool> {
 pub unsafe fn write_secret(secret: [u32; 4]) -> bool {
     let nvmc = &*NVMC::ptr();
     let uicr = &*UICR::ptr();
-    
+
     // Enable write mode
     nvmc.config.write(|w| w.wen().wen());
     while nvmc.ready.read().ready().is_busy() {}
-    
+
     // Write each word of the secret
     uicr.customer[0].write(|w| unsafe { w.bits(secret[0]) });
     info!("secret 0 : {:02X}", secret[0]);
@@ -254,21 +252,21 @@ pub unsafe fn write_secret(secret: [u32; 4]) -> bool {
     info!("secret 2 : {:02X}", secret[2]);
     uicr.customer[3].write(|w| unsafe { w.bits(secret[3]) });
     info!("secret 3 : {:02X}", secret[3]);
-    
+
     while nvmc.ready.read().ready().is_busy() {}
     nvmc.config.reset();
     while nvmc.ready.read().ready().is_busy() {}
 
     // Read back and verify each word using volatile reads
-    let tmp0 = unsafe { core::ptr::read_volatile(&uicr.customer[0] as *const _ as *const u32) };
-    let tmp1 = unsafe { core::ptr::read_volatile(&uicr.customer[1] as *const _ as *const u32) };
-    let tmp2 = unsafe { core::ptr::read_volatile(&uicr.customer[2] as *const _ as *const u32) };
-    let tmp3 = unsafe { core::ptr::read_volatile(&uicr.customer[3] as *const _ as *const u32) };
+    let tmp0 = uicr.customer[0].read().bits();
+    let tmp1 = uicr.customer[1].read().bits();
+    let tmp2 = uicr.customer[2].read().bits();
+    let tmp3 = uicr.customer[3].read().bits();
 
     if tmp0 != secret[0] || tmp1 != secret[1] || tmp2 != secret[2] || tmp3 != secret[3] {
         return false;
     }
-    
+
     // Write seal value
     nvmc.config.write(|w| w.wen().wen());
     while nvmc.ready.read().ready().is_busy() {}

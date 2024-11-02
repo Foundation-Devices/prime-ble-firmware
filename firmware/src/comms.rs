@@ -1,3 +1,4 @@
+// Standard imports for BLE communication and cryptographic operations
 use crate::consts::{BT_MAX_NUM_PKT, MTU, UICR_SECRET_SIZE, UICR_SECRET_START};
 use crate::{BT_DATA_RX, BT_STATE, BT_STATE_MPU_TX, CHALLENGE_NONCE, CHALLENGE_REQUEST, FIRMWARE_VER, RSSI_VALUE, RSSI_VALUE_MPU_TX};
 use crate::{BT_DATA_TX, IRQ_OUT_PIN};
@@ -13,18 +14,20 @@ use postcard::accumulator::{CobsAccumulator, FeedResult};
 use postcard::to_slice_cobs;
 use sha2::Sha256 as ShaChallenge;
 
+/// Main communication task that handles incoming UART messages from the MPU
+/// Decodes COBS-encoded messages and routes them to appropriate handlers
 #[embassy_executor::task]
 pub async fn comms_task(rx: &'static mut BufferedUarteRx<'_, UARTE0, TIMER1>) {
-    // Raw buffer - 64 bytes for the accumulator of cobs
+    // Buffer for raw incoming UART data
     let mut raw_buf = [0u8; 64];
 
-    // Create a cobs accumulator for data incoming
+    // COBS accumulator for decoding incoming messages
     let mut cobs_buf: CobsAccumulator<COBS_MAX_MSG_SIZE> = CobsAccumulator::new();
     loop {
         {
-            // Getting chars from Uart in a while loop
+            // Read data from UART
             if let Ok(n) = &rx.read(&mut raw_buf).await {
-                // Finished reading input
+                // Exit if no data received
                 if *n == 0 {
                     break;
                 }
@@ -32,10 +35,10 @@ pub async fn comms_task(rx: &'static mut BufferedUarteRx<'_, UARTE0, TIMER1>) {
                 let buf = &raw_buf[..*n];
                 let mut window = buf;
 
+                // Process all complete COBS messages in the buffer
                 'cobs: while !window.is_empty() {
                     window = match cobs_buf.feed_ref::<HostProtocolMessage>(window) {
                         FeedResult::Consumed => {
-                            // info!("consumed");
                             break 'cobs;
                         }
                         FeedResult::OverFull(new_wind) => {
@@ -49,12 +52,13 @@ pub async fn comms_task(rx: &'static mut BufferedUarteRx<'_, UARTE0, TIMER1>) {
                         FeedResult::Success { data, remaining } => {
                             info!("Remaining {} bytes", remaining.len());
 
+                            // Route message to appropriate handler based on type
                             match data {
                                 HostProtocolMessage::Bluetooth(bluetooth_msg) => {
                                     info!("Received HostProtocolMessage::Bluetooth");
                                     bluetooth_handler(bluetooth_msg).await
                                 }
-                                HostProtocolMessage::Bootloader(_) => (), // no-op, handled in the bootloader
+                                HostProtocolMessage::Bootloader(_) => (), // Handled in bootloader
                                 HostProtocolMessage::Reset => {
                                     cortex_m::peripheral::SCB::sys_reset();
                                 }
@@ -78,6 +82,7 @@ pub async fn comms_task(rx: &'static mut BufferedUarteRx<'_, UARTE0, TIMER1>) {
     }
 }
 
+/// Handles Bluetooth-specific messages received from the MPU
 async fn bluetooth_handler(msg: Bluetooth<'_>) {
     match msg {
         Bluetooth::Enable => {
@@ -90,40 +95,38 @@ async fn bluetooth_handler(msg: Bluetooth<'_>) {
         }
         Bluetooth::GetSignalStrength => {
             info!("Get signal strength");
-            // Send value to MPU
             RSSI_VALUE_MPU_TX.store(true, core::sync::atomic::Ordering::Relaxed);
         }
         Bluetooth::GetFirmwareVersion => {
             let version = env!("CARGO_PKG_VERSION");
             let _ = FIRMWARE_VER.try_send(version);
         }
-        Bluetooth::SignalStrength(_) => (), // no-op, host-side packet
+        Bluetooth::SignalStrength(_) => (), // Host-side packet
         Bluetooth::SendData(data) => {
-            // info!("Sending BLE data: {:?}", data);
-            // Error if data length is greater than max MTU size
+            // Only accept data packets within MTU size limit
             if data.len() <= MTU {
                 let mut buffer_tx_bt = BT_DATA_TX.lock().await;
-                // info!("Buffer to BT len {:?}", buffer_tx_bt.len());
                 if buffer_tx_bt.len() < BT_MAX_NUM_PKT {
                     let _ = buffer_tx_bt.push(Vec::from_slice(data).unwrap());
                 }
             }
         }
-        Bluetooth::ReceivedData(_) => {}           // no-op, host-side packet
-        Bluetooth::AckFirmwareVersion { .. } => {} // no-op, host-side packet
+        Bluetooth::ReceivedData(_) => {},           // Host-side packet
+        Bluetooth::AckFirmwareVersion { .. } => {}, // Host-side packet
     }
 }
 
-/// Sends the data received from the BLE NUS as `host-protocol` encoded data message.
+/// Task that handles sending data received over BLE back to the MPU via UART
+/// Uses COBS encoding for reliable binary data transfer
 #[embassy_executor::task]
 pub async fn send_bt_uart(uart_tx: &'static mut BufferedUarteTx<'static, UARTE0>) {
     let mut send_buf = [0u8; 270];
 
     loop {
-        // Try receive from BT sender channel
+        // Check for new BLE data to send to MPU
         let cobs = if let Ok(data) = BT_DATA_RX.try_receive() {
             let msg = HostProtocolMessage::Bluetooth(Bluetooth::ReceivedData(data.as_slice()));
-            send_buf.fill(0); // Clear the buffer from any previous data
+            send_buf.fill(0); // Clear buffer
             match to_slice_cobs(&msg, &mut send_buf) {
                 Ok(cobs) => Some(cobs),
                 Err(_) => None,
@@ -133,30 +136,31 @@ pub async fn send_bt_uart(uart_tx: &'static mut BufferedUarteTx<'static, UARTE0>
         };
 
         {
-            // If data is present from BT send to serial with Cobs format
+            // Send COBS-encoded data to MPU if available
             if let Some(cobs_tx) = cobs {
                 info!("Data rx from BT --> UART - data len {}", cobs_tx.len());
                 let now = Instant::now();
-                // Getting chars from Uart in a while loop
                 let _ = &uart_tx.write_all(cobs_tx).await;
                 let _ = &uart_tx.flush().await;
                 info!("Elapsed for packet to UART - {}", now.elapsed().as_micros());
-                assert_out_irq().await; // Ask the MPU to process a new packet we just sent
+                assert_out_irq().await; // Signal MPU
             }
         }
 
+        // Handle HMAC challenge-response authentication
         if CHALLENGE_REQUEST.load(core::sync::atomic::Ordering::Relaxed) {
             CHALLENGE_REQUEST.store(false, core::sync::atomic::Ordering::Relaxed);
 
             type HmacSha256 = Hmac<ShaChallenge>;
 
-            // SAFETY: UICR_SECRET_START points to valid read-only memory containing the secret
+            // Get device secret from UICR memory
             let secret_as_slice = unsafe { core::slice::from_raw_parts(UICR_SECRET_START as *const u8, UICR_SECRET_SIZE as usize) };
             let nonce = *CHALLENGE_NONCE.lock().await;
 
             info!("Secret saved {:02X}", secret_as_slice);
             info!("Nonce: {}", nonce);
 
+            // Calculate HMAC response
             let result = if let Ok(mut mac) = HmacSha256::new_from_slice(secret_as_slice) {
                 mac.update(&nonce.to_be_bytes());
                 let result = mac.finalize().into_bytes();
@@ -167,6 +171,7 @@ pub async fn send_bt_uart(uart_tx: &'static mut BufferedUarteTx<'static, UARTE0>
                 HostProtocolMessage::ChallengeResult { result: [0xFF; 32] }
             };
 
+            // Send response to MPU
             let now = Instant::now();
             let cobs_tx = to_slice_cobs(&result, &mut send_buf).unwrap();
             let _ = &uart_tx.write_all(cobs_tx).await;
@@ -174,6 +179,7 @@ pub async fn send_bt_uart(uart_tx: &'static mut BufferedUarteTx<'static, UARTE0>
             info!("Elapsed time to send HMAC challenge answer - {}", now.elapsed().as_millis());
         }
 
+        // Handle Bluetooth state updates
         if BT_STATE_MPU_TX.load(core::sync::atomic::Ordering::Relaxed) {
             send_buf.fill(0); // Clear the buffer from any previous data
 
@@ -195,9 +201,10 @@ pub async fn send_bt_uart(uart_tx: &'static mut BufferedUarteTx<'static, UARTE0>
 
             let _ = uart_tx.write_all(cobs_tx).await;
             let _ = uart_tx.flush().await;
-            assert_out_irq().await; // Ask the MP
+            assert_out_irq().await;
         }
 
+        // Handle firmware version requests
         if let Ok(version) = FIRMWARE_VER.try_receive() {
             send_buf.fill(0); // Clear the buffer from any previous data
 
@@ -212,6 +219,7 @@ pub async fn send_bt_uart(uart_tx: &'static mut BufferedUarteTx<'static, UARTE0>
             assert_out_irq().await; // Ask the MP
         }
 
+        // Handle RSSI value updates
         if RSSI_VALUE_MPU_TX.load(core::sync::atomic::Ordering::Relaxed) {
             send_buf.fill(0); // Clear the buffer from any previous data
 
@@ -227,14 +235,15 @@ pub async fn send_bt_uart(uart_tx: &'static mut BufferedUarteTx<'static, UARTE0>
 
             let _ = &uart_tx.write_all(cobs_tx).await;
             let _ = &uart_tx.flush().await;
-            assert_out_irq().await; // Ask the MP
+            assert_out_irq().await;
         }
 
         embassy_time::Timer::after_nanos(5).await;
     }
 }
 
-/// Sends the data received from the BLE NUS as `host-protocol` encoded data message.
+/// Alternative version of send_bt_uart that doesn't use COBS encoding
+/// Used for raw data transfer and performance testing
 #[embassy_executor::task]
 pub async fn send_bt_uart_no_cobs(uart_tx: &'static mut BufferedUarteTx<'static, UARTE0>) {
     let mut send_buf = [0u8; COBS_MAX_MSG_SIZE];
@@ -245,6 +254,7 @@ pub async fn send_bt_uart_no_cobs(uart_tx: &'static mut BufferedUarteTx<'static,
     let mut timer_tot: Instant = Instant::now();
 
     loop {
+        // Handle Bluetooth state updates
         if BT_STATE_MPU_TX.load(core::sync::atomic::Ordering::Relaxed) {
             send_buf.fill(0); // Clear the buffer from any previous data
 
@@ -258,14 +268,14 @@ pub async fn send_bt_uart_no_cobs(uart_tx: &'static mut BufferedUarteTx<'static,
                 false => HostProtocolMessage::AckState(State::Disabled),
             };
 
-            // Reset atomic flag
             BT_STATE_MPU_TX.store(true, core::sync::atomic::Ordering::Relaxed);
             let cobs_tx = to_slice_cobs(&msg, &mut send_buf).unwrap();
             let _ = uart_tx.write_all(cobs_tx).await;
             let _ = uart_tx.flush().await;
-            assert_out_irq().await; // Ask the MP
+            assert_out_irq().await;
         }
 
+        // Handle HMAC challenge-response
         if CHALLENGE_REQUEST.load(core::sync::atomic::Ordering::Relaxed) {
             CHALLENGE_REQUEST.store(false, core::sync::atomic::Ordering::Relaxed);
 
@@ -295,6 +305,7 @@ pub async fn send_bt_uart_no_cobs(uart_tx: &'static mut BufferedUarteTx<'static,
             info!("Elapsed time to send HMAC challenge answer - {}", now.elapsed().as_micros());
         }
 
+        // Handle RSSI updates
         if RSSI_VALUE_MPU_TX.load(core::sync::atomic::Ordering::Relaxed) {
             send_buf.fill(0); // Clear the buffer from any previous data
 
@@ -310,9 +321,10 @@ pub async fn send_bt_uart_no_cobs(uart_tx: &'static mut BufferedUarteTx<'static,
 
             let _ = uart_tx.write_all(cobs_tx).await;
             let _ = uart_tx.flush().await;
-            assert_out_irq().await; // Ask the MP
+            assert_out_irq().await;
         }
 
+        // Log performance metrics periodically
         if timer_pkt.elapsed().as_millis() > 1500 && rx_packet {
             info!("Total packet number: {}", pkt_counter);
             info!("Total packet time: {}", timer_tot.elapsed().as_millis() - 1500);
@@ -328,8 +340,8 @@ pub async fn send_bt_uart_no_cobs(uart_tx: &'static mut BufferedUarteTx<'static,
             timer_tot = Instant::now();
         }
 
+        // Handle raw data transfer
         {
-            // If data is present from BT send to serial with Cobs format
             if let Ok(data) = BT_DATA_RX.try_receive() {
                 if !rx_packet {
                     rx_packet = true;
@@ -341,28 +353,28 @@ pub async fn send_bt_uart_no_cobs(uart_tx: &'static mut BufferedUarteTx<'static,
                 pkt_counter += 1;
 
                 let now = Instant::now();
-                // Getting chars from Uart in a while loop
                 let _ = uart_tx.write_all(data.as_slice()).await;
                 let _ = uart_tx.flush().await;
                 info!("Elapsed for packet to UART - {}", now.elapsed().as_micros());
 
-                assert_out_irq().await; // Ask the MPU to process a new packet we just sent
+                assert_out_irq().await;
             }
         }
         embassy_time::Timer::after_nanos(10).await;
     }
 }
 
-/// Sends a single pulse on the nRF -> MPU IRQ line, signaling the MPU to process the data.
+/// Helper function to signal the MPU via GPIO
+/// Sends a falling edge pulse on the IRQ line
 async fn assert_out_irq() {
     let irq_out = IRQ_OUT_PIN.lock().await;
 
     {
         let mut button = irq_out.borrow_mut();
-        // The pin should be HIGH by default, and we need a falling edge, so put it in HIGH just in case
+        // Ensure pin starts HIGH
         button.as_mut().unwrap().set_high();
 
-        // Send the pulse
+        // Generate falling edge pulse
         button.as_mut().unwrap().set_low();
         button.as_mut().unwrap().set_high();
     }
