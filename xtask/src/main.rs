@@ -13,6 +13,9 @@ const SRECORD_PATH: &str = "misc/srecord_linux";
 #[cfg(target_os = "windows")]
 const SRECORD_PATH: &str = "misc\\srecord_win";
 
+#[cfg(target_os = "macos")]
+const SRECORD_PATH: &str = "misc/srecord_mac";
+
 #[derive(Parser)]
 #[command(version, about, long_about = None)]
 #[command(propagate_version = true)]
@@ -361,6 +364,9 @@ fn build_bt_package() {
     #[cfg(target_os = "windows")]
     let srecord: PathBuf = project_root().join(SRECORD_PATH).join("srec_cat");
 
+    #[cfg(target_os = "macos")]
+    let srecord: PathBuf = project_root().join(SRECORD_PATH).join("srec_cat");
+
     tracing::info!("Converting bin signed package to hex file with starting offset 0x19800");
     let status = Command::new(srecord.clone())
         .current_dir(project_root().join(SRECORD_PATH))
@@ -433,6 +439,9 @@ fn build_bt_package_debug() {
     let srecord: PathBuf = project_root().join(SRECORD_PATH).join("srec_cat");
 
     #[cfg(target_os = "windows")]
+    let srecord: PathBuf = project_root().join(SRECORD_PATH).join("srec_cat");
+
+    #[cfg(target_os = "macos")]
     let srecord: PathBuf = project_root().join(SRECORD_PATH).join("srec_cat");
 
     tracing::info!("Merging softdevice bootloader and BT signed application in single hex");

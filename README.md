@@ -49,3 +49,30 @@ Leaving here both probe-rs-cli solution and probe-rs ( which is the new one), be
    ```bash
    cargo run --release --bin firmware -- --probe <PROBE>
    ```
+
+### Fixing `JtagNoDeviceConnected` error
+
+Some nRF52 chips are coming locked from the fab and need an unlocking procedure to be programmed.
+The unlocking requires a J-Link probe and cannot be done with ST-Link probe.
+
+- Install `nrf-recover` tool
+  ```bash
+  cargo install nrf-recover
+  ```
+
+- Connect the J-Link `SWD` wires (as well as `VCC` and `GND`) to the nRF52 programming port.
+  The easiest way to do it is to use tag-connect 20-to-10 ribbon cable converter board.
+  If this converter isn't available, you can connect the wires manually.
+
+- Run the `nrf-recover` tool while selecting the J-Link probe:
+  ```bash
+  nrf-recover --probe-index 0 -y
+  ```
+
+- The result should look like this:
+  ```
+  Starting mass erase...
+  Mass erase completed, chip unlocked
+  ```
+
+- Power cycle the board and try to program the `SoftDevice` again.
