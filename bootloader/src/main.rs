@@ -174,10 +174,12 @@ async fn main(_spawner: Spawner) {
     config_uart.baudrate = uarte::Baudrate::BAUD115200;
 
     #[cfg(feature = "uart-pins-mpu")]
-    let (rxd, txd) = (p.P0_14, p.P0_12);
+    let (rxd, txd, baud_rate) = (p.P0_14, p.P0_12, uarte::Baudrate::BAUD1M);
 
     #[cfg(feature = "uart-pins-console")]
-    let (rxd, txd) = (p.P0_16, p.P0_18);
+    let (rxd, txd, baud_rate) = (p.P0_16, p.P0_18, uarte::Baudrate::BAUD115200);
+
+    config_uart.baudrate = baud_rate;
 
     let uart = uarte::Uarte::new(p.UARTE0, Irqs, rxd, txd, config_uart);
     let (mut tx, mut rx) = uart.split_with_idle(p.TIMER0, p.PPI_CH0, p.PPI_CH1);
