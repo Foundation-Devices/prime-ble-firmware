@@ -67,7 +67,7 @@ pub enum Bootloader<'a> {
     /// Response with bootloader version string
     AckBootloaderVersion { version: &'a str },
     /// Set challenge secret for authentication
-    ChallengeSet { secret: [u32; 4] },
+    ChallengeSet { secret: [u32; 8] },
     /// Response to challenge secret setting
     AckChallengeSet { result: SecretSaveResponse },
     /// Boot firmware

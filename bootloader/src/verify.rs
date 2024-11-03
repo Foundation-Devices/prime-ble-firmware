@@ -3,6 +3,7 @@ use crate::ack_msg_send;
 use crate::RNG_HW;
 use crate::SEALED_SECRET;
 use crate::SEAL_IDX;
+use crate::UICR_REGISTERS_FOR_SECRET;
 use cortex_m::prelude::_embedded_hal_blocking_delay_DelayMs;
 use cosign2::{Header, VerificationResult};
 use defmt::info;
@@ -235,7 +236,7 @@ pub fn check_fw(image_slice: &[u8], tx: &mut UarteTx<UARTE0>) -> Option<bool> {
 }
 
 /// Writes a secret to UICR memory and verifies it was written correctly
-pub unsafe fn write_secret(secret: [u32; 4]) -> bool {
+pub unsafe fn write_secret(secret: [u32; 8]) -> bool {
     let nvmc = &*NVMC::ptr();
     let uicr = &*UICR::ptr();
 
@@ -244,27 +245,20 @@ pub unsafe fn write_secret(secret: [u32; 4]) -> bool {
     while nvmc.ready.read().ready().is_busy() {}
 
     // Write each word of the secret
-    uicr.customer[0].write(|w| unsafe { w.bits(secret[0]) });
-    info!("secret 0 : {:02X}", secret[0]);
-    uicr.customer[1].write(|w| unsafe { w.bits(secret[1]) });
-    info!("secret 1 : {:02X}", secret[1]);
-    uicr.customer[2].write(|w| unsafe { w.bits(secret[2]) });
-    info!("secret 2 : {:02X}", secret[2]);
-    uicr.customer[3].write(|w| unsafe { w.bits(secret[3]) });
-    info!("secret 3 : {:02X}", secret[3]);
+    for i in 0..UICR_REGISTERS_FOR_SECRET {
+        uicr.customer[i].write(|w| unsafe { w.bits(secret[i]) });
+        info!("secret {} : {:02X}", i, secret[i]);
+    }
 
     while nvmc.ready.read().ready().is_busy() {}
     nvmc.config.reset();
     while nvmc.ready.read().ready().is_busy() {}
 
     // Read back and verify each word using volatile reads
-    let tmp0 = uicr.customer[0].read().bits();
-    let tmp1 = uicr.customer[1].read().bits();
-    let tmp2 = uicr.customer[2].read().bits();
-    let tmp3 = uicr.customer[3].read().bits();
-
-    if tmp0 != secret[0] || tmp1 != secret[1] || tmp2 != secret[2] || tmp3 != secret[3] {
-        return false;
+    for i in 0..UICR_REGISTERS_FOR_SECRET {
+        if uicr.customer[i].read().bits() != secret[i] {
+            return false;
+        }
     }
 
     // Write seal value
