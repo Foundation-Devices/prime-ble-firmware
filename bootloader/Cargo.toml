@@ -70,11 +70,10 @@ nrf-softdevice-mbr = { version = "0.2.0"}
 postcard = { version = "1.0.8", features = ["experimental-derive"] }
 serde = { version = "1.0.192", features = ["derive"], default-features = false }
 crc = "3.2.1"
-# cosign2 = { git = "https://github.com/Foundation-Devices/cosign2", default-features = false }
 micro-ecc-sys = { git = "https://github.com/Foundation-Devices/micro-ecc-sys.git", default-features = false }
 sha2 = { version = "0.10.8", default-features = false }
 hmac = "0.12.1"
-cosign2 = { path = "../../cosign2/cosign2", default-features = false }
+cosign2 = { git = "https://github.com/Foundation-Devices/keyOS", default-features = false }
 critical-section = "1.1"
 nrf-softdevice-s112 = { git = "https://github.com/embassy-rs/nrf-softdevice.git" }
 nrf-softdevice = { git = "https://github.com/embassy-rs/nrf-softdevice.git", features = ["defmt", "evt-max-size-256", "ble-peripheral"] }
