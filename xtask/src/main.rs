@@ -315,19 +315,12 @@ fn sign_bt_firmware() {
     }
 
     // Verify that cosign2 exists
-    if Command::new("cosign2").stdout(Stdio::null()).stderr(Stdio::null()).spawn().is_err() {
-        tracing::info!("Installing cosign2 bin...");
-        let status = Command::new(cargo())
-            .stdout(Stdio::null())
-            .stderr(Stdio::null())
-            .current_dir(project_root().join("cosign2/cosign2-bin"))
-            .args(["install", "--path", ".", "--bin", "cosign2"])
-            .status()
-            .unwrap();
-        if !status.success() {
-            tracing::error!("Cosign2 install process failed");
-            exit(0)
-        }
+    if Command::new("cosidgn2").stdout(Stdio::null()).stderr(Stdio::null()).spawn().is_err() {
+        tracing::error!("unable to find cosign2 tool, please install it:");
+        println!("   git clone https://github.com/Foundation-Devices/keyOS tmpkeyos");
+        println!("   cargo install --path tmpkeyos/imports/cosign2/cosign2-bin --bin cosign2");
+        println!("   rm -rf tmpkeyos");
+        exit(-1);
     }
 
     let version = Version::parse(FIRMWARE_VERSION).expect("Wrong version format").to_string();
