@@ -315,7 +315,7 @@ fn sign_bt_firmware() {
     }
 
     // Verify that cosign2 exists
-    if Command::new("cosidgn2").stdout(Stdio::null()).stderr(Stdio::null()).spawn().is_err() {
+    if Command::new("cosign2").stdout(Stdio::null()).stderr(Stdio::null()).spawn().is_err() {
         tracing::error!("unable to find cosign2 tool, please install it:");
         println!("   git clone https://github.com/Foundation-Devices/keyOS tmpkeyos");
         println!("   cargo install --path tmpkeyos/imports/cosign2/cosign2-bin --bin cosign2");
