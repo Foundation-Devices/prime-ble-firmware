@@ -1,7 +1,7 @@
 // Standard imports for BLE communication and cryptographic operations
 use crate::consts::{BT_MAX_NUM_PKT, MTU, UICR_SECRET_SIZE, UICR_SECRET_START};
+use crate::{BT_ADDRESS, BT_ADDRESS_MPU_TX, BT_DATA_TX, IRQ_OUT_PIN};
 use crate::{BT_DATA_RX, BT_STATE, BT_STATE_MPU_TX, CHALLENGE_NONCE, CHALLENGE_REQUEST, FIRMWARE_VER, RSSI_VALUE, RSSI_VALUE_MPU_TX};
-use crate::{BT_DATA_TX, IRQ_OUT_PIN};
 use defmt::info;
 use embassy_nrf::buffered_uarte::{BufferedUarteRx, BufferedUarteTx};
 use embassy_nrf::peripherals::{TIMER1, UARTE0};
@@ -63,12 +63,10 @@ pub async fn comms_task(rx: &'static mut BufferedUarteRx<'_, UARTE0, TIMER1>) {
                                     cortex_m::peripheral::SCB::sys_reset();
                                 }
                                 HostProtocolMessage::ChallengeRequest { nonce } => {
-                                    info!("Challenge request nonce {}", nonce);
                                     CHALLENGE_REQUEST.store(true, core::sync::atomic::Ordering::Relaxed);
                                     *CHALLENGE_NONCE.lock().await = nonce;
                                 }
                                 HostProtocolMessage::GetState => {
-                                    info!("Send BT state to MPU enabled");
                                     BT_STATE_MPU_TX.store(true, core::sync::atomic::Ordering::Relaxed);
                                 }
                                 _ => (),
@@ -94,7 +92,6 @@ async fn bluetooth_handler(msg: Bluetooth<'_>) {
             BT_STATE.store(false, core::sync::atomic::Ordering::Relaxed);
         }
         Bluetooth::GetSignalStrength => {
-            info!("Get signal strength");
             RSSI_VALUE_MPU_TX.store(true, core::sync::atomic::Ordering::Relaxed);
         }
         Bluetooth::GetFirmwareVersion => {
@@ -111,8 +108,12 @@ async fn bluetooth_handler(msg: Bluetooth<'_>) {
                 }
             }
         }
-        Bluetooth::ReceivedData(_) => {},           // Host-side packet
-        Bluetooth::AckFirmwareVersion { .. } => {}, // Host-side packet
+        Bluetooth::GetBtAddress => {
+            BT_ADDRESS_MPU_TX.store(true, core::sync::atomic::Ordering::Relaxed);
+        }
+        Bluetooth::ReceivedData(_) => {}           // Host-side packet
+        Bluetooth::AckFirmwareVersion { .. } => {} // Host-side packet
+        Bluetooth::AckBtAaddress { .. } => {}
     }
 }
 
@@ -124,41 +125,24 @@ pub async fn send_bt_uart(uart_tx: &'static mut BufferedUarteTx<'static, UARTE0>
 
     loop {
         // Check for new BLE data to send to MPU
-        let cobs = if let Ok(data) = BT_DATA_RX.try_receive() {
+        if let Ok(data) = BT_DATA_RX.try_receive() {
+            send_buf.fill(0); // Clear the buffer from any previous data
             let msg = HostProtocolMessage::Bluetooth(Bluetooth::ReceivedData(data.as_slice()));
-            send_buf.fill(0); // Clear buffer
-            match to_slice_cobs(&msg, &mut send_buf) {
-                Ok(cobs) => Some(cobs),
-                Err(_) => None,
-            }
-        } else {
-            None
+            let cobs_tx = to_slice_cobs(&msg, &mut send_buf).unwrap();
+            let _ = uart_tx.write_all(cobs_tx).await;
+            let _ = uart_tx.flush().await;
+            assert_out_irq().await;
         };
-
-        {
-            // Send COBS-encoded data to MPU if available
-            if let Some(cobs_tx) = cobs {
-                info!("Data rx from BT --> UART - data len {}", cobs_tx.len());
-                let now = Instant::now();
-                let _ = &uart_tx.write_all(cobs_tx).await;
-                let _ = &uart_tx.flush().await;
-                info!("Elapsed for packet to UART - {}", now.elapsed().as_micros());
-                assert_out_irq().await; // Signal MPU
-            }
-        }
 
         // Handle HMAC challenge-response authentication
         if CHALLENGE_REQUEST.load(core::sync::atomic::Ordering::Relaxed) {
             CHALLENGE_REQUEST.store(false, core::sync::atomic::Ordering::Relaxed);
+            send_buf.fill(0); // Clear the buffer from any previous data
 
             type HmacSha256 = Hmac<ShaChallenge>;
-
             // Get device secret from UICR memory
             let secret_as_slice = unsafe { core::slice::from_raw_parts(UICR_SECRET_START as *const u8, UICR_SECRET_SIZE as usize) };
             let nonce = *CHALLENGE_NONCE.lock().await;
-
-            info!("Secret saved {:02X}", secret_as_slice);
-            info!("Nonce: {}", nonce);
 
             // Calculate HMAC response
             let result = if let Ok(mut mac) = HmacSha256::new_from_slice(secret_as_slice) {
@@ -167,38 +151,28 @@ pub async fn send_bt_uart(uart_tx: &'static mut BufferedUarteTx<'static, UARTE0>
                 info!("{=[u8;32]:#X}", result.into());
                 HostProtocolMessage::ChallengeResult { result: result.into() }
             } else {
-                info!("HMAC initialization failed");
                 HostProtocolMessage::ChallengeResult { result: [0xFF; 32] }
             };
 
             // Send response to MPU
-            let now = Instant::now();
             let cobs_tx = to_slice_cobs(&result, &mut send_buf).unwrap();
-            let _ = &uart_tx.write_all(cobs_tx).await;
-            let _ = &uart_tx.flush().await;
-            info!("Elapsed time to send HMAC challenge answer - {}", now.elapsed().as_millis());
+            let _ = uart_tx.write_all(cobs_tx).await;
+            let _ = uart_tx.flush().await;
+            assert_out_irq().await;
         }
 
         // Handle Bluetooth state updates
         if BT_STATE_MPU_TX.load(core::sync::atomic::Ordering::Relaxed) {
             send_buf.fill(0); // Clear the buffer from any previous data
 
-            info!(
-                "Sending back BT state: {}",
-                BT_STATE_MPU_TX.load(core::sync::atomic::Ordering::Relaxed)
-            );
-
             // Reset atomic flag of state request
             BT_STATE_MPU_TX.store(true, core::sync::atomic::Ordering::Relaxed);
-
             let msg = match BT_STATE_MPU_TX.load(core::sync::atomic::Ordering::Relaxed) {
                 true => HostProtocolMessage::AckState(State::Enabled),
                 false => HostProtocolMessage::AckState(State::Disabled),
             };
 
             let cobs_tx = to_slice_cobs(&msg, &mut send_buf).unwrap();
-            info!("{}", cobs_tx);
-
             let _ = uart_tx.write_all(cobs_tx).await;
             let _ = uart_tx.flush().await;
             assert_out_irq().await;
@@ -207,16 +181,29 @@ pub async fn send_bt_uart(uart_tx: &'static mut BufferedUarteTx<'static, UARTE0>
         // Handle firmware version requests
         if let Ok(version) = FIRMWARE_VER.try_receive() {
             send_buf.fill(0); // Clear the buffer from any previous data
-
             info!("Sending back FW version: {}", version);
-
             let msg = HostProtocolMessage::Bluetooth(Bluetooth::AckFirmwareVersion { version });
             let cobs_tx = to_slice_cobs(&msg, &mut send_buf).unwrap();
-            info!("{}", cobs_tx);
 
             let _ = uart_tx.write_all(cobs_tx).await;
             let _ = uart_tx.flush().await;
             assert_out_irq().await; // Ask the MP
+        }
+
+        // Handle RSSI value updates
+        if BT_ADDRESS_MPU_TX.load(core::sync::atomic::Ordering::Relaxed) {
+            send_buf.fill(0); // Clear the buffer from any previous data
+
+            // Reset flag for sending to MPU
+            BT_ADDRESS_MPU_TX.store(false, core::sync::atomic::Ordering::Relaxed);
+            let bt_address = *BT_ADDRESS.lock().await;
+            info!("Sending back BT address: {=[u8;6]:#X}", bt_address);
+            let msg = HostProtocolMessage::Bluetooth(Bluetooth::AckBtAaddress { bt_address });
+            let cobs_tx = to_slice_cobs(&msg, &mut send_buf).unwrap();
+
+            let _ = &uart_tx.write_all(cobs_tx).await;
+            let _ = &uart_tx.flush().await;
+            assert_out_irq().await;
         }
 
         // Handle RSSI value updates
@@ -227,11 +214,8 @@ pub async fn send_bt_uart(uart_tx: &'static mut BufferedUarteTx<'static, UARTE0>
             RSSI_VALUE_MPU_TX.store(false, core::sync::atomic::Ordering::Relaxed);
 
             let rssi = RSSI_VALUE.load(core::sync::atomic::Ordering::Relaxed);
-            info!("Sending back RSSI: {}", rssi);
-
             let msg = HostProtocolMessage::Bluetooth(Bluetooth::SignalStrength(rssi));
             let cobs_tx = to_slice_cobs(&msg, &mut send_buf).unwrap();
-            info!("{}", cobs_tx);
 
             let _ = &uart_tx.write_all(cobs_tx).await;
             let _ = &uart_tx.flush().await;
@@ -286,23 +270,18 @@ pub async fn send_bt_uart_no_cobs(uart_tx: &'static mut BufferedUarteTx<'static,
             let nonce = *CHALLENGE_NONCE.lock().await;
 
             info!("Nonce: {}", nonce);
-            let mut now = Instant::now();
             let result = if let Ok(mut mac) = HmacSha256::new_from_slice(secret_as_slice) {
                 mac.update(&nonce.to_be_bytes());
                 let result = mac.finalize().into_bytes();
                 info!("{=[u8;32]:#X}", result.into());
                 HostProtocolMessage::ChallengeResult { result: result.into() }
             } else {
-                info!("HMAC initialization failed");
                 HostProtocolMessage::ChallengeResult { result: [0xFF; 32] }
             };
-            info!("Elapsed time to calculate HMAC challenge answer - {}", now.elapsed().as_micros());
 
-            now = Instant::now();
             let cobs_tx = to_slice_cobs(&result, &mut send_buf).unwrap();
             let _ = &uart_tx.write_all(cobs_tx).await;
             let _ = &uart_tx.flush().await;
-            info!("Elapsed time to send HMAC challenge answer - {}", now.elapsed().as_micros());
         }
 
         // Handle RSSI updates
