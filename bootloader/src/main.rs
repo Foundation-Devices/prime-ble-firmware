@@ -226,7 +226,7 @@ async fn main(_spawner: Spawner) {
 
     // Main command processing loop
     'exitloop: while !jump_app {
-        let mut raw_buf = [0u8; 64];
+        let mut raw_buf = [0u8; 512];
         let mut cobs_buf: CobsAccumulator<COBS_MAX_MSG_SIZE> = CobsAccumulator::new();
         
         // Read and process UART data

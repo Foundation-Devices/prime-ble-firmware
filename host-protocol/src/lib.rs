@@ -33,6 +33,10 @@ pub enum Bluetooth<'a> {
     GetFirmwareVersion,
     /// Response with firmware version string
     AckFirmwareVersion { version: &'a str },
+    /// Get bt address
+    GetBtAddress,
+    /// Send bt address
+    AckBtAaddress { bt_address: [u8;6] }    
 }
 
 /// Bootloader-specific messages for firmware updates and verification.

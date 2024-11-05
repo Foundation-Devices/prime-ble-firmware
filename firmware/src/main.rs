@@ -16,7 +16,6 @@ use embassy_nrf::peripherals::{TIMER1, UARTE0};
 // global logger
 use embassy_nrf as _;
 use embassy_time::Timer;
-use embedded_io_async::Write;
 // time driver
 use panic_probe as _;
 
@@ -38,6 +37,7 @@ use embassy_sync::mutex::Mutex;
 use futures::pin_mut;
 use heapless::Vec;
 use host_protocol::COBS_MAX_MSG_SIZE;
+use nrf_softdevice::ble::get_address;
 use nrf_softdevice::Softdevice;
 use server::{initialize_sd, run_bluetooth, stop_bluetooth, Server};
 use static_cell::StaticCell;
@@ -63,6 +63,8 @@ static FIRMWARE_VER: Channel<ThreadModeRawMutex, &str, 1> = Channel::new();
 static BUFFERED_UART: StaticCell<BufferedUarte<'_, UARTE0, TIMER1>> = StaticCell::new();
 static CHALLENGE_REQUEST: AtomicBool = AtomicBool::new(false);
 static CHALLENGE_NONCE: Mutex<ThreadModeRawMutex, u64> = Mutex::new(0);
+static BT_ADDRESS: Mutex<ThreadModeRawMutex, [u8; 6]> = Mutex::new([0xFF; 6]);
+static BT_ADDRESS_MPU_TX: AtomicBool = AtomicBool::new(false);
 
 /// nRF -> MPU IRQ output pin
 static IRQ_OUT_PIN: Mutex<ThreadModeRawMutex, RefCell<Option<Output>>> = Mutex::new(RefCell::new(None));
@@ -72,14 +74,6 @@ async fn softdevice_task(sd: &'static Softdevice) -> ! {
     info!("SD is running");
 
     sd.run().await
-}
-
-#[embassy_executor::task]
-async fn heartbeat() {
-    loop {
-        info!("Heartbeat - 30s");
-        Timer::after_secs(30).await;
-    }
 }
 
 #[embassy_executor::main]
@@ -130,8 +124,6 @@ async fn main(spawner: Spawner) {
         &mut RX_BUFFER.init([0; COBS_MAX_MSG_SIZE])[..],
     ));
 
-    let _ = uart.write_all(b"Hi from app!").await;
-
     let (rx, tx) = uart.split_by_ref();
 
     // Configure the OUT IRQ pin
@@ -151,10 +143,6 @@ async fn main(spawner: Spawner) {
     let server = unwrap!(Server::new(sd));
     unwrap!(spawner.spawn(softdevice_task(sd)));
 
-    info!("Hello World!");
-
-    // heartbeat small task to check activity
-    unwrap!(spawner.spawn(heartbeat()));
     // Uart task
     unwrap!(spawner.spawn(comms_task(rx)));
     #[cfg(feature = "uart-cobs-mcu")]
@@ -163,6 +151,10 @@ async fn main(spawner: Spawner) {
     unwrap!(spawner.spawn(send_bt_uart_no_cobs(tx)));
 
     info!("Init tasks");
+
+    // Get Bt device address
+    *BT_ADDRESS.lock().await = get_address(sd).bytes();
+    info!("Address : {}", *BT_ADDRESS.lock().await);
 
     loop {
         Timer::after_millis(1).await;
@@ -176,7 +168,6 @@ async fn main(spawner: Spawner) {
             info!("Starting BLE advertisement");
             // source of this idea https://github.com/embassy-rs/nrf-softdevice/blob/master/examples/src/bin/ble_peripheral_onoff.rs
             futures::future::select(run_bluetooth_fut, stop_bluetooth_fut).await;
-            info!("Off Future Consumed");
         }
     }
 }
