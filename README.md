@@ -12,6 +12,24 @@ Firmware and bootloader communicates via UART with the main MCU
 
 Leaving here both probe-rs-cli solution and probe-rs ( which is the new one), because on my machine seems having some issue with probe-rs while with probe-rs-cli works nice. Maybe it's just a problem of my setup
 
+### Prerequisites
+
+   ```bash
+   cargo install cargo-xtask
+   ```
+   ```bash
+   cargo install cargo-binutils
+   ```
+   ```bash
+   apt install llvm libclang-dev libsrecord*
+   ```
+   ```bash
+   rustup component add llvm-tools
+   ```
+   ```bash
+   rustup target add thumbv7em-none-eabi
+   ```
+
 ### Installation and running with probe-rs ( instructions [here](https://probe.rs/docs/getting-started/installation/) )
 
 1. Install `probe-rs`:
