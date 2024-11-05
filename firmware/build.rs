@@ -21,7 +21,7 @@ fn main() {
     // on the linker search path.
     let out = &PathBuf::from(env::var_os("OUT_DIR").unwrap());
     #[cfg(feature = "default")]
-    let _ = std::fs::copy("./memory_unsigned.x", "./memory.x");
+    let _ = std::fs::copy("./memory_signed.x", "./memory.x");
 
     #[cfg(feature = "debug")]
     let _ = std::fs::copy("./memory_unsigned.x", "./memory.x");
