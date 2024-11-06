@@ -36,7 +36,7 @@ pub enum Bluetooth<'a> {
     /// Get bt address
     GetBtAddress,
     /// Send bt address
-    AckBtAaddress { bt_address: [u8;6] }    
+    AckBtAaddress { bt_address: [u8; 6] },
 }
 
 /// Bootloader-specific messages for firmware updates and verification.

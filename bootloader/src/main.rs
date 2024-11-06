@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 //! Bootloader implementation for Foundation Devices hardware
-//! 
+//!
 //! This bootloader provides:
 //! - Firmware update capabilities over UART
 //! - Firmware verification using cosign signatures
@@ -72,13 +72,13 @@ pub struct BootState {
 }
 
 /// Updates a chunk of flash memory with new firmware data
-/// 
+///
 /// Validates that the write is within bounds and sends acknowledgement messages
 /// back over UART with CRC verification
 fn update_chunk<'a>(boot_status: &'a mut BootState, idx: usize, data: &'a [u8], flash: &'a mut Nvmc, tx: &mut UarteTx<UARTE0>) {
     // Calculate target flash address
     let cursor = BASE_APP_ADDR + boot_status.offset;
-    
+
     // Validate write is within application area
     match cursor {
         (BASE_APP_ADDR..=BASE_BOOTLOADER_APP) => {}
@@ -98,13 +98,13 @@ fn update_chunk<'a>(boot_status: &'a mut BootState, idx: usize, data: &'a [u8], 
             boot_status.actual_sector = BASE_APP_ADDR + (boot_status.offset / FLASH_PAGE) * FLASH_PAGE;
             info!("Updating flash page starting at addr: {:02X}", boot_status.actual_sector);
             info!("offset : {:02X}", boot_status.actual_sector + boot_status.offset % FLASH_PAGE);
-            
+
             // Calculate CRC of written data
             let crc = Crc::<u32>::new(&CRC_32_ISCSI);
             let crc_pkt = crc.checksum(data);
-            
+
             boot_status.actual_pkt_idx = idx as u32;
-            
+
             // Send success acknowledgement with CRC
             ack_msg_send(
                 HostProtocolMessage::Bootloader(Bootloader::AckWithIdxCrc {
@@ -127,7 +127,7 @@ pub fn ack_msg_send(message: HostProtocolMessage, tx: &mut UarteTx<UARTE0>) {
 
 #[cfg(feature = "flash-protect")]
 /// Configures flash memory protection for bootloader and MBR regions
-/// 
+///
 /// Uses Nordic's BPROT peripheral to prevent modification of critical code regions
 fn flash_protect() {
     // Protect Nordic MBR area
@@ -228,7 +228,7 @@ async fn main(_spawner: Spawner) {
     'exitloop: while !jump_app {
         let mut raw_buf = [0u8; 512];
         let mut cobs_buf: CobsAccumulator<COBS_MAX_MSG_SIZE> = CobsAccumulator::new();
-        
+
         // Read and process UART data
         while let Ok(n) = rx.read_until_idle(&mut raw_buf).await {
             if n == 0 {
@@ -322,27 +322,27 @@ async fn main(_spawner: Spawner) {
                                     // Double check firmware validity before jumping
                                     let image_slice = get_fw_image_slice(BASE_APP_ADDR, APP_SIZE);
                                     if let Some(is_valid) = check_fw(image_slice, &mut tx) {
-                                        if is_valid && fw_is_valid {                                        
+                                        if is_valid && fw_is_valid {
                                             // Clean up UART resources before jumping
                                             drop(tx);
-                                            drop(rx);                                   
-                                        // Jump to application code if firmware is valid
-                                        unsafe {
-                                            jump_to_app();
+                                            drop(rx);
+                                            // Jump to application code if firmware is valid
+                                            unsafe {
+                                                jump_to_app();
+                                            }
                                         }
                                     }
+
+                                    // If we get here, firmware verification failed
+                                    ack_msg_send(
+                                        HostProtocolMessage::Bootloader(Bootloader::AckVerifyFirmware {
+                                            result: false,
+                                            hash: [0xFF; 32],
+                                        }),
+                                        &mut tx,
+                                    );
                                 }
-                                
-                                // If we get here, firmware verification failed
-                                ack_msg_send(
-                                    HostProtocolMessage::Bootloader(Bootloader::AckVerifyFirmware {
-                                        result: false,
-                                        hash: [0xFF; 32],
-                                    }),
-                                    &mut tx,
-                                );
-                            }
-                            _ => (),
+                                _ => (),
                             },
                             // Handle reset command
                             HostProtocolMessage::Reset => {
@@ -352,7 +352,8 @@ async fn main(_spawner: Spawner) {
                             // Handle challenge-response authentication
                             HostProtocolMessage::ChallengeRequest { nonce } => {
                                 type HmacSha256 = Hmac<ShaChallenge>;
-                                let secret_as_slice = unsafe { core::slice::from_raw_parts(UICR_SECRET_START as *const u8, UICR_SECRET_SIZE as usize) };
+                                let secret_as_slice =
+                                    unsafe { core::slice::from_raw_parts(UICR_SECRET_START as *const u8, UICR_SECRET_SIZE as usize) };
                                 info!("slice {:02X}", secret_as_slice);
 
                                 let result = if let Ok(mut mac) = HmacSha256::new_from_slice(secret_as_slice) {
@@ -378,6 +379,4 @@ async fn main(_spawner: Spawner) {
             embassy_time::Timer::after_millis(1).await;
         }
     }
-    
-    
 }

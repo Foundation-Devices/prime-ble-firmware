@@ -55,7 +55,7 @@ pub const SEAL_IDX: usize = 8;
 pub const SEALED_SECRET: u32 = 0x5A5A5A5A;
 
 /// Start address of secret storage in UICR region
-/// This constant defines the base address in UICR memory where the challenge-response 
+/// This constant defines the base address in UICR memory where the challenge-response
 /// authentication secret is stored. The UICR (User Information Configuration Registers)
 /// region starts at 0x10001000, and this secret storage begins at offset 0x80 (register 32).
 /// The secret uses 8 consecutive 32-bit UICR registers starting from this address.
