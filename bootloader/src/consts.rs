@@ -67,11 +67,6 @@ pub const UICR_SECRET_START: u32 = 0x10001080;
 /// the 8 UICR registers used (8 registers * 4 bytes per register = 32 bytes total).
 pub const UICR_SECRET_SIZE: u8 = 0x20;
 
-/// Number of 32-bit UICR registers used to store the secret value
-/// Each register holds 4 bytes, so 8 registers = 32 bytes total storage
-/// Used in write_secret() to iterate through registers when saving secret
-pub const UICR_REGISTERS_FOR_SECRET: usize = 8;
-
 #[cfg(feature = "no-dbg-access")]
 #[used]
 #[link_section = ".uicr_appprotection"]

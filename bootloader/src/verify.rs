@@ -3,7 +3,6 @@ use crate::ack_msg_send;
 use crate::RNG_HW;
 use crate::SEALED_SECRET;
 use crate::SEAL_IDX;
-use crate::UICR_REGISTERS_FOR_SECRET;
 use cortex_m::prelude::_embedded_hal_blocking_delay_DelayMs;
 use cosign2::{Header, VerificationResult};
 use defmt::info;
@@ -245,9 +244,9 @@ pub unsafe fn write_secret(secret: [u32; 8]) -> bool {
     while nvmc.ready.read().ready().is_busy() {}
 
     // Write each word of the secret
-    for i in 0..UICR_REGISTERS_FOR_SECRET {
-        uicr.customer[i].write(|w| unsafe { w.bits(secret[i]) });
-        info!("secret {} : {:02X}", i, secret[i]);
+    for (i, secret) in secret.iter().enumerate() {
+        uicr.customer[i].write(|w| unsafe { w.bits(*secret) });
+        info!("secret {} : {:02X}", i, secret);
     }
 
     while nvmc.ready.read().ready().is_busy() {}
@@ -255,8 +254,8 @@ pub unsafe fn write_secret(secret: [u32; 8]) -> bool {
     while nvmc.ready.read().ready().is_busy() {}
 
     // Read back and verify each word using volatile reads
-    for i in 0..UICR_REGISTERS_FOR_SECRET {
-        if uicr.customer[i].read().bits() != secret[i] {
+    for (i, secret) in secret.iter().enumerate() {
+        if uicr.customer[i].read().bits() != *secret {
             return false;
         }
     }
