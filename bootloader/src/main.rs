@@ -28,13 +28,14 @@ use cosign2::Header;
 use crc::{Crc, CRC_32_ISCSI};
 use defmt::info;
 use embassy_executor::Spawner;
-use embassy_nrf::gpio::{Input, Pull};
-use embassy_nrf::nvmc::Nvmc;
-use embassy_nrf::peripherals::{self, RNG, UARTE0};
-use embassy_nrf::rng;
-use embassy_nrf::rng::Rng;
-use embassy_nrf::uarte::UarteTx;
-use embassy_nrf::{bind_interrupts, uarte};
+use embassy_nrf::{
+    bind_interrupts,
+    gpio::{Input, Pull},
+    nvmc::Nvmc,
+    peripherals::{self, RNG, UARTE0},
+    rng::{self, Rng},
+    uarte::{self, UarteTx},
+};
 use embassy_sync::blocking_mutex::CriticalSectionMutex;
 use embassy_sync::blocking_mutex::Mutex;
 use embedded_storage::nor_flash::NorFlash;
@@ -216,8 +217,8 @@ async fn main(_spawner: Spawner) {
     let _ = Timer::after_micros(5).await;
 
     // Send startup message
-    let mut buf = [0; 22];
-    buf.copy_from_slice(b"Hello from bootloader!");
+    let mut buf = [0; 10];
+    buf.copy_from_slice(b"Bootloader");
     let _ = tx.write(&buf).await;
 
     let mut boot_status: BootState = Default::default();

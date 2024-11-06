@@ -17,7 +17,7 @@ pub const INT_VECTOR_TABLE_BASE: u32 = 0x19800;
 /// Points to the SoftDevice base address at 0x1000, which is where the interrupt vector table
 /// must be located for unsigned firmware to properly handle interrupts through the SoftDevice
 #[cfg(feature = "boot-unsigned-fw")]
-pub const INT_VECTOR_TABLE_BASE: u32 = 0x1000;
+pub const INT_VECTOR_TABLE_BASE: u16 = 0x1000;
 
 /// Base address for the application in flash memory
 /// This is where the actual application firmware code begins in flash memory at 0x19000,
@@ -26,7 +26,7 @@ pub const BASE_APP_ADDR: u32 = 0x19000;
 
 /// Size of the application area in flash memory (50KB)
 /// This constant defines the maximum size available for the application firmware.
-/// The size is set to 50KB (0xC800 bytes) to leave sufficient space for the bootloader
+/// The size is set to 50KB (0xD000 bytes) to leave sufficient space for the bootloader
 /// while allowing reasonably sized application code.
 pub const APP_SIZE: u32 = 0xC800;
 
@@ -65,7 +65,7 @@ pub const UICR_SECRET_START: u32 = 0x10001080;
 /// This constant defines the size of the storage area in UICR memory reserved for storing
 /// the challenge-response authentication secret. The size is 32 bytes (0x20) which matches
 /// the 8 UICR registers used (8 registers * 4 bytes per register = 32 bytes total).
-pub const UICR_SECRET_SIZE: u32 = 0x20;
+pub const UICR_SECRET_SIZE: u8 = 0x20;
 
 /// Number of 32-bit UICR registers used to store the secret value
 /// Each register holds 4 bytes, so 8 registers = 32 bytes total storage
@@ -75,4 +75,4 @@ pub const UICR_REGISTERS_FOR_SECRET: usize = 8;
 #[cfg(feature = "no-dbg-access")]
 #[used]
 #[link_section = ".uicr_appprotection"]
-pub static APP_PROTECTION: i32 = 0x00;
+pub static APP_PROTECTION: u8 = 0x00;

@@ -7,5 +7,8 @@ build:
 build-debug:
     cargo xtask build-fw-debug-image
 
-flash:
-    cd firmware && cargo run --release --bin firmware
+flash-debug-app:
+    cd firmware && cargo deb
+
+flash-debug-bootloader:
+    cd bootloader && cargo deb
