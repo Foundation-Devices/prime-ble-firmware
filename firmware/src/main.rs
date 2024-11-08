@@ -153,8 +153,10 @@ async fn main(spawner: Spawner) {
     info!("Init tasks");
 
     // Get Bt device address
-    *BT_ADDRESS.lock().await = get_address(sd).bytes();
-    info!("Address : {}", *BT_ADDRESS.lock().await);
+    let mut address = get_address(sd).bytes();
+    address.reverse();
+    info!("Address : {=[u8;6]:#X}", address);
+    *BT_ADDRESS.lock().await = address;
 
     loop {
         Timer::after_millis(1).await;
