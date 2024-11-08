@@ -17,7 +17,7 @@ mod jump_app;
 mod verify;
 
 use defmt_rtt as _;
-use embassy_nrf as _;
+use embassy_nrf::{self as _, gpio::Output};
 use embassy_time::Timer;
 use host_protocol::State;
 use panic_probe as _;
@@ -72,6 +72,26 @@ pub struct BootState {
     pub actual_pkt_idx: u32,
 }
 
+/// Helper function to signal the MPU via GPIO
+/// Sends a falling edge pulse on the IRQ line
+fn assert_out_irq() {
+    static mut IRQ_PIN: Option<Output> = None;
+
+    unsafe {
+        // Initialize the static pin if not already done
+        if IRQ_PIN.is_none() {
+            IRQ_PIN = Some(Output::new(p.P0_20, Level::High, OutputDrive::Standard));
+        }
+
+        // Generate falling edge pulse using the static pin
+        if let Some(pin) = IRQ_PIN.as_mut() {
+            pin.set_high();
+            pin.set_low();
+            pin.set_high();
+        }
+    }
+}
+
 /// Updates a chunk of flash memory with new firmware data
 ///
 /// Validates that the write is within bounds and sends acknowledgement messages
@@ -124,6 +144,7 @@ pub fn ack_msg_send(message: HostProtocolMessage, tx: &mut UarteTx<UARTE0>) {
     let mut buf_cobs = [0_u8; 64];
     let cobs_ack = to_slice_cobs(&message, &mut buf_cobs).unwrap();
     let _ = tx.blocking_write(cobs_ack);
+    assert_out_irq();
 }
 
 #[cfg(feature = "flash-protect")]
@@ -191,6 +212,7 @@ async fn main(_spawner: Spawner) {
         RNG_HW.lock(|f| f.borrow_mut().replace(rng));
     }
 
+
     // Initialize flash controller
     let mut flash = Nvmc::new(p.NVMC);
 
@@ -211,10 +233,6 @@ async fn main(_spawner: Spawner) {
 
     // Check if secrets are sealed
     let seal = unsafe { &*nrf52805_pac::UICR::ptr() }.customer[SEAL_IDX].read().customer().bits();
-
-    // Configure bootloader trigger GPIO
-    let boot_gpio = Input::new(p.P0_20, Pull::Down);
-    let _ = Timer::after_micros(5).await;
 
     // Send startup message
     let mut buf = [0; 10];
