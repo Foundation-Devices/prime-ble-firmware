@@ -1,13 +1,10 @@
 // External dependencies and imports
-use crate::ack_msg_send;
 use crate::RNG_HW;
 use crate::SEALED_SECRET;
 use crate::SEAL_IDX;
 use cortex_m::prelude::_embedded_hal_blocking_delay_DelayMs;
 use cosign2::{Header, VerificationResult};
 use defmt::info;
-use embassy_nrf::peripherals::UARTE0;
-use embassy_nrf::uarte::UarteTx;
 use embassy_time::Delay;
 use host_protocol::{Bootloader, HostProtocolMessage};
 use micro_ecc_sys::{uECC_decompress, uECC_secp256k1, uECC_valid_public_key, uECC_verify};
@@ -209,29 +206,27 @@ pub fn get_fw_image_slice<'a>(base_address: u32, len: u32) -> &'a [u8] {
 }
 
 /// Verifies firmware and sends result over UART
-pub fn check_fw(image_slice: &[u8], tx: &mut UarteTx<UARTE0>) -> Option<bool> {
+pub fn check_fw(image_slice: &[u8]) -> (HostProtocolMessage<'_>, bool) {
     if let Some((result, hash)) = verify_os_image(image_slice) {
         if result == VerificationResult::Valid {
-            ack_msg_send(
+            return (
                 HostProtocolMessage::Bootloader(Bootloader::AckVerifyFirmware {
                     result: true,
                     hash: hash.sha,
                 }),
-                tx,
+                true,
             );
-            return Some(true);
         } else {
-            ack_msg_send(
+            return (
                 HostProtocolMessage::Bootloader(Bootloader::AckVerifyFirmware {
                     result: false,
                     hash: hash.sha,
                 }),
-                tx,
+                false,
             );
-            return Some(false);
         }
     }
-    None
+    (HostProtocolMessage::Bootloader(Bootloader::NoCosignHeader), false)
 }
 
 /// Writes a secret to UICR memory and verifies it was written correctly

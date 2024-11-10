@@ -28,7 +28,7 @@ pub const BASE_APP_ADDR: u32 = 0x19000;
 /// This constant defines the maximum size available for the application firmware.
 /// The size is set to 50KB (0xD000 bytes) to leave sufficient space for the bootloader
 /// while allowing reasonably sized application code.
-pub const APP_SIZE: u32 = 0xC800;
+pub const APP_SIZE: u32 = 0xD000;
 
 /// Start address of the bootloader application code in flash memory
 /// This address (0x26000) marks where the bootloader code begins in flash.

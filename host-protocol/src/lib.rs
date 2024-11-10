@@ -120,3 +120,134 @@ pub enum HostProtocolMessage<'a> {
     /// Challenge response with authentication result
     ChallengeResult { result: [u8; 32] },
 }
+
+#[cfg(test)]
+extern crate std;
+#[test]
+fn calculate_bootloader_message_sizes() {
+    use postcard::to_slice_cobs;
+    use std::println;
+
+    // Helper function to calculate COBS size
+    fn get_cobs_size(msg: HostProtocolMessage) -> usize {
+        let mut buf = [0; 512]; // Buffer large enough for all messages
+        let serialized = to_slice_cobs(&msg, &mut buf).unwrap();
+        serialized.len()
+    }
+
+    // Test each variant
+    let sizes_bootloader_cobs_sent = [
+        (
+            "AckEraseFirmware",
+            get_cobs_size(HostProtocolMessage::Bootloader(Bootloader::AckEraseFirmware)),
+        ),
+        (
+            "AckVerifyFirmware",
+            get_cobs_size(HostProtocolMessage::Bootloader(Bootloader::AckVerifyFirmware {
+                result: true,
+                hash: [0; 32],
+            })),
+        ),
+        (
+            "NackWithIdx",
+            get_cobs_size(HostProtocolMessage::Bootloader(Bootloader::NackWithIdx { block_idx: 0xFFFFFFFF })),
+        ),
+        (
+            "AckWithIdx",
+            get_cobs_size(HostProtocolMessage::Bootloader(Bootloader::AckWithIdx { block_idx: 0xFFFFFFFF })),
+        ),
+        (
+            "AckWithIdxCrc",
+            get_cobs_size(HostProtocolMessage::Bootloader(Bootloader::AckWithIdxCrc {
+                block_idx: 0xFFFFFFFF,
+                crc: 0xFFFFFFFF,
+            })),
+        ),
+        (
+            "FirmwareOutOfBounds",
+            get_cobs_size(HostProtocolMessage::Bootloader(Bootloader::FirmwareOutOfBounds {
+                block_idx: 0xFFFFFFFF,
+            })),
+        ),
+        (
+            "NoCosignHeader",
+            get_cobs_size(HostProtocolMessage::Bootloader(Bootloader::NoCosignHeader)),
+        ),
+        (
+            "AckFirmwareVersion",
+            get_cobs_size(HostProtocolMessage::Bootloader(Bootloader::AckFirmwareVersion {
+                version: "v1.2.3",
+            })),
+        ),
+        (
+            "AckBootloaderVersion",
+            get_cobs_size(HostProtocolMessage::Bootloader(Bootloader::AckBootloaderVersion {
+                version: "v1.2.3-longversionstring",
+            })),
+        ),
+        (
+            "AckChallengeSet",
+            get_cobs_size(HostProtocolMessage::Bootloader(Bootloader::AckChallengeSet {
+                result: SecretSaveResponse::Error,
+            })),
+        ),
+    ];
+
+    // Test each variant
+    let sizes_bootloader_cobs_recv = [
+        (
+            "EraseFirmware",
+            get_cobs_size(HostProtocolMessage::Bootloader(Bootloader::EraseFirmware)),
+        ),
+        (
+            "VerifyFirmware",
+            get_cobs_size(HostProtocolMessage::Bootloader(Bootloader::VerifyFirmware)),
+        ),
+        // Test WriteFirmwareBlock with different sizes
+        (
+            "WriteFirmwareBlock(256)",
+            get_cobs_size(HostProtocolMessage::Bootloader(Bootloader::WriteFirmwareBlock {
+                block_idx: 0xFFFFFFFF,
+                block_data: &[0xFF; 256],
+            })),
+        ),
+        (
+            "FirmwareVersion",
+            get_cobs_size(HostProtocolMessage::Bootloader(Bootloader::FirmwareVersion)),
+        ),
+        (
+            "BootloaderVersion",
+            get_cobs_size(HostProtocolMessage::Bootloader(Bootloader::BootloaderVersion)),
+        ),
+        (
+            "ChallengeSet",
+            get_cobs_size(HostProtocolMessage::Bootloader(Bootloader::ChallengeSet {
+                secret: [0xFFFFFFFF; 8],
+            })),
+        ),
+        (
+            "BootFirmware",
+            get_cobs_size(HostProtocolMessage::Bootloader(Bootloader::BootFirmware)),
+        ),
+    ];
+
+    // Print results sorted by size
+    let mut sizes_vec = sizes_bootloader_cobs_recv.to_vec();
+    sizes_vec.sort_by_key(|(_name, size)| *size);
+
+    println!("Message sizes after COBS encoding of bootloader received messages:");
+    println!("----------------------------------");
+    for (name, size) in sizes_vec {
+        println!("{}: {} bytes", name, size);
+    }
+
+    // Print results sorted by size
+    let mut sizes_vec = sizes_bootloader_cobs_sent.to_vec();
+    sizes_vec.sort_by_key(|(_name, size)| *size);
+
+    println!("Message sizes after COBS encoding of bootloader sent messages:");
+    println!("----------------------------------");
+    for (name, size) in sizes_vec {
+        println!("{}: {} bytes", name, size);
+    }
+}

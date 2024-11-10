@@ -12,3 +12,6 @@ flash-debug-app:
 
 flash-debug-bootloader:
     cd bootloader && cargo deb
+
+cobs-size-test:
+    cd host-protocol && cargo test -- --nocapture
