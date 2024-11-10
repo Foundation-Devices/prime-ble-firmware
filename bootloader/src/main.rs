@@ -17,8 +17,7 @@ mod jump_app;
 mod verify;
 
 use defmt_rtt as _;
-use embassy_nrf as _;
-use embassy_time::Timer;
+use embassy_nrf::{self as _};
 use host_protocol::State;
 use panic_probe as _;
 
@@ -30,7 +29,7 @@ use defmt::info;
 use embassy_executor::Spawner;
 use embassy_nrf::{
     bind_interrupts,
-    gpio::{Input, Pull},
+    gpio::{Level, Output, OutputDrive},
     nvmc::Nvmc,
     peripherals::{self, RNG, UARTE0},
     rng::{self, Rng},
@@ -55,6 +54,9 @@ use verify::{check_fw, get_fw_image_slice, write_secret};
 // Global mutex for hardware RNG access
 static RNG_HW: CriticalSectionMutex<RefCell<Option<Rng<'_, RNG>>>> = Mutex::new(RefCell::new(None));
 
+// Global static pin for IRQ output
+static mut IRQ_PIN: Option<Output<'static>> = None;
+
 // Bind hardware interrupts to their handlers
 bind_interrupts!(struct Irqs {
     UARTE0_UART0 => uarte::InterruptHandler<peripherals::UARTE0>;
@@ -70,6 +72,21 @@ pub struct BootState {
     pub actual_sector: u32,
     /// Index of the last successfully written packet
     pub actual_pkt_idx: u32,
+}
+/// Signals the MPU by generating a falling edge pulse on the IRQ line
+///
+/// Pulse sequence: HIGH -> LOW -> HIGH
+/// Used to notify MPU of important events or available data
+///
+/// Safety: Accesses static IRQ_PIN which is only modified during init
+fn assert_out_irq() {
+    unsafe {
+        if let Some(pin) = IRQ_PIN.as_mut() {
+            pin.set_high();
+            pin.set_low();
+            pin.set_high();
+        } // Generate falling edge pulse using the static pin
+    }
 }
 
 /// Updates a chunk of flash memory with new firmware data
@@ -120,10 +137,12 @@ fn update_chunk<'a>(boot_status: &'a mut BootState, idx: usize, data: &'a [u8], 
 }
 
 /// Sends a message over UART using COBS encoding
+#[inline(never)]
 pub fn ack_msg_send(message: HostProtocolMessage, tx: &mut UarteTx<UARTE0>) {
-    let mut buf_cobs = [0_u8; 64];
+    let mut buf_cobs = [0_u8; 48];
     let cobs_ack = to_slice_cobs(&message, &mut buf_cobs).unwrap();
     let _ = tx.blocking_write(cobs_ack);
+    assert_out_irq();
 }
 
 #[cfg(feature = "flash-protect")]
@@ -191,30 +210,36 @@ async fn main(_spawner: Spawner) {
         RNG_HW.lock(|f| f.borrow_mut().replace(rng));
     }
 
+    // Initialize IRQ pin
+    unsafe {
+        IRQ_PIN = Some(Output::new(p.P0_20, Level::High, OutputDrive::Standard));
+    }
+
     // Initialize flash controller
     let mut flash = Nvmc::new(p.NVMC);
 
     // Track firmware validity
-    let mut fw_is_valid = false;
+    let mut fw_is_valid: bool;
 
     // Verify firmware on startup
     {
         let image_slice = get_fw_image_slice(BASE_APP_ADDR, APP_SIZE);
-        if let Some(res) = check_fw(image_slice, &mut tx) {
-            fw_is_valid = res;
-            info!("fw is : {}", res);
-        } else {
-            ack_msg_send(HostProtocolMessage::Bootloader(Bootloader::NoCosignHeader), &mut tx);
-            info!("shit ");
+        match check_fw(image_slice) {
+            (msg, true) => {
+                fw_is_valid = true;
+                info!("fw is valid");
+                ack_msg_send(msg, &mut tx)
+            }
+            (msg, false) => {
+                fw_is_valid = false;
+                info!("fw is invalid");
+                ack_msg_send(msg, &mut tx)
+            }
         }
     }
 
     // Check if secrets are sealed
     let seal = unsafe { &*nrf52805_pac::UICR::ptr() }.customer[SEAL_IDX].read().customer().bits();
-
-    // Configure bootloader trigger GPIO
-    let boot_gpio = Input::new(p.P0_20, Pull::Down);
-    let _ = Timer::after_micros(5).await;
 
     // Send startup message
     let mut buf = [0; 10];
@@ -295,10 +320,17 @@ async fn main(_spawner: Spawner) {
                                 // Verify firmware signature
                                 Bootloader::VerifyFirmware => {
                                     let image_slice = get_fw_image_slice(BASE_APP_ADDR, APP_SIZE);
-                                    if let Some(res) = check_fw(image_slice, &mut tx) {
-                                        fw_is_valid = true;
-                                    } else {
-                                        ack_msg_send(HostProtocolMessage::Bootloader(Bootloader::NoCosignHeader), &mut tx);
+                                    match check_fw(image_slice) {
+                                        (msg, true) => {
+                                            fw_is_valid = true;
+                                            ack_msg_send(msg, &mut tx);
+                                            info!("fw is valid");
+                                        }
+                                        (msg, false) => {
+                                            fw_is_valid = false;
+                                            ack_msg_send(msg, &mut tx);
+                                            info!("fw is invalid");
+                                        }
                                     }
                                 }
                                 // Set challenge secret
@@ -322,15 +354,14 @@ async fn main(_spawner: Spawner) {
                                 Bootloader::BootFirmware => {
                                     // Double check firmware validity before jumping
                                     let image_slice = get_fw_image_slice(BASE_APP_ADDR, APP_SIZE);
-                                    if let Some(is_valid) = check_fw(image_slice, &mut tx) {
-                                        if is_valid && fw_is_valid {
-                                            // Clean up UART resources before jumping
-                                            drop(tx);
-                                            drop(rx);
-                                            // Jump to application code if firmware is valid
-                                            unsafe {
-                                                jump_to_app();
-                                            }
+                                    let (_, is_valid) = check_fw(image_slice);
+                                    if is_valid && fw_is_valid {
+                                        // Clean up UART resources before jumping
+                                        drop(tx);
+                                        drop(rx);
+                                        // Jump to application code if firmware is valid
+                                        unsafe {
+                                            jump_to_app();
                                         }
                                     }
 
