@@ -231,6 +231,54 @@ fn calculate_bootloader_message_sizes() {
         ),
     ];
 
+    // Add new test array for Bluetooth messages
+    let sizes_bluetooth_messages = [
+        (
+            "Enable",
+            get_cobs_size(HostProtocolMessage::Bluetooth(Bluetooth::Enable)),
+        ),
+        (
+            "Disable",
+            get_cobs_size(HostProtocolMessage::Bluetooth(Bluetooth::Disable)),
+        ),
+        (
+            "GetSignalStrength",
+            get_cobs_size(HostProtocolMessage::Bluetooth(Bluetooth::GetSignalStrength)),
+        ),
+        (
+            "SignalStrength",
+            get_cobs_size(HostProtocolMessage::Bluetooth(Bluetooth::SignalStrength(255))),
+        ),
+        (
+            "SendData(256)",
+            get_cobs_size(HostProtocolMessage::Bluetooth(Bluetooth::SendData(&[0xFF; 256]))),
+        ),
+        (
+            "ReceivedData(256)",
+            get_cobs_size(HostProtocolMessage::Bluetooth(Bluetooth::ReceivedData(&[0xFF; 256]))),
+        ),
+        (
+            "GetFirmwareVersion",
+            get_cobs_size(HostProtocolMessage::Bluetooth(Bluetooth::GetFirmwareVersion)),
+        ),
+        (
+            "AckFirmwareVersion",
+            get_cobs_size(HostProtocolMessage::Bluetooth(Bluetooth::AckFirmwareVersion {
+                version: "v1.2.3",
+            })),
+        ),
+        (
+            "GetBtAddress",
+            get_cobs_size(HostProtocolMessage::Bluetooth(Bluetooth::GetBtAddress)),
+        ),
+        (
+            "AckBtAddress",
+            get_cobs_size(HostProtocolMessage::Bluetooth(Bluetooth::AckBtAaddress {
+                bt_address: [0xFF; 6],
+            })),
+        ),
+    ];
+
     // Print results sorted by size
     let mut sizes_vec = sizes_bootloader_cobs_recv.to_vec();
     sizes_vec.sort_by_key(|(_name, size)| *size);
@@ -248,6 +296,16 @@ fn calculate_bootloader_message_sizes() {
     println!("Message sizes after COBS encoding of bootloader sent messages:");
     println!("----------------------------------");
     for (name, size) in sizes_vec {
+        println!("{}: {} bytes", name, size);
+    }
+
+    // Add printing for Bluetooth message sizes
+    let mut bluetooth_sizes = sizes_bluetooth_messages.to_vec();
+    bluetooth_sizes.sort_by_key(|(_name, size)| *size);
+
+    println!("\nMessage sizes after COBS encoding of Bluetooth messages:");
+    println!("----------------------------------");
+    for (name, size) in bluetooth_sizes {
         println!("{}: {} bytes", name, size);
     }
 }
