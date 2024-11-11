@@ -132,6 +132,10 @@ pub async fn send_bt_uart(uart_tx: &'static mut BufferedUarteTx<'static, UARTE0>
             let _ = uart_tx.write_all(cobs_tx).await;
             let _ = uart_tx.flush().await;
             assert_out_irq().await;
+            // Try to send another packet if there is more data to send
+            if BT_DATA_RX.len() > 0 {
+                continue;
+            }
         };
 
         // Handle HMAC challenge-response authentication

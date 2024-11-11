@@ -248,10 +248,8 @@ async fn main(_spawner: Spawner) {
 
     let mut boot_status: BootState = Default::default();
 
-    let mut jump_app = false;
-
     // Main command processing loop
-    'exitloop: while !jump_app {
+    loop {
         let mut raw_buf = [0u8; 512];
         let mut cobs_buf: CobsAccumulator<COBS_MAX_MSG_SIZE> = CobsAccumulator::new();
 
@@ -378,8 +376,9 @@ async fn main(_spawner: Spawner) {
                             },
                             // Handle reset command
                             HostProtocolMessage::Reset => {
-                                jump_app = true;
-                                break 'exitloop;
+                                drop(tx);
+                                drop(rx);
+                                cortex_m::peripheral::SCB::sys_reset();
                             }
                             // Handle challenge-response authentication
                             HostProtocolMessage::ChallengeRequest { nonce } => {
