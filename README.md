@@ -8,61 +8,79 @@ This workspace is composed of:
 - Application firmware
 - Host protocol
 
-Firmware and bootloader communicates via UART with the main MCU 
+This workspace contains the following crates:
 
-Leaving here both probe-rs-cli solution and probe-rs ( which is the new one), because on my machine seems having some issue with probe-rs while with probe-rs-cli works nice. Maybe it's just a problem of my setup
+- `bootloader`: Secure bootloader that handles firmware updates and verification
+- `firmware`: Main BLE application firmware that implements the Bluetooth protocol
+- `host-protocol`: Shared protocol definitions for MPU-BLE communication
+
+The firmware and bootloader communicate with the main MCU via UART using the COBS protocol for reliable serial data transfer. The host protocol defines the message types and structures used for this communication.
+
 
 ### Prerequisites
 
    ```bash
+   # Install xtask for custom build scripts
    cargo install cargo-xtask
    ```
+     ```bash
+   # Install just for running the Justfile
+   cargo install just
+   ```
    ```bash
+   # Install binutils for working with binary files
    cargo install cargo-binutils
    ```
    ```bash
+   # Install LLVM toolchain and srec_cat for hex file manipulation
    apt install llvm libclang-dev libsrecord*
    ```
    ```bash
+   # Add LLVM tools component for binary inspection
    rustup component add llvm-tools
    ```
    ```bash
+   # Add ARM Cortex-M4 compilation target
    rustup target add thumbv7em-none-eabi
    ```
 
-### Installation and running with probe-rs ( instructions [here](https://probe.rs/docs/getting-started/installation/) )
+### Installation and Running with probe-rs
 
-1. Install `probe-rs`:
+Follow the [probe-rs installation guide](https://probe.rs/docs/getting-started/installation/) to get started.
+
+1. Install the probe-rs tools:
    ```bash
    cargo install probe-rs-tools
    ```
-   
-2. List connected probes with `probe-rs` and check the ST-Link is connected:
+
+2. Verify your ST-Link probe is detected:
    ```bash
    probe-rs list
    ```
 
-3. There are two Xtasks available to create:
-   1. Complete package for production in Intel Hex format with signed Bt Application, Softdevice and Bootloader - binary application file for update mode
-      ```bash
-      cargo xtask build-fw-image
-      ```
-   At the end of the process a *BtPackage* folder will be created in project root folder with 3 files inside
-      * _BTApp_Full_Image.hex_- Full production image Intel hex format
-      * _BT_application.bin_- Bluetooth application without cosign2 header
-      * _BT_application_signed.bin_- Bluetooth application cosign2 header for fw update
-   2. Complete package for debug without Cosign Header, console uart for debug and no flash protection.
-      ```bash
-      cargo xtask build-fw-debug-image
-      ```
-   At the end of the process a *BtPackage* folder will be created in project root folder with 1 file inside
-      * BTApp_Full_Image_debug.hex_- Full debug image Intel hex format ( No signed, uart console, no flash protection )
-   
-4. Modify in .cargo folder of firmware:
+3. Build firmware packages using the provided Xtasks:
+
+   **Production Package**
    ```bash
-   runner = "probe-rs run --chip nrf52805_xxAA"
+   just build
    ```
-   
+   This creates a `BtPackage` folder containing:
+   - `BTApp_Full_Image.hex` - Complete production image in Intel HEX format
+   - `BT_application.bin` - Raw Bluetooth application binary
+   - `BT_application_signed.bin` - Signed application with cosign2 header for updates
+
+   **Debug Package** 
+   ```bash
+   just build-debug
+   ```
+   This creates a `BtPackage` folder containing:
+   - `BTApp_Full_Image_debug.hex` - Debug image with console UART and no flash protection
+
+4. **Flash SoftDevice and run Bluetooth test app with UART MPU** 
+   ```bash
+   just bluetooth-app
+   ```
+
 5. Flash and run the firmware:
    ```bash
    cargo run --release --bin firmware -- --probe <PROBE>

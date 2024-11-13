@@ -17,6 +17,7 @@ default = [
     "ble-sec",
     "nrf52805",
 ]
+
 debug = [
     "uart-pins-console",
     "uart-no-cobs-mcu",
@@ -35,6 +36,10 @@ nrf52805 = [
     "nrf-softdevice/nrf52805",
     "nrf-softdevice/s112",
 ]
+
+# Bluetooth test -use this to test bluetooth without the MPU
+# using memory_unsigned.x
+bluetooth-test = []
 
 # Cobs format for MCU
 uart-cobs-mcu = []

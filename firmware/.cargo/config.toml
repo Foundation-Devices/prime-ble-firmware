@@ -12,3 +12,4 @@ DEFMT_LOG = "debug"
 
 [alias]
 deb = "run -r --no-default-features --features debug"
+bluetooth-app = "run -r --features bluetooth-test"

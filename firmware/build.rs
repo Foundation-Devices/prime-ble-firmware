@@ -20,10 +20,10 @@ fn main() {
     // Put `memory.x` in our output directory and ensure it's
     // on the linker search path.
     let out = &PathBuf::from(env::var_os("OUT_DIR").unwrap());
-    #[cfg(feature = "default")]
+    #[cfg(all(feature = "default", not(feature = "bluetooth-test")))]
     let _ = std::fs::copy("./memory_signed.x", "./memory.x");
 
-    #[cfg(feature = "debug")]
+    #[cfg(any(feature = "debug", feature = "bluetooth-test"))]
     let _ = std::fs::copy("./memory_unsigned.x", "./memory.x");
 
     File::create(out.join("./memory.x"))
