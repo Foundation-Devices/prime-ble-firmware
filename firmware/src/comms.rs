@@ -1,7 +1,8 @@
 // Standard imports for BLE communication and cryptographic operations
 use crate::consts::{BT_MAX_NUM_PKT, MTU, UICR_SECRET_SIZE, UICR_SECRET_START};
-use crate::{BT_ADDRESS, BT_ADDRESS_MPU_TX, BT_DATA_TX, IRQ_OUT_PIN};
-use crate::{BT_DATA_RX, BT_STATE, BT_STATE_MPU_TX, CHALLENGE_NONCE, CHALLENGE_REQUEST, FIRMWARE_VER, RSSI_VALUE, RSSI_VALUE_MPU_TX};
+use crate::nus::BleState;
+use crate::{BT_DATA_RX, CHALLENGE_NONCE, CHALLENGE_REQUEST, FIRMWARE_VER};
+use crate::{BT_DATA_TX, IRQ_OUT_PIN};
 use defmt::info;
 use embassy_nrf::buffered_uarte::{BufferedUarteRx, BufferedUarteTx};
 use embassy_nrf::peripherals::{TIMER1, UARTE0};
@@ -67,7 +68,7 @@ pub async fn comms_task(rx: &'static mut BufferedUarteRx<'_, UARTE0, TIMER1>) {
                                     *CHALLENGE_NONCE.lock().await = nonce;
                                 }
                                 HostProtocolMessage::GetState => {
-                                    BT_STATE_MPU_TX.store(true, core::sync::atomic::Ordering::Relaxed);
+                                    BleState::set_notify_bt_state();
                                 }
                                 _ => (),
                             };
@@ -85,14 +86,14 @@ async fn bluetooth_handler(msg: Bluetooth<'_>) {
     match msg {
         Bluetooth::Enable => {
             info!("Bluetooth enabled");
-            BT_STATE.store(true, core::sync::atomic::Ordering::Relaxed);
+            BleState::set_ble_state(true);
         }
         Bluetooth::Disable => {
             info!("Bluetooth disabled");
-            BT_STATE.store(false, core::sync::atomic::Ordering::Relaxed);
+            BleState::set_ble_state(false);
         }
         Bluetooth::GetSignalStrength => {
-            RSSI_VALUE_MPU_TX.store(true, core::sync::atomic::Ordering::Relaxed);
+            BleState::set_notify_rssi();
         }
         Bluetooth::GetFirmwareVersion => {
             let version = env!("CARGO_PKG_VERSION");
@@ -109,7 +110,7 @@ async fn bluetooth_handler(msg: Bluetooth<'_>) {
             }
         }
         Bluetooth::GetBtAddress => {
-            BT_ADDRESS_MPU_TX.store(true, core::sync::atomic::Ordering::Relaxed);
+            BleState::set_notify_bt_address();
         }
         Bluetooth::ReceivedData(_) => {}           // Host-side packet
         Bluetooth::AckFirmwareVersion { .. } => {} // Host-side packet
@@ -166,12 +167,12 @@ pub async fn send_bt_uart(uart_tx: &'static mut BufferedUarteTx<'static, UARTE0>
         }
 
         // Handle Bluetooth state updates
-        if BT_STATE_MPU_TX.load(core::sync::atomic::Ordering::Relaxed) {
+        if BleState::notify_bt_state() {
             send_buf.fill(0); // Clear the buffer from any previous data
 
             // Reset atomic flag of state request
-            BT_STATE_MPU_TX.store(true, core::sync::atomic::Ordering::Relaxed);
-            let msg = match BT_STATE_MPU_TX.load(core::sync::atomic::Ordering::Relaxed) {
+            BleState::clear_notify_bt_state();
+            let msg = match BleState::is_connected() {
                 true => HostProtocolMessage::AckState(State::Enabled),
                 false => HostProtocolMessage::AckState(State::Disabled),
             };
@@ -195,12 +196,12 @@ pub async fn send_bt_uart(uart_tx: &'static mut BufferedUarteTx<'static, UARTE0>
         }
 
         // Handle RSSI value updates
-        if BT_ADDRESS_MPU_TX.load(core::sync::atomic::Ordering::Relaxed) {
+        if BleState::notify_bt_address() {
             send_buf.fill(0); // Clear the buffer from any previous data
 
             // Reset flag for sending to MPU
-            BT_ADDRESS_MPU_TX.store(false, core::sync::atomic::Ordering::Relaxed);
-            let bt_address = *BT_ADDRESS.lock().await;
+            BleState::clear_notify_bt_address();
+            let bt_address = BleState::get_bt_address().await;
             info!("Sending back BT address: {=[u8;6]:#X}", bt_address);
             let msg = HostProtocolMessage::Bluetooth(Bluetooth::AckBtAaddress { bt_address });
             let cobs_tx = to_slice_cobs(&msg, &mut send_buf).unwrap();
@@ -211,13 +212,13 @@ pub async fn send_bt_uart(uart_tx: &'static mut BufferedUarteTx<'static, UARTE0>
         }
 
         // Handle RSSI value updates
-        if RSSI_VALUE_MPU_TX.load(core::sync::atomic::Ordering::Relaxed) {
+        if BleState::notify_rssi() {
             send_buf.fill(0); // Clear the buffer from any previous data
 
             // Reset flag for sending to MPU
-            RSSI_VALUE_MPU_TX.store(false, core::sync::atomic::Ordering::Relaxed);
+            BleState::clear_notify_rssi();
 
-            let rssi = RSSI_VALUE.load(core::sync::atomic::Ordering::Relaxed);
+            let rssi = BleState::get_rssi();
             let msg = HostProtocolMessage::Bluetooth(Bluetooth::SignalStrength(rssi));
             let cobs_tx = to_slice_cobs(&msg, &mut send_buf).unwrap();
 
@@ -243,20 +244,17 @@ pub async fn send_bt_uart_no_cobs(uart_tx: &'static mut BufferedUarteTx<'static,
 
     loop {
         // Handle Bluetooth state updates
-        if BT_STATE_MPU_TX.load(core::sync::atomic::Ordering::Relaxed) {
+        if BleState::notify_bt_state() {
             send_buf.fill(0); // Clear the buffer from any previous data
 
-            info!(
-                "Sending back BT state: {}",
-                BT_STATE_MPU_TX.load(core::sync::atomic::Ordering::Relaxed)
-            );
+            info!("Sending back BT state: {}", BleState::is_connected());
 
-            let msg = match BT_STATE_MPU_TX.load(core::sync::atomic::Ordering::Relaxed) {
+            let msg = match BleState::is_connected() {
                 true => HostProtocolMessage::AckState(State::Enabled),
                 false => HostProtocolMessage::AckState(State::Disabled),
             };
 
-            BT_STATE_MPU_TX.store(true, core::sync::atomic::Ordering::Relaxed);
+            BleState::set_notify_bt_state();
             let cobs_tx = to_slice_cobs(&msg, &mut send_buf).unwrap();
             let _ = uart_tx.write_all(cobs_tx).await;
             let _ = uart_tx.flush().await;
@@ -289,13 +287,13 @@ pub async fn send_bt_uart_no_cobs(uart_tx: &'static mut BufferedUarteTx<'static,
         }
 
         // Handle RSSI updates
-        if RSSI_VALUE_MPU_TX.load(core::sync::atomic::Ordering::Relaxed) {
+        if BleState::notify_rssi() {
             send_buf.fill(0); // Clear the buffer from any previous data
 
             // Reset flag for sending to MPU
-            RSSI_VALUE_MPU_TX.store(false, core::sync::atomic::Ordering::Relaxed);
+            BleState::clear_notify_rssi();
 
-            let rssi = RSSI_VALUE.load(core::sync::atomic::Ordering::Relaxed);
+            let rssi = BleState::get_rssi();
             info!("Sending back RSSI: {}", rssi);
 
             let msg = HostProtocolMessage::Bluetooth(Bluetooth::SignalStrength(rssi));

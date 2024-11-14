@@ -1,6 +1,20 @@
 // SPDX-FileCopyrightText: 2024 Foundation Devices, Inc. <hello@foundationdevices.com>
 // SPDX-License-Identifier: GPL-3.0-or-later
 
+//! Main firmware entry point and initialization
+//!
+//! This module handles:
+//! - Hardware initialization (clocks, UART, GPIO)
+//! - Task spawning for BLE and UART communication
+//! - Global static variables for inter-task communication
+//! - Main event loop for BLE state management
+//!
+//! The firmware supports two UART configurations:
+//! - Console mode (115200 baud) for debugging
+//! - MPU mode (1M baud) for communicating with the main processor
+//!
+//! One of these modes must be selected at compile time via feature flags.
+
 #![no_std]
 #![no_main]
 
@@ -39,6 +53,7 @@ use heapless::Vec;
 use host_protocol::COBS_MAX_MSG_SIZE;
 use nrf_softdevice::ble::get_address;
 use nrf_softdevice::Softdevice;
+use nus::BleState;
 use server::{initialize_sd, run_bluetooth, stop_bluetooth, Server};
 use static_cell::StaticCell;
 
@@ -48,27 +63,31 @@ compile_error!("Only one of the features `uart-pins-console` or `uart-pins-mpu` 
 #[cfg(not(any(feature = "uart-pins-console", feature = "uart-pins-mpu")))]
 compile_error!("One of the features `uart-pins-console` or `uart-pins-mpu` must be enabled.");
 
+// Bind UART interrupt handler
 bind_interrupts!(struct Irqs {
     UARTE0_UART0 => buffered_uarte::InterruptHandler<peripherals::UARTE0>;
 });
 
-// Signal for BT state
-static BT_STATE: AtomicBool = AtomicBool::new(false);
-static BT_STATE_MPU_TX: AtomicBool = AtomicBool::new(false);
-static BT_DATA_TX: Mutex<ThreadModeRawMutex, Vec<Vec<u8, ATT_MTU>, BT_MAX_NUM_PKT>> = Mutex::new(Vec::new());
-static RSSI_VALUE: AtomicU8 = AtomicU8::new(0);
-static RSSI_VALUE_MPU_TX: AtomicBool = AtomicBool::new(false);
-static BT_DATA_RX: Channel<ThreadModeRawMutex, Vec<u8, ATT_MTU>, BT_MAX_NUM_PKT> = Channel::new();
-static FIRMWARE_VER: Channel<ThreadModeRawMutex, &str, 1> = Channel::new();
-static BUFFERED_UART: StaticCell<BufferedUarte<'_, UARTE0, TIMER1>> = StaticCell::new();
-static CHALLENGE_REQUEST: AtomicBool = AtomicBool::new(false);
-static CHALLENGE_NONCE: Mutex<ThreadModeRawMutex, u64> = Mutex::new(0);
-static BT_ADDRESS: Mutex<ThreadModeRawMutex, [u8; 6]> = Mutex::new([0xFF; 6]);
-static BT_ADDRESS_MPU_TX: AtomicBool = AtomicBool::new(false);
+// Global state variables for Bluetooth communication
+static BT_STATE: AtomicBool = AtomicBool::new(false); // Current BLE connection state
+static BT_STATE_MPU_TX: AtomicBool = AtomicBool::new(false); // Flag to notify MPU of BLE state changes
+static BT_DATA_TX: Mutex<ThreadModeRawMutex, Vec<Vec<u8, ATT_MTU>, BT_MAX_NUM_PKT>> = Mutex::new(Vec::new()); // Outgoing BLE data buffer
+static RSSI_VALUE: AtomicU8 = AtomicU8::new(0); // Current RSSI value
+static RSSI_VALUE_MPU_TX: AtomicBool = AtomicBool::new(false); // Flag to notify MPU of RSSI updates
+static BT_DATA_RX: Channel<ThreadModeRawMutex, Vec<u8, ATT_MTU>, BT_MAX_NUM_PKT> = Channel::new(); // Incoming BLE data channel
+static FIRMWARE_VER: Channel<ThreadModeRawMutex, &str, 1> = Channel::new(); // Firmware version info
+static BUFFERED_UART: StaticCell<BufferedUarte<'_, UARTE0, TIMER1>> = StaticCell::new(); // UART interface
+
+// Security-related globals
+static CHALLENGE_REQUEST: AtomicBool = AtomicBool::new(false); // Flag for pending authentication challenge
+static CHALLENGE_NONCE: Mutex<ThreadModeRawMutex, u64> = Mutex::new(0); // Nonce for challenge-response auth
+static BT_ADDRESS: Mutex<ThreadModeRawMutex, [u8; 6]> = Mutex::new([0xFF; 6]); // Device BLE address
+static BT_ADDRESS_MPU_TX: AtomicBool = AtomicBool::new(false); // Flag to notify MPU of address updates
 
 /// nRF -> MPU IRQ output pin
 static IRQ_OUT_PIN: Mutex<ThreadModeRawMutex, RefCell<Option<Output>>> = Mutex::new(RefCell::new(None));
 
+/// Task to run the SoftDevice (Nordic's BLE stack)
 #[embassy_executor::task]
 async fn softdevice_task(sd: &'static Softdevice) -> ! {
     info!("SD is running");
@@ -76,8 +95,10 @@ async fn softdevice_task(sd: &'static Softdevice) -> ! {
     sd.run().await
 }
 
+/// Main firmware entry point
 #[embassy_executor::main]
 async fn main(spawner: Spawner) {
+    // Configure system clocks and interrupts
     let mut conf = embassy_nrf::config::Config::default();
     // This caused bad behaviour at reset - will check if i did something wrong
     // conf.dcdc = embassy_nrf::config::DcdcConfig { reg1: true };
@@ -89,6 +110,7 @@ async fn main(spawner: Spawner) {
 
     let p = embassy_nrf::init(conf);
 
+    // Configure UART based on selected mode
     #[cfg(feature = "uart-pins-console")]
     let baud_rate = uarte::Baudrate::BAUD115200;
     #[cfg(feature = "uart-pins-console")]
@@ -103,15 +125,18 @@ async fn main(spawner: Spawner) {
     config_uart.parity = uarte::Parity::EXCLUDED;
     config_uart.baudrate = baud_rate;
 
+    // Initialize UART buffers
     static TX_BUFFER: StaticCell<[u8; COBS_MAX_MSG_SIZE]> = StaticCell::new();
     static RX_BUFFER: StaticCell<[u8; COBS_MAX_MSG_SIZE]> = StaticCell::new();
 
+    // Select UART pins based on mode
     #[cfg(feature = "uart-pins-mpu")]
     let (rxd, txd) = (p.P0_14, p.P0_12);
 
     #[cfg(feature = "uart-pins-console")]
     let (rxd, txd) = (p.P0_16, p.P0_18);
 
+    // Initialize buffered UART
     let uart = BUFFERED_UART.init(BufferedUarte::new(
         p.UARTE0,
         p.TIMER1,
@@ -137,15 +162,15 @@ async fn main(spawner: Spawner) {
             .replace(Output::new(p.P0_20, Level::High, OutputDrive::Standard));
     }
 
-    // set priority to avoid collisions with softdevice
+    // Set UART interrupt priority below SoftDevice to avoid conflicts
     interrupt::UARTE0_UART0.set_priority(interrupt::Priority::P3);
 
+    // Initialize BLE stack and server
     let sd = initialize_sd();
-
     let server = unwrap!(Server::new(sd));
     unwrap!(spawner.spawn(softdevice_task(sd)));
 
-    // Uart task
+    // Spawn communication tasks
     unwrap!(spawner.spawn(comms_task(rx)));
     #[cfg(feature = "uart-cobs-mcu")]
     unwrap!(spawner.spawn(send_bt_uart(tx)));
@@ -154,23 +179,24 @@ async fn main(spawner: Spawner) {
 
     info!("Init tasks");
 
-    // Get Bt device address
+    // Get and store device BLE address
     let mut address = get_address(sd).bytes();
     address.reverse();
     info!("Address : {=[u8;6]:#X}", address);
     *BT_ADDRESS.lock().await = address;
 
+    // Main event loop
     loop {
         Timer::after_millis(1).await;
 
-        if BT_STATE.load(core::sync::atomic::Ordering::Relaxed) {
+        if BleState::is_connected() {
             let run_bluetooth_fut = run_bluetooth(sd, &server);
             let stop_bluetooth_fut = stop_bluetooth();
             pin_mut!(run_bluetooth_fut);
             pin_mut!(stop_bluetooth_fut);
 
             info!("Starting BLE advertisement");
-            // source of this idea https://github.com/embassy-rs/nrf-softdevice/blob/master/examples/src/bin/ble_peripheral_onoff.rs
+            // Wait for either BLE operation to complete or stop signal
             futures::future::select(run_bluetooth_fut, stop_bluetooth_fut).await;
         }
     }

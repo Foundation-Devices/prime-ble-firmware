@@ -1,10 +1,20 @@
 // SPDX-FileCopyrightText: 2024 Foundation Devices, Inc. <hello@foundationdevices.com>
 // SPDX-License-Identifier: GPL-3.0-or-later
 
+//! Bluetooth server implementation for Nordic UART Service (NUS)
+//!
+//! This module handles:
+//! - Bluetooth device configuration and initialization
+//! - Advertisement and connection management
+//! - Data transmission through NUS
+//! - RSSI monitoring
+//! - PHY layer configuration
+//! - Connection parameter negotiation
+
 use crate::consts::{ATT_MTU, DEVICE_NAME, SERVICES_LIST, SHORT_NAME};
 use crate::nus::*;
 use crate::BT_DATA_TX;
-use crate::{BT_STATE, RSSI_VALUE};
+use crate::BT_STATE;
 use core::mem;
 use defmt::{info, *};
 use embassy_time::{Duration, Timer};
@@ -20,19 +30,21 @@ use nrf_softdevice::gatt_server;
 use nrf_softdevice::{raw, Softdevice};
 use raw::ble_gap_conn_params_t;
 
-// Get connection interval with macro
-// to get 15ms just call ci_ms!(15)
+/// Converts milliseconds to connection interval units (1.25ms)
+/// Example: ci_ms!(15) returns the value for 15ms interval
 macro_rules! ci_ms {
     ($a:expr) => {{
         $a * 1000 / 1250
     }};
 }
 
+/// Main GATT server structure implementing Nordic UART Service
 #[gatt_server]
 pub struct Server {
     nus: Nus,
 }
 
+/// Waits for Bluetooth to stop by polling BT_STATE
 pub async fn stop_bluetooth() {
     while BT_STATE.load(core::sync::atomic::Ordering::Relaxed) {
         // Do nothing
@@ -41,6 +53,8 @@ pub async fn stop_bluetooth() {
     info!("BT off");
 }
 
+/// Initializes the SoftDevice with required configurations
+/// Returns a static reference to the enabled SoftDevice
 pub fn initialize_sd() -> &'static mut Softdevice {
     let config = nrf_softdevice::Config {
         clock: Some(raw::nrf_clock_lf_cfg_t {
@@ -76,7 +90,9 @@ pub fn initialize_sd() -> &'static mut Softdevice {
     Softdevice::enable(&config)
 }
 
-/// Notifies the connected client about new data.
+/// Handles notification of data to connected clients
+/// Monitors the BT_DATA_TX buffer and sends pending data
+/// Also handles RSSI monitoring when no data is being sent
 async fn notify_data_tx<'a>(server: &'a Server, connection: &'a Connection) {
     loop {
         // This is the way we can notify data when NUS service is up
@@ -95,7 +111,7 @@ async fn notify_data_tx<'a>(server: &'a Server, connection: &'a Connection) {
             if connection.rssi().is_some() && buffer.is_empty() {
                 // Get as u8 rssi - receiver side will take care of cast to i8
                 let rssi_as_u8 = connection.rssi().unwrap() as u8;
-                RSSI_VALUE.store(rssi_as_u8, core::sync::atomic::Ordering::Relaxed);
+                BleState::set_rssi(rssi_as_u8);
             }
         }
 
@@ -104,6 +120,8 @@ async fn notify_data_tx<'a>(server: &'a Server, connection: &'a Connection) {
     }
 }
 
+/// Updates the physical layer configuration after connection
+/// Attempts to switch to 2M PHY after a delay
 #[cfg(feature = "bluetooth-PHY2")]
 pub async fn update_phy(mut conn: Connection) {
     // delay to avoid request during discovery services, many phones reject in this case
@@ -114,7 +132,8 @@ pub async fn update_phy(mut conn: Connection) {
     }
 }
 
-// Set parameter for data event extension on Sd112
+/// Configures data event extension for SoftDevice 112
+/// Returns status code from SoftDevice configuration
 pub fn set_data_event_ext() -> u32 {
     let ret = unsafe {
         raw::sd_ble_opt_set(
@@ -132,7 +151,10 @@ pub fn set_data_event_ext() -> u32 {
     ret
 }
 
+/// Main Bluetooth operation loop
+/// Handles advertisement, connections, and data transfer
 pub async fn run_bluetooth(sd: &'static Softdevice, server: &Server) {
+    // Configure advertisement data with device info and services
     static ADV_DATA: ExtendedAdvertisementPayload = ExtendedAdvertisementBuilder::new()
         .flags(&[Flag::GeneralDiscovery, Flag::LE_Only])
         .services_128(ServiceList::Complete, &SERVICES_LIST)
@@ -205,10 +227,11 @@ pub async fn run_bluetooth(sd: &'static Softdevice, server: &Server) {
             }
         }
         // Force false
-        BT_STATE.store(true, core::sync::atomic::Ordering::Relaxed);
+        BleState::set_ble_state(false);
     }
 }
 
+/// Server implementation for handling GATT events
 impl Server {
     fn handle_event(&self, event: ServerEvent) {
         match event {
