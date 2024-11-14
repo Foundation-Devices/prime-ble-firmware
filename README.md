@@ -66,6 +66,7 @@ Follow the [probe-rs installation guide](https://probe.rs/docs/getting-started/i
    - `BTApp_Full_Image.hex` - Complete production image in Intel HEX format
    - `BT_application.bin` - Raw Bluetooth application binary
    - `BT_application_signed.bin` - Signed application with cosign2 header for updates
+  
    **Build Debug Package** 
    ```bash
    just build-debug
