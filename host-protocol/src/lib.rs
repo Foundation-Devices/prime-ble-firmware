@@ -233,14 +233,8 @@ fn calculate_bootloader_message_sizes() {
 
     // Add new test array for Bluetooth messages
     let sizes_bluetooth_messages = [
-        (
-            "Enable",
-            get_cobs_size(HostProtocolMessage::Bluetooth(Bluetooth::Enable)),
-        ),
-        (
-            "Disable",
-            get_cobs_size(HostProtocolMessage::Bluetooth(Bluetooth::Disable)),
-        ),
+        ("Enable", get_cobs_size(HostProtocolMessage::Bluetooth(Bluetooth::Enable))),
+        ("Disable", get_cobs_size(HostProtocolMessage::Bluetooth(Bluetooth::Disable))),
         (
             "GetSignalStrength",
             get_cobs_size(HostProtocolMessage::Bluetooth(Bluetooth::GetSignalStrength)),
@@ -263,9 +257,7 @@ fn calculate_bootloader_message_sizes() {
         ),
         (
             "AckFirmwareVersion",
-            get_cobs_size(HostProtocolMessage::Bluetooth(Bluetooth::AckFirmwareVersion {
-                version: "v1.2.3",
-            })),
+            get_cobs_size(HostProtocolMessage::Bluetooth(Bluetooth::AckFirmwareVersion { version: "v1.2.3" })),
         ),
         (
             "GetBtAddress",
@@ -273,9 +265,7 @@ fn calculate_bootloader_message_sizes() {
         ),
         (
             "AckBtAddress",
-            get_cobs_size(HostProtocolMessage::Bluetooth(Bluetooth::AckBtAaddress {
-                bt_address: [0xFF; 6],
-            })),
+            get_cobs_size(HostProtocolMessage::Bluetooth(Bluetooth::AckBtAaddress { bt_address: [0xFF; 6] })),
         ),
     ];
 

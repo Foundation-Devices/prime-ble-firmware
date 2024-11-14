@@ -7,15 +7,6 @@ use tracing_subscriber::{fmt, prelude::*, EnvFilter};
 
 const FIRMWARE_VERSION: &str = "0.1.0";
 
-#[cfg(target_os = "linux")]
-const SRECORD_PATH: &str = "misc/srecord_linux";
-
-#[cfg(target_os = "windows")]
-const SRECORD_PATH: &str = "misc\\srecord_win";
-
-#[cfg(target_os = "macos")]
-const SRECORD_PATH: &str = "misc/srecord_mac";
-
 #[derive(Parser)]
 #[command(version, about, long_about = None)]
 #[command(propagate_version = true)]
@@ -44,7 +35,17 @@ fn project_root() -> PathBuf {
 }
 
 fn srecord() -> PathBuf {
-    which::which("srec_cat").unwrap_or(project_root().join(SRECORD_PATH).join("srec_cat"))
+    which::which("srec_cat2").unwrap_or_else(|_| {
+        tracing::error!("SRecord tools not found. Please install them:");
+        println!("\nOn Ubuntu/Debian:");
+        println!("   sudo apt-get install srecord");
+        println!("\nOn macOS:");
+        println!("   brew install srecord");
+        println!("\nOn Windows:");
+        println!("   1. Download from http://srecord.sourceforge.net/");
+        println!("   2. Add the installation directory to your PATH environment variable");
+        panic!("srecord tools must be installed to continue")
+    })
 }
 
 pub fn cargo() -> String {
@@ -65,7 +66,7 @@ fn build_tools_check() {
         tracing::info!("Please install cargo binutils with these commands:");
         tracing::info!("cargo install cargo-binutils");
         tracing::info!("rustup component add llvm-tools");
-        exit(0);
+        exit(-1);
     }
 
     tracing::info!("Cargo clean...");
@@ -78,7 +79,7 @@ fn build_tools_check() {
         .expect("Running Cargo clean fails");
     if !status.success() {
         tracing::info!("Cargo clean not working");
-        exit(0);
+        exit(-1);
     }
 
     tracing::info!("Removing package folder...");
@@ -89,7 +90,8 @@ fn build_tools_check() {
         .status()
         .expect("Running rm failed");
     if !status.success() {
-        exit(0)
+        tracing::error!("Removing package folder failed");
+        exit(-1)
     }
 
     let build_dir = project_root().join("BtPackage");
@@ -112,7 +114,7 @@ fn build_tools_check_debug() {
         tracing::info!("Please install cargo binutils with these commands:");
         tracing::info!("cargo install cargo-binutils");
         tracing::info!("rustup component add llvm-tools");
-        exit(0);
+        exit(-1);
     }
 
     tracing::info!("Cargo clean...");
@@ -125,7 +127,7 @@ fn build_tools_check_debug() {
         .expect("Running Cargo clean fails");
     if !status.success() {
         tracing::info!("Cargo clean not working");
-        exit(0);
+        exit(-1);
     }
 
     tracing::info!("Removing package folder...");
@@ -136,7 +138,8 @@ fn build_tools_check_debug() {
         .status()
         .expect("Running rm failed");
     if !status.success() {
-        exit(0)
+        tracing::error!("Removing package folder failed");
+        exit(-1)
     }
 
     let build_dir = project_root().join("BtPackageDebug");
@@ -157,7 +160,8 @@ fn build_bt_bootloader() {
         .status()
         .expect("Running Cargo failed");
     if !status.success() {
-        panic!("Bootloader build failed");
+        tracing::error!("Bootloader build failed");
+        exit(-1);
     }
 
     tracing::info!("Generating bootloader hex file...");
@@ -169,7 +173,8 @@ fn build_bt_bootloader() {
         .status()
         .expect("Running Cargo objcopy failed");
     if !status.success() {
-        panic!("Bootloader hex generation failed");
+        tracing::error!("Bootloader hex generation failed");
+        exit(-1);
     }
 }
 
@@ -188,7 +193,8 @@ fn build_bt_bootloader_debug() {
         .status()
         .expect("Running Cargo failed");
     if !status.success() {
-        panic!("Bootloader build failed");
+        tracing::error!("Bootloader build failed");
+        exit(-1);
     }
 
     tracing::info!("Generating bootloader hex file...");
@@ -210,7 +216,8 @@ fn build_bt_bootloader_debug() {
         .status()
         .expect("Running Cargo objcopy failed");
     if !status.success() {
-        panic!("Bootloader hex generation failed");
+        tracing::error!("Bootloader hex generation failed");
+        exit(-1);
     }
 }
 
@@ -226,7 +233,8 @@ fn build_bt_firmware() {
         .status()
         .expect("Running Cargo failed");
     if !status.success() {
-        panic!("Firmware build failed");
+        tracing::error!("Firmware build failed");
+        exit(-1);
     }
 
     tracing::info!("Creating BT application hex file");
@@ -238,7 +246,8 @@ fn build_bt_firmware() {
         .status()
         .expect("Running Cargo objcopy failed");
     if !status.success() {
-        panic!("Firmware build failed");
+        tracing::error!("Firmware build failed");
+        exit(-1);
     }
 
     // Created a full populated flash image to avoid the signed fw is different from the slice to check.
@@ -262,7 +271,8 @@ fn build_bt_firmware() {
         .status()
         .expect("Running Cargo objcopy failed");
     if !status.success() {
-        panic!("Firmware build failed");
+        tracing::error!("Firmware build failed");
+        exit(-1);
     }
 }
 
@@ -274,7 +284,7 @@ fn build_bt_debug_firmware() {
         .current_dir(project_root().join("firmware"))
         .arg("build")
         .arg("-r")
-        // .arg("-q")
+        .arg("-q")
         .arg("--no-default-features")
         .arg("--features")
         .arg("debug")
@@ -313,7 +323,7 @@ fn sign_bt_firmware() {
 
     if let Err(e) = fs::File::open(&cosign2_config_path) {
         tracing::info!("Cosign2 config not found at {cosign2_config_path_str}: {}", e);
-        panic!("cosign2.toml not found at project root");
+        exit(-1);
     }
 
     // Verify that cosign2 exists
@@ -348,62 +358,66 @@ fn sign_bt_firmware() {
         .unwrap()
         .success()
     {
-        panic!("cosign2 failed");
+        tracing::error!("cosign2 failed");
+        exit(-1);
     }
 }
 
 fn build_bt_package() {
     tracing::info!("Converting bin signed package to hex file with starting offset 0x19800");
-    let status = Command::new(srecord().clone())
-        .current_dir(project_root().join(SRECORD_PATH))
+    let status = Command::new(srecord())
+        .current_dir(project_root())
         .args([
-            "../../BtPackage/BT_application_signed.bin",
+            "./BtPackage/BT_application_signed.bin",
             "-Binary",
             "-o",
-            "../../BtPackage/BT_application_signed.hex",
+            "./BtPackage/BT_application_signed.hex",
             "-Intel",
         ])
         .status()
         .expect("Running Cargo failed");
     if !status.success() {
-        panic!("Converting bin to hex failed");
+        tracing::error!("Converting bin to hex failed");
+        exit(-1);
     }
 
     let status = Command::new(srecord().clone())
-        .current_dir(project_root().join(SRECORD_PATH))
+        .current_dir(project_root())
         .args([
-            "../../BtPackage/BT_application_signed.hex",
+            "./BtPackage/BT_application_signed.hex",
             "-Intel",
             "-offset",
             "0x19000",
             "-o",
-            "../../BtPackage/BT_application_signed.hex",
+            "./BtPackage/BT_application_signed.hex",
             "-Intel",
         ])
         .status()
         .expect("Running Cargo failed");
     if !status.success() {
-        panic!("Converting bin to hex failed");
+        tracing::error!("Converting bin to hex failed");
+        exit(-1);
     }
 
     tracing::info!("Merging softdevice bootloader and BT signed application in single hex");
-    let status = Command::new(srecord().clone())
-        .current_dir(project_root().join(SRECORD_PATH))
+    let status = Command::new(srecord())
+        .current_dir(project_root())
         .args([
-            "../../BtPackage/BT_application_signed.hex",
+            "./BtPackage/BT_application_signed.hex",
             "-Intel",
-            "../../BtPackage/bootloader.hex",
+            "./BtPackage/bootloader.hex",
             "-Intel",
-            "../s112_nrf52_7.2.0_softdevice.hex",
+            "./misc/s112_nrf52_7.2.0_softdevice.hex",
             "-Intel",
             "-o",
-            "../../BtPackage/BTApp_Full_Image.hex",
+            "./BtPackage/BTApp_Full_Image.hex",
             "-Intel",
         ])
         .status()
         .expect("Running Cargo failed");
     if !status.success() {
-        panic!("Merging signed package failed");
+        tracing::error!("Merging signed package failed");
+        exit(-1);
     }
 
     tracing::info!("Removing single hex files");
@@ -416,29 +430,31 @@ fn build_bt_package() {
         .status()
         .expect("Running rm failed");
     if !status.success() {
-        exit(0)
+        tracing::error!("Removing single hex files failed");
+        exit(-1)
     }
 }
 
 fn build_bt_package_debug() {
     tracing::info!("Merging softdevice bootloader and BT signed application in single hex");
-    let status = Command::new(srecord().clone())
-        .current_dir(project_root().join(SRECORD_PATH))
+    let status = Command::new(srecord())
+        .current_dir(project_root())
         .args([
-            "../../BtPackageDebug/BtappDebug.hex",
+            "./BtPackageDebug/BtappDebug.hex",
             "-Intel",
-            "../../BtPackageDebug/bootloaderDebug.hex",
+            "./BtPackageDebug/bootloaderDebug.hex",
             "-Intel",
-            "../s112_nrf52_7.2.0_softdevice.hex",
+            "./misc/s112_nrf52_7.2.0_softdevice.hex",
             "-Intel",
             "-o",
-            "../../BtPackageDebug/BTApp_Full_Image_debug.hex",
+            "./BtPackageDebug/BTApp_Full_Image_debug.hex",
             "-Intel",
         ])
         .status()
         .expect("Running Cargo failed");
     if !status.success() {
-        panic!("Merging signed package failed");
+        tracing::error!("Merging signed package failed");
+        exit(-1);
     }
 
     tracing::info!("Removing single hex files");
@@ -450,7 +466,8 @@ fn build_bt_package_debug() {
         .status()
         .expect("Running rm failed");
     if !status.success() {
-        exit(0)
+        tracing::error!("Removing single hex files failed");
+        exit(-1)
     }
 }
 
