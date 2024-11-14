@@ -24,7 +24,7 @@ use comms::comms_task;
 use comms::send_bt_uart;
 #[cfg(feature = "uart-no-cobs-mcu")]
 use comms::send_bt_uart_no_cobs;
-use consts::ATT_MTU;
+use consts::{ATT_MTU, BT_MAX_NUM_PKT};
 use defmt::{info, *};
 use embassy_executor::Spawner;
 use embassy_nrf::buffered_uarte::{self, BufferedUarte};
@@ -55,10 +55,10 @@ bind_interrupts!(struct Irqs {
 // Signal for BT state
 static BT_STATE: AtomicBool = AtomicBool::new(false);
 static BT_STATE_MPU_TX: AtomicBool = AtomicBool::new(false);
-static BT_DATA_TX: Mutex<ThreadModeRawMutex, Vec<Vec<u8, ATT_MTU>, 4>> = Mutex::new(Vec::new());
+static BT_DATA_TX: Mutex<ThreadModeRawMutex, Vec<Vec<u8, ATT_MTU>, BT_MAX_NUM_PKT>> = Mutex::new(Vec::new());
 static RSSI_VALUE: AtomicU8 = AtomicU8::new(0);
 static RSSI_VALUE_MPU_TX: AtomicBool = AtomicBool::new(false);
-static BT_DATA_RX: Channel<ThreadModeRawMutex, Vec<u8, ATT_MTU>, 4> = Channel::new();
+static BT_DATA_RX: Channel<ThreadModeRawMutex, Vec<u8, ATT_MTU>, BT_MAX_NUM_PKT> = Channel::new();
 static FIRMWARE_VER: Channel<ThreadModeRawMutex, &str, 1> = Channel::new();
 static BUFFERED_UART: StaticCell<BufferedUarte<'_, UARTE0, TIMER1>> = StaticCell::new();
 static CHALLENGE_REQUEST: AtomicBool = AtomicBool::new(false);
@@ -78,8 +78,6 @@ async fn softdevice_task(sd: &'static Softdevice) -> ! {
 
 #[embassy_executor::main]
 async fn main(spawner: Spawner) {
-    info!("Hello World!");
-
     let mut conf = embassy_nrf::config::Config::default();
     // This caused bad behaviour at reset - will check if i did something wrong
     // conf.dcdc = embassy_nrf::config::DcdcConfig { reg1: true };
@@ -93,9 +91,13 @@ async fn main(spawner: Spawner) {
 
     #[cfg(feature = "uart-pins-console")]
     let baud_rate = uarte::Baudrate::BAUD115200;
+    #[cfg(feature = "uart-pins-console")]
+    info!("Uart console pins - 115200 BAUD");
 
     #[cfg(feature = "uart-pins-mpu")]
     let baud_rate = uarte::Baudrate::BAUD1M;
+    #[cfg(feature = "uart-pins-mpu")]
+    info!("Uart MPU pins - 1M BAUD");
 
     let mut config_uart = uarte::Config::default();
     config_uart.parity = uarte::Parity::EXCLUDED;

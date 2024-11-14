@@ -13,6 +13,7 @@ use futures::pin_mut;
 use nrf_softdevice::ble::advertisement_builder::{ExtendedAdvertisementBuilder, ExtendedAdvertisementPayload, Flag, ServiceList};
 use nrf_softdevice::ble::gatt_server::notify_value;
 use nrf_softdevice::ble::peripheral;
+#[cfg(feature = "bluetooth-PHY2")]
 use nrf_softdevice::ble::PhySet;
 use nrf_softdevice::ble::{gatt_server, Connection};
 use nrf_softdevice::gatt_server;
@@ -81,7 +82,7 @@ async fn notify_data_tx<'a>(server: &'a Server, connection: &'a Connection) {
         // This is the way we can notify data when NUS service is up
         {
             let mut buffer = BT_DATA_TX.lock().await;
-            if buffer.len() > 0 {
+            if !buffer.is_empty() {
                 match notify_value(connection, server.nus.get_handle(), &buffer[0]) {
                     Ok(_) => {
                         buffer.remove(0);
@@ -90,8 +91,8 @@ async fn notify_data_tx<'a>(server: &'a Server, connection: &'a Connection) {
                 }
             }
 
-            // info!("Getting RSSI - tick 1S");
-            if connection.rssi().is_some() && buffer.len() == 0 {
+            // Getting RSSI if connected
+            if connection.rssi().is_some() && buffer.is_empty() {
                 // Get as u8 rssi - receiver side will take care of cast to i8
                 let rssi_as_u8 = connection.rssi().unwrap() as u8;
                 RSSI_VALUE.store(rssi_as_u8, core::sync::atomic::Ordering::Relaxed);
@@ -103,6 +104,7 @@ async fn notify_data_tx<'a>(server: &'a Server, connection: &'a Connection) {
     }
 }
 
+#[cfg(feature = "bluetooth-PHY2")]
 pub async fn update_phy(mut conn: Connection) {
     // delay to avoid request during discovery services, many phones reject in this case
     Timer::after_secs(2).await;
@@ -160,7 +162,7 @@ pub async fn run_bluetooth(sd: &'static Softdevice, server: &Server) {
         // Request connection interval - trying to request a short one.
         let conn_params = ble_gap_conn_params_t {
             conn_sup_timeout: 500,
-            max_conn_interval: ci_ms!(25),
+            max_conn_interval: ci_ms!(30),
             min_conn_interval: ci_ms!(12),
             slave_latency: 0,
         };
@@ -177,7 +179,9 @@ pub async fn run_bluetooth(sd: &'static Softdevice, server: &Server) {
 
         let gatt_fut = gatt_server::run(&conn, server, |e| server.handle_event(e));
         let tx_fut = notify_data_tx(server, &conn);
-        // let _phy_upd = update_phy(conn.clone()).await;
+
+        #[cfg(feature = "bluetooth-PHY2")]
+        let _phy_upd = update_phy(conn.clone()).await;
 
         // Pin mutable futures
         pin_mut!(tx_fut);

@@ -133,7 +133,7 @@ pub async fn send_bt_uart(uart_tx: &'static mut BufferedUarteTx<'static, UARTE0>
             let _ = uart_tx.flush().await;
             assert_out_irq().await;
             // Try to send another packet if there is more data to send
-            if BT_DATA_RX.len() > 0 {
+            if !BT_DATA_RX.is_empty() {
                 continue;
             }
         };

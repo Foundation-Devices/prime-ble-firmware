@@ -41,6 +41,9 @@ nrf52805 = [
 # using memory_unsigned.x
 bluetooth-test = []
 
+#Activate PHY2
+bluetooth-PHY2 = []
+
 # Cobs format for MCU
 uart-cobs-mcu = []
 
