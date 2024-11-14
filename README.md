@@ -2,12 +2,6 @@
 
 ### Passport Prime BLE controller firmware.
 
-This workspace is composed of:
-
-- Bootloader
-- Application firmware
-- Host protocol
-
 This workspace contains the following crates:
 
 - `bootloader`: Secure bootloader that handles firmware updates and verification
@@ -23,7 +17,7 @@ The firmware and bootloader communicate with the main MCU via UART using the COB
    # Install xtask for custom build scripts
    cargo install cargo-xtask
    ```
-     ```bash
+   ```bash
    # Install just for running the Justfile
    cargo install just
    ```
@@ -58,9 +52,13 @@ Follow the [probe-rs installation guide](https://probe.rs/docs/getting-started/i
    probe-rs list
    ```
 
-3. Build firmware packages using the provided Xtasks:
+3. Build firmware packages using the provided just commands:
 
-   **Production Package**
+   **Just command list**
+   ```bash
+   just -l
+   ```
+   **Build Production Package**
    ```bash
    just build
    ```
@@ -68,23 +66,19 @@ Follow the [probe-rs installation guide](https://probe.rs/docs/getting-started/i
    - `BTApp_Full_Image.hex` - Complete production image in Intel HEX format
    - `BT_application.bin` - Raw Bluetooth application binary
    - `BT_application_signed.bin` - Signed application with cosign2 header for updates
-
-   **Debug Package** 
+   **Build Debug Package** 
    ```bash
    just build-debug
    ```
    This creates a `BtPackage` folder containing:
    - `BTApp_Full_Image_debug.hex` - Debug image with console UART and no flash protection
 
-4. **Flash SoftDevice and run Bluetooth test app with UART MPU** 
+   **Flash SoftDevice and run Bluetooth test app with UART MPU** 
    ```bash
    just bluetooth-app
    ```
 
-5. Flash and run the firmware:
-   ```bash
-   cargo run --release --bin firmware -- --probe <PROBE>
-   ```
+
 
 ### Fixing `JtagNoDeviceConnected` error
 
