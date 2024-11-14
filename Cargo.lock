@@ -153,7 +153,7 @@ dependencies = [
  "rustc-hash",
  "shlex",
  "syn 2.0.71",
- "which",
+ "which 4.4.2",
 ]
 
 [[package]]
@@ -1954,6 +1954,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "which"
+version = "7.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c9cad3279ade7346b96e38731a641d7343dd6a53d55083dd54eadfa5a1b38c6b"
+dependencies = [
+ "either",
+ "home",
+ "rustix",
+ "winsafe",
+]
+
+[[package]]
 name = "winapi"
 version = "0.3.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2049,6 +2061,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "589f6da84c646204747d1270a2a5661ea66ed1cced2631d546fdfb155959f9ec"
 
 [[package]]
+name = "winsafe"
+version = "0.0.19"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d135d17ab770252ad95e9a872d365cf3090e3be864a34ab46f48555993efc904"
+
+[[package]]
 name = "xtask"
 version = "0.1.0"
 dependencies = [
@@ -2059,4 +2077,5 @@ dependencies = [
  "serde_json",
  "tracing",
  "tracing-subscriber",
+ "which 7.0.0",
 ]

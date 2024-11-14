@@ -43,6 +43,10 @@ fn project_root() -> PathBuf {
     Path::new(&env!("CARGO_MANIFEST_DIR")).ancestors().nth(1).unwrap().to_path_buf()
 }
 
+fn srecord() -> PathBuf {
+    which::which("srec_cat").unwrap_or(project_root().join(SRECORD_PATH).join("srec_cat"))
+}
+
 pub fn cargo() -> String {
     env::var("CARGO").unwrap_or_else(|_| "cargo".to_string())
 }
@@ -349,17 +353,8 @@ fn sign_bt_firmware() {
 }
 
 fn build_bt_package() {
-    #[cfg(target_os = "linux")]
-    let srecord: PathBuf = project_root().join(SRECORD_PATH).join("srec_cat");
-
-    #[cfg(target_os = "windows")]
-    let srecord: PathBuf = project_root().join(SRECORD_PATH).join("srec_cat");
-
-    #[cfg(target_os = "macos")]
-    let srecord: PathBuf = project_root().join(SRECORD_PATH).join("srec_cat");
-
     tracing::info!("Converting bin signed package to hex file with starting offset 0x19800");
-    let status = Command::new(srecord.clone())
+    let status = Command::new(srecord().clone())
         .current_dir(project_root().join(SRECORD_PATH))
         .args([
             "../../BtPackage/BT_application_signed.bin",
@@ -374,7 +369,7 @@ fn build_bt_package() {
         panic!("Converting bin to hex failed");
     }
 
-    let status = Command::new(srecord.clone())
+    let status = Command::new(srecord().clone())
         .current_dir(project_root().join(SRECORD_PATH))
         .args([
             "../../BtPackage/BT_application_signed.hex",
@@ -392,7 +387,7 @@ fn build_bt_package() {
     }
 
     tracing::info!("Merging softdevice bootloader and BT signed application in single hex");
-    let status = Command::new(srecord.clone())
+    let status = Command::new(srecord().clone())
         .current_dir(project_root().join(SRECORD_PATH))
         .args([
             "../../BtPackage/BT_application_signed.hex",
@@ -426,17 +421,8 @@ fn build_bt_package() {
 }
 
 fn build_bt_package_debug() {
-    #[cfg(target_os = "linux")]
-    let srecord: PathBuf = project_root().join(SRECORD_PATH).join("srec_cat");
-
-    #[cfg(target_os = "windows")]
-    let srecord: PathBuf = project_root().join(SRECORD_PATH).join("srec_cat");
-
-    #[cfg(target_os = "macos")]
-    let srecord: PathBuf = project_root().join(SRECORD_PATH).join("srec_cat");
-
     tracing::info!("Merging softdevice bootloader and BT signed application in single hex");
-    let status = Command::new(srecord.clone())
+    let status = Command::new(srecord().clone())
         .current_dir(project_root().join(SRECORD_PATH))
         .args([
             "../../BtPackageDebug/BtappDebug.hex",
