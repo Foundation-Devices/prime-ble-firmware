@@ -69,20 +69,20 @@ bind_interrupts!(struct Irqs {
 });
 
 // Global state variables for Bluetooth communication
-static BT_STATE: AtomicBool = AtomicBool::new(false); // Current BLE connection state
-static BT_STATE_MPU_TX: AtomicBool = AtomicBool::new(false); // Flag to notify MPU of BLE state changes
-static BT_DATA_TX: Mutex<ThreadModeRawMutex, Vec<Vec<u8, ATT_MTU>, BT_MAX_NUM_PKT>> = Mutex::new(Vec::new()); // Outgoing BLE data buffer
-static RSSI_VALUE: AtomicU8 = AtomicU8::new(0); // Current RSSI value
-static RSSI_VALUE_MPU_TX: AtomicBool = AtomicBool::new(false); // Flag to notify MPU of RSSI updates
-static BT_DATA_RX: Channel<ThreadModeRawMutex, Vec<u8, ATT_MTU>, BT_MAX_NUM_PKT> = Channel::new(); // Incoming BLE data channel
-static FIRMWARE_VER: Channel<ThreadModeRawMutex, &str, 1> = Channel::new(); // Firmware version info
-static BUFFERED_UART: StaticCell<BufferedUarte<'_, UARTE0, TIMER1>> = StaticCell::new(); // UART interface
+static BT_STATE: AtomicBool = AtomicBool::new(false);
+static BT_STATE_MPU_TX: AtomicBool = AtomicBool::new(false);
+static BT_DATA_TX: Mutex<ThreadModeRawMutex, Vec<Vec<u8, ATT_MTU>, BT_MAX_NUM_PKT>> = Mutex::new(Vec::new());
+static RSSI_VALUE: AtomicU8 = AtomicU8::new(0);
+static RSSI_VALUE_MPU_TX: AtomicBool = AtomicBool::new(false);
+static BT_DATA_RX: Channel<ThreadModeRawMutex, Vec<u8, ATT_MTU>, BT_MAX_NUM_PKT> = Channel::new();
+static FIRMWARE_VER: Channel<ThreadModeRawMutex, &str, 1> = Channel::new();
+static BUFFERED_UART: StaticCell<BufferedUarte<'_, UARTE0, TIMER1>> = StaticCell::new();
 
 // Security-related globals
-static CHALLENGE_REQUEST: AtomicBool = AtomicBool::new(false); // Flag for pending authentication challenge
-static CHALLENGE_NONCE: Mutex<ThreadModeRawMutex, u64> = Mutex::new(0); // Nonce for challenge-response auth
-static BT_ADDRESS: Mutex<ThreadModeRawMutex, [u8; 6]> = Mutex::new([0xFF; 6]); // Device BLE address
-static BT_ADDRESS_MPU_TX: AtomicBool = AtomicBool::new(false); // Flag to notify MPU of address updates
+static CHALLENGE_REQUEST: AtomicBool = AtomicBool::new(false);
+static CHALLENGE_NONCE: Mutex<ThreadModeRawMutex, u64> = Mutex::new(0);
+static BT_ADDRESS: Mutex<ThreadModeRawMutex, [u8; 6]> = Mutex::new([0xFF; 6]);
+static BT_ADDRESS_MPU_TX: AtomicBool = AtomicBool::new(false);
 
 /// nRF -> MPU IRQ output pin
 static IRQ_OUT_PIN: Mutex<ThreadModeRawMutex, RefCell<Option<Output>>> = Mutex::new(RefCell::new(None));
@@ -91,7 +91,6 @@ static IRQ_OUT_PIN: Mutex<ThreadModeRawMutex, RefCell<Option<Output>>> = Mutex::
 #[embassy_executor::task]
 async fn softdevice_task(sd: &'static Softdevice) -> ! {
     info!("SD is running");
-
     sd.run().await
 }
 
@@ -183,7 +182,8 @@ async fn main(spawner: Spawner) {
     let mut address = get_address(sd).bytes();
     address.reverse();
     info!("Address : {=[u8;6]:#X}", address);
-    *BT_ADDRESS.lock().await = address;
+    // Set the BLE address
+    BleState::set_bt_address(address).await;
 
     // Main event loop
     loop {

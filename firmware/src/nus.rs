@@ -30,88 +30,79 @@ pub struct BleState;
 
 impl BleState {
     /// Returns the current Bluetooth connection state
-    #[inline]
     pub fn is_connected() -> bool {
         BT_STATE.load(Ordering::Acquire)
     }
 
     /// Checks if there is a pending Bluetooth state notification for the MPU
-    #[inline]
     pub fn notify_bt_state() -> bool {
         BT_STATE_MPU_TX.load(Ordering::Relaxed)
     }
 
     /// Sets the flag to notify MPU about Bluetooth state changes
-    #[inline]
     pub fn set_notify_bt_state() {
         BT_STATE_MPU_TX.store(true, Ordering::Release);
     }
 
     /// Clears the flag for MPU Bluetooth state notifications
-    #[inline]
     pub fn clear_notify_bt_state() {
         BT_STATE_MPU_TX.store(false, Ordering::Relaxed);
     }
 
     /// Updates the Bluetooth connection state and triggers MPU notification
-    #[inline]
     pub fn set_ble_state(state: bool) {
         BT_STATE.store(state, Ordering::Release);
         BT_STATE_MPU_TX.store(true, Ordering::Relaxed);
     }
 
     /// Sets the flag to notify MPU about new RSSI value
-    #[inline]
     pub fn set_notify_rssi() {
         RSSI_VALUE_MPU_TX.store(true, Ordering::Relaxed)
     }
 
     /// Checks if there is a pending RSSI notification for the MPU
-    #[inline]
     pub fn notify_rssi() -> bool {
         RSSI_VALUE_MPU_TX.load(Ordering::Relaxed)
     }
 
     /// Clears the flag for MPU RSSI notifications
-    #[inline]
     pub fn clear_notify_rssi() {
         RSSI_VALUE_MPU_TX.store(false, Ordering::Relaxed)
     }
 
     /// Gets the current RSSI value
-    #[inline]
     pub fn get_rssi() -> u8 {
         RSSI_VALUE.load(Ordering::Relaxed)
     }
 
     /// Updates the RSSI value and notifies the MPU
-    #[inline]
     pub fn set_rssi(rssi: u8) {
         RSSI_VALUE.store(rssi, Ordering::Relaxed)
     }
 
     /// Sets the flag to notify MPU about new BLE address
-    #[inline]
     pub fn set_notify_bt_address() {
         BT_ADDRESS_MPU_TX.store(true, Ordering::Release);
     }
 
     /// Checks if there is a pending BLE address notification for the MPU
-    #[inline]
     pub fn notify_bt_address() -> bool {
         BT_ADDRESS_MPU_TX.load(Ordering::Relaxed)
     }
 
     /// Clears the flag for MPU BLE address notifications
-    #[inline]
     pub fn clear_notify_bt_address() {
         BT_ADDRESS_MPU_TX.store(false, Ordering::Relaxed);
     }
 
     /// Gets the current BLE address
-    #[inline]
     pub async fn get_bt_address() -> [u8; 6] {
         *BT_ADDRESS.lock().await
+    }
+
+    /// Sets the BLE address
+    pub async fn set_bt_address(address: [u8; 6]) {
+        *BT_ADDRESS.lock().await = address;
     }
 }
 

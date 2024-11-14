@@ -254,7 +254,7 @@ pub async fn send_bt_uart_no_cobs(uart_tx: &'static mut BufferedUarteTx<'static,
                 false => HostProtocolMessage::AckState(State::Disabled),
             };
 
-            BleState::set_notify_bt_state();
+            BleState::clear_notify_bt_state();
             let cobs_tx = to_slice_cobs(&msg, &mut send_buf).unwrap();
             let _ = uart_tx.write_all(cobs_tx).await;
             let _ = uart_tx.flush().await;
