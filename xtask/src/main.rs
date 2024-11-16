@@ -19,13 +19,13 @@ struct XtaskArgs {
 enum Commands {
     /// Build a full flashable firmware image with:
     /// Softdevice - s112_nrf52_7.2.0_softdevice.hex
-    /// Bootloader in release version ( Mpu uart pins - BAUD rate 115200)
+    /// Bootloader in release version (MPU UART pins, baud rate 1M)
     /// Memory protection ( no probe access and bootloader and SD MBR area protected )
     #[command(verbatim_doc_comment)]
     BuildFwImage,
     /// Build a full package image with SD, bootloader and application without:
     /// Flash protection
-    /// UART mpu pins ( just console ones )
+    /// UART mpu pins (console pins, baudrate 115200)
     #[command(verbatim_doc_comment)]
     BuildFwDebugImage,
 }
@@ -35,7 +35,7 @@ fn project_root() -> PathBuf {
 }
 
 fn srecord() -> PathBuf {
-    which::which("srec_cat2").unwrap_or_else(|_| {
+    which::which("srec_cat").unwrap_or_else(|_| {
         tracing::error!("SRecord tools not found. Please install them:");
         println!("\nOn Ubuntu/Debian:");
         println!("   sudo apt-get install srecord");
