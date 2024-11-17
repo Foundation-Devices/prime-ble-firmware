@@ -12,7 +12,6 @@ mod server;
 use core::cell::RefCell;
 use core::sync::atomic::{AtomicBool, AtomicU8};
 use defmt_rtt as _;
-use embassy_nrf::peripherals::{TIMER1, UARTE0};
 // global logger
 use embassy_nrf as _;
 use embassy_time::Timer;
@@ -21,7 +20,6 @@ use panic_probe as _;
 
 use comms::comms_task;
 #[cfg(feature = "uart-cobs-mcu")]
-use comms::send_bt_uart;
 #[cfg(feature = "uart-no-cobs-mcu")]
 use comms::send_bt_uart_no_cobs;
 use consts::{ATT_MTU, BT_MAX_NUM_PKT};
@@ -54,17 +52,10 @@ bind_interrupts!(struct Irqs {
 
 // Signal for BT state
 static BT_STATE: AtomicBool = AtomicBool::new(false);
-static BT_STATE_MPU_TX: AtomicBool = AtomicBool::new(false);
 static BT_DATA_TX: Mutex<ThreadModeRawMutex, Vec<Vec<u8, ATT_MTU>, BT_MAX_NUM_PKT>> = Mutex::new(Vec::new());
 static RSSI_VALUE: AtomicU8 = AtomicU8::new(0);
-static RSSI_VALUE_MPU_TX: AtomicBool = AtomicBool::new(false);
 static BT_DATA_RX: Channel<ThreadModeRawMutex, Vec<u8, ATT_MTU>, BT_MAX_NUM_PKT> = Channel::new();
-static FIRMWARE_VER: Channel<ThreadModeRawMutex, &str, 1> = Channel::new();
-static BUFFERED_UART: StaticCell<BufferedUarte<'_, UARTE0, TIMER1>> = StaticCell::new();
-static CHALLENGE_REQUEST: AtomicBool = AtomicBool::new(false);
-static CHALLENGE_NONCE: Mutex<ThreadModeRawMutex, u64> = Mutex::new(0);
 static BT_ADDRESS: Mutex<ThreadModeRawMutex, [u8; 6]> = Mutex::new([0xFF; 6]);
-static BT_ADDRESS_MPU_TX: AtomicBool = AtomicBool::new(false);
 
 /// nRF -> MPU IRQ output pin
 static IRQ_OUT_PIN: Mutex<ThreadModeRawMutex, RefCell<Option<Output>>> = Mutex::new(RefCell::new(None));
@@ -72,7 +63,6 @@ static IRQ_OUT_PIN: Mutex<ThreadModeRawMutex, RefCell<Option<Output>>> = Mutex::
 #[embassy_executor::task]
 async fn softdevice_task(sd: &'static Softdevice) -> ! {
     info!("SD is running");
-
     sd.run().await
 }
 
@@ -112,7 +102,7 @@ async fn main(spawner: Spawner) {
     #[cfg(feature = "uart-pins-console")]
     let (rxd, txd) = (p.P0_16, p.P0_18);
 
-    let uart = BUFFERED_UART.init(BufferedUarte::new(
+    let uart = BufferedUarte::new(
         p.UARTE0,
         p.TIMER1,
         p.PPI_CH0,
@@ -124,9 +114,7 @@ async fn main(spawner: Spawner) {
         config_uart,
         &mut TX_BUFFER.init([0; COBS_MAX_MSG_SIZE])[..],
         &mut RX_BUFFER.init([0; COBS_MAX_MSG_SIZE])[..],
-    ));
-
-    let (rx, tx) = uart.split_by_ref();
+    );
 
     // Configure the OUT IRQ pin
     {
@@ -144,13 +132,8 @@ async fn main(spawner: Spawner) {
 
     let server = unwrap!(Server::new(sd));
     unwrap!(spawner.spawn(softdevice_task(sd)));
-
     // Uart task
-    unwrap!(spawner.spawn(comms_task(rx)));
-    #[cfg(feature = "uart-cobs-mcu")]
-    unwrap!(spawner.spawn(send_bt_uart(tx)));
-    #[cfg(feature = "uart-no-cobs-mcu")]
-    unwrap!(spawner.spawn(send_bt_uart_no_cobs(tx)));
+    unwrap!(spawner.spawn(comms_task(uart)));
 
     info!("Init tasks");
 
@@ -161,8 +144,6 @@ async fn main(spawner: Spawner) {
     *BT_ADDRESS.lock().await = address;
 
     loop {
-        Timer::after_millis(1).await;
-
         if BT_STATE.load(core::sync::atomic::Ordering::Relaxed) {
             let run_bluetooth_fut = run_bluetooth(sd, &server);
             let stop_bluetooth_fut = stop_bluetooth();
@@ -172,6 +153,9 @@ async fn main(spawner: Spawner) {
             info!("Starting BLE advertisement");
             // source of this idea https://github.com/embassy-rs/nrf-softdevice/blob/master/examples/src/bin/ble_peripheral_onoff.rs
             futures::future::select(run_bluetooth_fut, stop_bluetooth_fut).await;
+        }
+        else{
+            Timer::after_millis(100).await;
         }
     }
 }
