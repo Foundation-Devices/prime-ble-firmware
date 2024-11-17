@@ -176,7 +176,7 @@ async fn main(spawner: Spawner) {
     #[cfg(feature = "uart-no-cobs-mcu")]
     unwrap!(spawner.spawn(send_bt_uart_no_cobs(tx)));
 
-    info!("Init tasks");
+    info!("BtApp");
 
     // Get and store device BLE address
     let mut address = get_address(sd).bytes();
@@ -187,8 +187,6 @@ async fn main(spawner: Spawner) {
 
     // Main event loop
     loop {
-        Timer::after_millis(1).await;
-
         if BleState::is_connected() {
             let run_bluetooth_fut = run_bluetooth(sd, &server);
             let stop_bluetooth_fut = stop_bluetooth();
@@ -198,6 +196,8 @@ async fn main(spawner: Spawner) {
             info!("Starting BLE advertisement");
             // Wait for either BLE operation to complete or stop signal
             futures::future::select(run_bluetooth_fut, stop_bluetooth_fut).await;
+        } else {
+            Timer::after_millis(100).await;
         }
     }
 }

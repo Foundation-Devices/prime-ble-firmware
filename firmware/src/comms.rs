@@ -133,6 +133,7 @@ pub async fn send_bt_uart(uart_tx: &'static mut BufferedUarteTx<'static, UARTE0>
             let _ = uart_tx.write_all(cobs_tx).await;
             let _ = uart_tx.flush().await;
             assert_out_irq().await;
+
             // Try to send another packet if there is more data to send
             if !BT_DATA_RX.is_empty() {
                 continue;
@@ -247,8 +248,6 @@ pub async fn send_bt_uart_no_cobs(uart_tx: &'static mut BufferedUarteTx<'static,
         if BleState::notify_bt_state() {
             send_buf.fill(0); // Clear the buffer from any previous data
 
-            info!("Sending back BT state: {}", BleState::is_connected());
-
             let msg = match BleState::is_connected() {
                 true => HostProtocolMessage::AckState(State::Enabled),
                 false => HostProtocolMessage::AckState(State::Disabled),
@@ -271,11 +270,10 @@ pub async fn send_bt_uart_no_cobs(uart_tx: &'static mut BufferedUarteTx<'static,
             let secret_as_slice = unsafe { core::slice::from_raw_parts(UICR_SECRET_START as *const u8, UICR_SECRET_SIZE as usize) };
             let nonce = *CHALLENGE_NONCE.lock().await;
 
-            info!("Nonce: {}", nonce);
+            // info!("Nonce: {}", nonce);
             let result = if let Ok(mut mac) = HmacSha256::new_from_slice(secret_as_slice) {
                 mac.update(&nonce.to_be_bytes());
                 let result = mac.finalize().into_bytes();
-                info!("{=[u8;32]:#X}", result.into());
                 HostProtocolMessage::ChallengeResult { result: result.into() }
             } else {
                 HostProtocolMessage::ChallengeResult { result: [0xFF; 32] }
@@ -292,13 +290,9 @@ pub async fn send_bt_uart_no_cobs(uart_tx: &'static mut BufferedUarteTx<'static,
 
             // Reset flag for sending to MPU
             BleState::clear_notify_rssi();
-
             let rssi = BleState::get_rssi();
-            info!("Sending back RSSI: {}", rssi);
-
             let msg = HostProtocolMessage::Bluetooth(Bluetooth::SignalStrength(rssi));
             let cobs_tx = to_slice_cobs(&msg, &mut send_buf).unwrap();
-            info!("{}", cobs_tx);
 
             let _ = uart_tx.write_all(cobs_tx).await;
             let _ = uart_tx.flush().await;
@@ -328,7 +322,7 @@ pub async fn send_bt_uart_no_cobs(uart_tx: &'static mut BufferedUarteTx<'static,
                     rx_packet = true;
                     timer_tot = Instant::now();
                 }
-                info!("Infra packet time: {}", timer_pkt.elapsed().as_millis());
+                info!("Infra packet time: {} millisec", timer_pkt.elapsed().as_millis());
                 timer_pkt = Instant::now();
                 data_counter += data.len() as u64;
                 pkt_counter += 1;
@@ -336,7 +330,7 @@ pub async fn send_bt_uart_no_cobs(uart_tx: &'static mut BufferedUarteTx<'static,
                 let now = Instant::now();
                 let _ = uart_tx.write_all(data.as_slice()).await;
                 let _ = uart_tx.flush().await;
-                info!("Elapsed for packet to UART - {}", now.elapsed().as_micros());
+                info!("Packet to UART in {} microsec", now.elapsed().as_micros());
 
                 assert_out_irq().await;
             }
