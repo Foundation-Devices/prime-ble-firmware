@@ -153,8 +153,7 @@ async fn main(spawner: Spawner) {
             info!("Starting BLE advertisement");
             // source of this idea https://github.com/embassy-rs/nrf-softdevice/blob/master/examples/src/bin/ble_peripheral_onoff.rs
             futures::future::select(run_bluetooth_fut, stop_bluetooth_fut).await;
-        }
-        else{
+        } else {
             Timer::after_millis(100).await;
         }
     }

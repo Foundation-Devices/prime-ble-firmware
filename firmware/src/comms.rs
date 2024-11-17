@@ -5,7 +5,7 @@ use crate::{BT_DATA_RX, BT_STATE, RSSI_VALUE};
 use defmt::info;
 use embassy_nrf::buffered_uarte::BufferedUarte;
 use embassy_nrf::peripherals::{TIMER1, UARTE0};
-use embassy_time::Instant;
+use embassy_time::{with_timeout, Duration, Instant};
 use embedded_io_async::Write;
 use heapless::Vec;
 use hmac::{Hmac, Mac};
@@ -38,7 +38,6 @@ async fn assert_out_irq() {
     }
 }
 
-
 /// Main communication task that handles incoming UART messages from the MPU
 /// Decodes COBS-encoded messages and routes them to appropriate handlers
 #[embassy_executor::task]
@@ -69,18 +68,22 @@ pub async fn comms_task(uart: BufferedUarte<'static, UARTE0, TIMER1>) {
                 }
             }
 
-
             // Read data from UART
-            if let Ok(n) = &rx.read(&mut raw_buf).await {
+            if let Ok(n) = with_timeout(Duration::from_micros(200), rx.read(&mut raw_buf)).await {
                 // Clear the send buffer
                 send_buf.fill(0);
 
                 // Exit if no data received
-                if *n == 0 {
+                let num = match n {
+                    Ok(n) => n,
+                    Err(_) => break,
+                };
+
+                if num == 0 {
                     break;
                 }
 
-                let buf = &raw_buf[..*n];
+                let buf = &raw_buf[..num];
                 let mut window = buf;
 
                 // Process all complete COBS messages in the buffer
@@ -182,7 +185,9 @@ async fn bluetooth_handler(msg: Bluetooth<'_>) -> Option<HostProtocolMessage<'_>
             return None;
         }
         Bluetooth::GetBtAddress => {
-            let msg = HostProtocolMessage::Bluetooth(Bluetooth::AckBtAaddress { bt_address: *BT_ADDRESS.lock().await });
+            let msg = HostProtocolMessage::Bluetooth(Bluetooth::AckBtAaddress {
+                bt_address: *BT_ADDRESS.lock().await,
+            });
             return Some(msg);
         }
         Bluetooth::ReceivedData(_) => {
@@ -207,9 +212,9 @@ fn hmac_challenge_response(nonce: u64) -> HostProtocolMessage<'static> {
     let result = if let Ok(mut mac) = HmacSha256::new_from_slice(secret_as_slice) {
         mac.update(&nonce.to_be_bytes());
         let result = mac.finalize().into_bytes();
-            info!("{=[u8;32]:#X}", result.into());
-            HostProtocolMessage::ChallengeResult { result: result.into() }
-        } else {
+        info!("{=[u8;32]:#X}", result.into());
+        HostProtocolMessage::ChallengeResult { result: result.into() }
+    } else {
         HostProtocolMessage::ChallengeResult { result: [0xFF; 32] }
     };
     result
@@ -329,4 +334,3 @@ fn hmac_challenge_response(nonce: u64) -> HostProtocolMessage<'static> {
 //         embassy_time::Timer::after_nanos(10).await;
 //     }
 // }
-
