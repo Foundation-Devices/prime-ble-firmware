@@ -171,7 +171,7 @@ pub async fn send_bt_uart(uart_tx: &'static mut BufferedUarteTx<'static, UARTE0>
 
             // Reset atomic flag of state request
             BT_STATE_MPU_TX.store(true, core::sync::atomic::Ordering::Relaxed);
-            let msg = match BT_STATE_MPU_TX.load(core::sync::atomic::Ordering::Relaxed) {
+            let msg = match BT_STATE.load(core::sync::atomic::Ordering::Relaxed) {
                 true => HostProtocolMessage::AckState(State::Enabled),
                 false => HostProtocolMessage::AckState(State::Disabled),
             };
@@ -251,7 +251,7 @@ pub async fn send_bt_uart_no_cobs(uart_tx: &'static mut BufferedUarteTx<'static,
                 BT_STATE_MPU_TX.load(core::sync::atomic::Ordering::Relaxed)
             );
 
-            let msg = match BT_STATE_MPU_TX.load(core::sync::atomic::Ordering::Relaxed) {
+            let msg = match BT_STATE.load(core::sync::atomic::Ordering::Relaxed) {
                 true => HostProtocolMessage::AckState(State::Enabled),
                 false => HostProtocolMessage::AckState(State::Disabled),
             };
