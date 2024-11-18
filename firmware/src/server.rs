@@ -24,7 +24,9 @@ use raw::ble_gap_conn_params_t;
 // to get 15ms just call ci_ms!(15)
 macro_rules! ci_ms {
     ($a:expr) => {{
-        $a * 1000 / 1250
+        let ms = ($a as f32 * 1000.0) / 1250.0;
+        info!("ci units: {}", ms);
+        ms as u16
     }};
 }
 
