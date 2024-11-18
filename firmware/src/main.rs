@@ -89,19 +89,9 @@ async fn main(spawner: Spawner) {
 
     let p = embassy_nrf::init(conf);
 
-    #[cfg(feature = "uart-pins-console")]
-    let baud_rate = uarte::Baudrate::BAUD115200;
-    #[cfg(feature = "uart-pins-console")]
-    info!("Uart console pins - 115200 BAUD");
-
-    #[cfg(feature = "uart-pins-mpu")]
-    let baud_rate = uarte::Baudrate::BAUD1M;
-    #[cfg(feature = "uart-pins-mpu")]
-    info!("Uart MPU pins - 1M BAUD");
-
     let mut config_uart = uarte::Config::default();
     config_uart.parity = uarte::Parity::EXCLUDED;
-    config_uart.baudrate = baud_rate;
+    config_uart.baudrate = uarte::Baudrate::BAUD1M;
 
     static TX_BUFFER: StaticCell<[u8; COBS_MAX_MSG_SIZE]> = StaticCell::new();
     static RX_BUFFER: StaticCell<[u8; COBS_MAX_MSG_SIZE]> = StaticCell::new();

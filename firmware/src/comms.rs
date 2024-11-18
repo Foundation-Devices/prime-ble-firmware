@@ -330,7 +330,7 @@ pub async fn send_bt_uart_no_cobs(uart_tx: &'static mut BufferedUarteTx<'static,
                     rx_packet = true;
                     timer_tot = Instant::now();
                 }
-                info!("Infra packet time: {}", timer_pkt.elapsed().as_millis());
+                info!("Infra packet time: {} ms", timer_pkt.elapsed().as_millis());
                 timer_pkt = Instant::now();
                 data_counter += data.len() as u64;
                 pkt_counter += 1;
@@ -338,7 +338,7 @@ pub async fn send_bt_uart_no_cobs(uart_tx: &'static mut BufferedUarteTx<'static,
                 let now = Instant::now();
                 let _ = uart_tx.write_all(data.as_slice()).await;
                 let _ = uart_tx.flush().await;
-                info!("Elapsed for packet to UART - {}", now.elapsed().as_micros());
+                info!("UART write time: {} us", now.elapsed().as_micros());
 
                 assert_out_irq().await;
             }
