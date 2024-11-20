@@ -139,8 +139,7 @@ pub async fn send_bt_uart(uart_tx: &'static mut BufferedUarteTx<'static, UARTE0>
         };
 
         // Handle HMAC challenge-response authentication
-        if CHALLENGE_REQUEST.load(core::sync::atomic::Ordering::Relaxed) {
-            CHALLENGE_REQUEST.store(false, core::sync::atomic::Ordering::Relaxed);
+        if CHALLENGE_REQUEST.swap(false, core::sync::atomic::Ordering::Relaxed) {
             send_buf.fill(0); // Clear the buffer from any previous data
 
             type HmacSha256 = Hmac<ShaChallenge>;
@@ -166,11 +165,9 @@ pub async fn send_bt_uart(uart_tx: &'static mut BufferedUarteTx<'static, UARTE0>
         }
 
         // Handle Bluetooth state updates
-        if BT_STATE_MPU_TX.load(core::sync::atomic::Ordering::Relaxed) {
+        if BT_STATE_MPU_TX.swap(false, core::sync::atomic::Ordering::Relaxed) {
             send_buf.fill(0); // Clear the buffer from any previous data
 
-            // Reset atomic flag of state request
-            BT_STATE_MPU_TX.store(true, core::sync::atomic::Ordering::Relaxed);
             let msg = match BT_STATE.load(core::sync::atomic::Ordering::Relaxed) {
                 true => HostProtocolMessage::AckState(State::Enabled),
                 false => HostProtocolMessage::AckState(State::Disabled),
@@ -195,11 +192,9 @@ pub async fn send_bt_uart(uart_tx: &'static mut BufferedUarteTx<'static, UARTE0>
         }
 
         // Handle RSSI value updates
-        if BT_ADDRESS_MPU_TX.load(core::sync::atomic::Ordering::Relaxed) {
+        if BT_ADDRESS_MPU_TX.swap(false, core::sync::atomic::Ordering::Relaxed) {
             send_buf.fill(0); // Clear the buffer from any previous data
 
-            // Reset flag for sending to MPU
-            BT_ADDRESS_MPU_TX.store(false, core::sync::atomic::Ordering::Relaxed);
             let bt_address = *BT_ADDRESS.lock().await;
             info!("Sending back BT address: {=[u8;6]:#X}", bt_address);
             let msg = HostProtocolMessage::Bluetooth(Bluetooth::AckBtAaddress { bt_address });
@@ -211,11 +206,8 @@ pub async fn send_bt_uart(uart_tx: &'static mut BufferedUarteTx<'static, UARTE0>
         }
 
         // Handle RSSI value updates
-        if RSSI_VALUE_MPU_TX.load(core::sync::atomic::Ordering::Relaxed) {
+        if RSSI_VALUE_MPU_TX.swap(false, core::sync::atomic::Ordering::Relaxed) {
             send_buf.fill(0); // Clear the buffer from any previous data
-
-            // Reset flag for sending to MPU
-            RSSI_VALUE_MPU_TX.store(false, core::sync::atomic::Ordering::Relaxed);
 
             let rssi = RSSI_VALUE.load(core::sync::atomic::Ordering::Relaxed);
             let msg = HostProtocolMessage::Bluetooth(Bluetooth::SignalStrength(rssi));
@@ -264,9 +256,7 @@ pub async fn send_bt_uart_no_cobs(uart_tx: &'static mut BufferedUarteTx<'static,
         }
 
         // Handle HMAC challenge-response
-        if CHALLENGE_REQUEST.load(core::sync::atomic::Ordering::Relaxed) {
-            CHALLENGE_REQUEST.store(false, core::sync::atomic::Ordering::Relaxed);
-
+        if CHALLENGE_REQUEST.swap(false, core::sync::atomic::Ordering::Relaxed) {
             type HmacSha256 = Hmac<ShaChallenge>;
 
             // SAFETY: UICR_SECRET_START points to valid read-only memory containing the secret
@@ -289,11 +279,8 @@ pub async fn send_bt_uart_no_cobs(uart_tx: &'static mut BufferedUarteTx<'static,
         }
 
         // Handle RSSI updates
-        if RSSI_VALUE_MPU_TX.load(core::sync::atomic::Ordering::Relaxed) {
+        if RSSI_VALUE_MPU_TX.swap(false, core::sync::atomic::Ordering::Relaxed) {
             send_buf.fill(0); // Clear the buffer from any previous data
-
-            // Reset flag for sending to MPU
-            RSSI_VALUE_MPU_TX.store(false, core::sync::atomic::Ordering::Relaxed);
 
             let rssi = RSSI_VALUE.load(core::sync::atomic::Ordering::Relaxed);
             info!("Sending back RSSI: {}", rssi);
