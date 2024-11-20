@@ -224,28 +224,24 @@ async fn main(_spawner: Spawner) {
     // Verify firmware on startup
     {
         let image_slice = get_fw_image_slice(BASE_APP_ADDR, APP_SIZE);
-        match check_fw(image_slice) {
-            (msg, true) => {
-                fw_is_valid = true;
-                info!("fw is valid");
-                ack_msg_send(msg, &mut tx)
-            }
-            (msg, false) => {
-                fw_is_valid = false;
-                info!("fw is invalid");
-                ack_msg_send(msg, &mut tx)
-            }
+        fw_is_valid = check_fw(image_slice).1;
+        if fw_is_valid {
+            info!("fw is valid");
+        } else {
+            info!("fw is invalid");
         }
     }
 
     // Check if secrets are sealed
     let seal = unsafe { &*nrf52805_pac::UICR::ptr() }.customer[SEAL_IDX].read().customer().bits();
 
-    // Send startup message
-    let mut buf = [0; 10];
-    buf.copy_from_slice(b"Bootloader");
-    let _ = tx.write(&buf).await;
-
+    // Send startup message (console only)
+    #[cfg(feature = "uart-pins-console")]
+    {
+        let mut buf = [0; 10];
+        buf.copy_from_slice(b"Bootloader");
+        let _ = tx.write(&buf).await;
+    }
     let mut boot_status: BootState = Default::default();
 
     // Main command processing loop
