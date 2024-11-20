@@ -200,7 +200,7 @@ pub fn get_fw_image_slice<'a>(base_address: u32, len: u32) -> &'a [u8] {
 }
 
 /// Verifies firmware and sends result over UART
-pub fn check_fw(image_slice: &[u8]) -> (HostProtocolMessage<'_>, bool) {
+pub fn check_fw(image_slice: &[u8]) -> (HostProtocolMessage<'_>, VerificationResult) {
     if let Some((result, hash)) = verify_os_image(image_slice) {
         return if result == VerificationResult::Valid {
             (
@@ -208,7 +208,7 @@ pub fn check_fw(image_slice: &[u8]) -> (HostProtocolMessage<'_>, bool) {
                     result: true,
                     hash: hash.sha,
                 }),
-                true,
+                VerificationResult::Valid,
             )
         } else {
             (
@@ -216,11 +216,14 @@ pub fn check_fw(image_slice: &[u8]) -> (HostProtocolMessage<'_>, bool) {
                     result: false,
                     hash: hash.sha,
                 }),
-                false,
+                VerificationResult::Invalid,
             )
         };
     }
-    (HostProtocolMessage::Bootloader(Bootloader::NoCosignHeader), false)
+    (
+        HostProtocolMessage::Bootloader(Bootloader::NoCosignHeader),
+        VerificationResult::Invalid,
+    )
 }
 
 /// Writes a secret to UICR memory and verifies it was written correctly

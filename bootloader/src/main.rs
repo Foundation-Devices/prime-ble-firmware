@@ -23,7 +23,7 @@ use panic_probe as _;
 
 use consts::*;
 use core::cell::RefCell;
-use cosign2::Header;
+use cosign2::{Header, VerificationResult};
 use crc::{Crc, CRC_32_ISCSI};
 use defmt::info;
 use embassy_executor::Spawner;
@@ -301,11 +301,11 @@ async fn main(_spawner: Spawner) {
                                 Bootloader::VerifyFirmware => {
                                     let image_slice = get_fw_image_slice(BASE_APP_ADDR, APP_SIZE);
                                     match check_fw(image_slice) {
-                                        (msg, true) => {
+                                        (msg, VerificationResult::Valid) => {
                                             ack_msg_send(msg, &mut tx);
                                             info!("fw is valid");
                                         }
-                                        (msg, false) => {
+                                        (msg, VerificationResult::Invalid) => {
                                             ack_msg_send(msg, &mut tx);
                                             info!("fw is invalid");
                                         }
@@ -332,10 +332,10 @@ async fn main(_spawner: Spawner) {
                                 Bootloader::BootFirmware => {
                                     // Double check firmware validity before jumping
                                     let image_slice = get_fw_image_slice(BASE_APP_ADDR, APP_SIZE);
-                                    let (msg, is_valid) = check_fw(image_slice);
+                                    let (msg, verif_res) = check_fw(image_slice);
                                     ack_msg_send(msg, &mut tx);
 
-                                    if is_valid {
+                                    if let VerificationResult::Valid = verif_res {
                                         // Clean up UART resources before jumping
                                         drop(tx);
                                         drop(rx);
