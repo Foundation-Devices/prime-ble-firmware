@@ -14,15 +14,9 @@ use sha2::{Digest, Sha256 as Sha};
 
 // Known public keys used for firmware signature verification
 // These are the authorized keys that can sign valid firmware updates
-const KNOWN_SIGNERS: [[u8; 33]; 2] = [
-    [
-        0x03, 129, 12, 122, 122, 122, 65, 228, 183, 129, 52, 56, 71, 10, 150, 103, 66, 200, 6, 209, 224, 28, 160, 234, 138, 182, 222, 152,
-        240, 216, 242, 176, 35,
-    ],
-    [
-        3, 183, 43, 173, 167, 178, 160, 111, 147, 27, 96, 177, 191, 221, 111, 147, 88, 112, 199, 126, 37, 79, 232, 178, 65, 192, 8, 185,
-        71, 42, 215, 48, 85,
-    ],
+// TODO: put well-known public keys here
+const KNOWN_SIGNERS: [[u8; 33]; 0] = [
+    // [0; 33],
 ];
 
 /// Wrapper struct for ECC signature verification operations
@@ -208,23 +202,23 @@ pub fn get_fw_image_slice<'a>(base_address: u32, len: u32) -> &'a [u8] {
 /// Verifies firmware and sends result over UART
 pub fn check_fw(image_slice: &[u8]) -> (HostProtocolMessage<'_>, bool) {
     if let Some((result, hash)) = verify_os_image(image_slice) {
-        if result == VerificationResult::Valid {
-            return (
+        return if result == VerificationResult::Valid {
+            (
                 HostProtocolMessage::Bootloader(Bootloader::AckVerifyFirmware {
                     result: true,
                     hash: hash.sha,
                 }),
                 true,
-            );
+            )
         } else {
-            return (
+            (
                 HostProtocolMessage::Bootloader(Bootloader::AckVerifyFirmware {
                     result: false,
                     hash: hash.sha,
                 }),
                 false,
-            );
-        }
+            )
+        };
     }
     (HostProtocolMessage::Bootloader(Bootloader::NoCosignHeader), false)
 }
