@@ -12,3 +12,9 @@ publish = false
 [dependencies]
 postcard = { version = "1.0.8", features = ["experimental-derive"] }
 serde = { version = "1.0.192", features = ["derive"], default-features = false }
+
+[dev-dependencies]
+clap = { version = "4.5.21", features = ["derive"] }
+env_logger = "0.11.5"
+tokio = { version = "1.41.1", features = ["full"] }
+tokio-serial = "5.4.4"

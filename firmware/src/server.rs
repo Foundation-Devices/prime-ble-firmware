@@ -163,9 +163,9 @@ pub async fn run_bluetooth(sd: &'static Softdevice, server: &Server) {
 
         // Request connection interval - trying to request a short one.
         let conn_params = ble_gap_conn_params_t {
-            conn_sup_timeout: 500,
-            max_conn_interval: ci_ms!(30),
-            min_conn_interval: ci_ms!(12),
+            conn_sup_timeout: 500,         // 5s
+            max_conn_interval: ci_ms!(30), // 30ms
+            min_conn_interval: ci_ms!(12), // 12ms
             slave_latency: 0,
         };
 
