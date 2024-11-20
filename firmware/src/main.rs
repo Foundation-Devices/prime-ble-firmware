@@ -80,9 +80,9 @@ async fn main(spawner: Spawner) {
     let p = embassy_nrf::init(conf);
 
     #[cfg(feature = "uart-pins-console")]
-    let baud_rate = uarte::Baudrate::BAUD115200;
+    let baud_rate = uarte::Baudrate::BAUD460800;
     #[cfg(feature = "uart-pins-console")]
-    info!("Uart console pins - 115200 BAUD");
+    info!("Uart console pins - 460800 BAUD");
 
     #[cfg(feature = "uart-pins-mpu")]
     let baud_rate = uarte::Baudrate::BAUD460800;

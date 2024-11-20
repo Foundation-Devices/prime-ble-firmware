@@ -113,12 +113,15 @@ pub async fn comms_task(uart: BufferedUarte<'static, UARTE0, TIMER1>) {
                     &mut timer_tot,
                     &data,
                 );
-
-                // let msg = HostProtocolMessage::Bluetooth(Bluetooth::ReceivedData(data.as_slice()));
-                // let cobs_tx = to_slice_cobs(&msg, &mut send_buf).unwrap();
+                #[cfg(any(feature = "debug", feature = "bluetooth-test"))]
+                let data = data.as_slice();
+                #[cfg(not(any(feature = "debug", feature = "bluetooth-test")))]
+                let msg = HostProtocolMessage::Bluetooth(Bluetooth::ReceivedData(data.as_slice()));
+                #[cfg(not(any(feature = "debug", feature = "bluetooth-test")))]
+                let data = to_slice_cobs(&msg, &mut send_buf).unwrap();
                 // Measure time taken to send packet to UART
                 let now = Instant::now();
-                let _ = tx.write_all(data.as_slice()).await;
+                let _ = tx.write_all(data).await;
                 let _ = tx.flush().await;
                 info!("Elapsed for packet to UART - {}", now.elapsed().as_micros());
                 assert_out_irq().await;
