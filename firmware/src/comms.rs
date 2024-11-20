@@ -191,7 +191,7 @@ pub async fn send_bt_uart(uart_tx: &'static mut BufferedUarteTx<'static, UARTE0>
             assert_out_irq().await; // Ask the MP
         }
 
-        // Handle RSSI value updates
+        // Handle BT address request
         if BT_ADDRESS_MPU_TX.swap(false, core::sync::atomic::Ordering::Relaxed) {
             send_buf.fill(0); // Clear the buffer from any previous data
 
