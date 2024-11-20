@@ -218,20 +218,6 @@ async fn main(_spawner: Spawner) {
     // Initialize flash controller
     let mut flash = Nvmc::new(p.NVMC);
 
-    // Track firmware validity
-    let mut fw_is_valid: bool;
-
-    // Verify firmware on startup
-    {
-        let image_slice = get_fw_image_slice(BASE_APP_ADDR, APP_SIZE);
-        fw_is_valid = check_fw(image_slice).1;
-        if fw_is_valid {
-            info!("fw is valid");
-        } else {
-            info!("fw is invalid");
-        }
-    }
-
     // Check if secrets are sealed
     let seal = unsafe { &*nrf52805_pac::UICR::ptr() }.customer[SEAL_IDX].read().customer().bits();
 
@@ -316,12 +302,10 @@ async fn main(_spawner: Spawner) {
                                     let image_slice = get_fw_image_slice(BASE_APP_ADDR, APP_SIZE);
                                     match check_fw(image_slice) {
                                         (msg, true) => {
-                                            fw_is_valid = true;
                                             ack_msg_send(msg, &mut tx);
                                             info!("fw is valid");
                                         }
                                         (msg, false) => {
-                                            fw_is_valid = false;
                                             ack_msg_send(msg, &mut tx);
                                             info!("fw is invalid");
                                         }
@@ -351,7 +335,7 @@ async fn main(_spawner: Spawner) {
                                     let (msg, is_valid) = check_fw(image_slice);
                                     ack_msg_send(msg, &mut tx);
 
-                                    if is_valid && fw_is_valid {
+                                    if is_valid {
                                         // Clean up UART resources before jumping
                                         drop(tx);
                                         drop(rx);
