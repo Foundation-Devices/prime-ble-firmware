@@ -25,8 +25,9 @@ pub const INT_VECTOR_TABLE_BASE: u16 = 0x1000;
 pub const BASE_APP_ADDR: u32 = 0x19000;
 
 /// Size of the application area in flash memory (50KB)
-/// This constant defines the maximum size available for the application firmware.
-/// The size is set to 50KB (0xD000 bytes) to leave sufficient space for the bootloader
+/// This constant defines the maximum size available for the application firmware.starting from 0x19000 up to 0x26000 
+/// consider that 2KB are needed for cosign2 signature so real fw app goes from 0x19800 to 0x26000 
+/// The size is set to 50KB to leave sufficient space for the bootloader
 /// while allowing reasonably sized application code.
 pub const APP_SIZE: u32 = 0xD000;
 
