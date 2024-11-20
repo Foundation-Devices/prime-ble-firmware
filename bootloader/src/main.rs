@@ -139,7 +139,7 @@ fn update_chunk<'a>(boot_status: &'a mut BootState, idx: usize, data: &'a [u8], 
 /// Sends a message over UART using COBS encoding
 #[inline(never)]
 pub fn ack_msg_send(message: HostProtocolMessage, tx: &mut UarteTx<UARTE0>) {
-    let mut buf_cobs = [0_u8; 48];
+    let mut buf_cobs = [0_u8; COBS_MAX_MSG_SIZE];
     let cobs_ack = to_slice_cobs(&message, &mut buf_cobs).unwrap();
     let _ = tx.blocking_write(cobs_ack);
     assert_out_irq();
