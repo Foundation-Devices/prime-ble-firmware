@@ -102,6 +102,15 @@ pub enum State {
     Unknown,
 }
 
+/// Errors that can occur during postcard serialization or deserialization
+#[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq)]
+pub enum PostcardError {
+    /// Error deserializing message
+    Deser,
+    /// Buffer overflow
+    OverFull,
+}
+
 /// Top-level message types for host-target communication
 #[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq)]
 pub enum HostProtocolMessage<'a> {
@@ -119,6 +128,8 @@ pub enum HostProtocolMessage<'a> {
     ChallengeRequest { nonce: u64 },
     /// Challenge response with authentication result
     ChallengeResult { result: [u8; 32] },
+    /// Postcard error
+    PostcardError(PostcardError),
 }
 
 #[cfg(test)]

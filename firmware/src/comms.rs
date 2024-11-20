@@ -9,7 +9,7 @@ use embassy_time::{with_timeout, Duration, Instant};
 use embedded_io_async::Write;
 use heapless::Vec;
 use hmac::{Hmac, Mac};
-use host_protocol::{Bluetooth, HostProtocolMessage, State, COBS_MAX_MSG_SIZE};
+use host_protocol::{Bluetooth, HostProtocolMessage, PostcardError, State, COBS_MAX_MSG_SIZE};
 use postcard::accumulator::{CobsAccumulator, FeedResult};
 use postcard::to_slice_cobs;
 use sha2::Sha256 as ShaChallenge;
@@ -152,10 +152,22 @@ pub async fn comms_task(uart: BufferedUarte<'static, UARTE0, TIMER1>) {
                         }
                         FeedResult::OverFull(new_wind) => {
                             info!("overfull");
+                            let msg = HostProtocolMessage::PostcardError(PostcardError::OverFull);
+                            if let Ok(cobs_tx) = to_slice_cobs(&msg, &mut send_buf) {
+                                let _ = tx.write_all(cobs_tx).await;
+                                let _ = tx.flush().await;
+                                assert_out_irq().await;
+                            }
                             new_wind
                         }
                         FeedResult::DeserError(new_wind) => {
                             info!("DeserError");
+                            let msg = HostProtocolMessage::PostcardError(PostcardError::Deser);
+                            if let Ok(cobs_tx) = to_slice_cobs(&msg, &mut send_buf) {
+                                let _ = tx.write_all(cobs_tx).await;
+                                let _ = tx.flush().await;
+                                assert_out_irq().await;
+                            }
                             new_wind
                         }
                         FeedResult::Success { data, remaining } => {

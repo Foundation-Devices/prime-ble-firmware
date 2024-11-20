@@ -39,9 +39,9 @@ use embassy_sync::blocking_mutex::CriticalSectionMutex;
 use embassy_sync::blocking_mutex::Mutex;
 use embedded_storage::nor_flash::NorFlash;
 use hmac::{Hmac, Mac};
-use host_protocol::HostProtocolMessage;
 use host_protocol::COBS_MAX_MSG_SIZE;
 use host_protocol::{Bootloader, SecretSaveResponse};
+use host_protocol::{HostProtocolMessage, PostcardError};
 use jump_app::jump_to_app;
 #[allow(unused_imports)]
 use nrf_softdevice::Softdevice;
@@ -252,10 +252,14 @@ async fn main(_spawner: Spawner) {
                     }
                     FeedResult::OverFull(new_wind) => {
                         info!("overfull");
+                        let msg = HostProtocolMessage::PostcardError(PostcardError::OverFull);
+                        ack_msg_send(msg, &mut tx);
                         new_wind
                     }
                     FeedResult::DeserError(new_wind) => {
                         info!("DeserError");
+                        let msg = HostProtocolMessage::PostcardError(PostcardError::Deser);
+                        ack_msg_send(msg, &mut tx);
                         new_wind
                     }
                     FeedResult::Success { data, remaining } => {
