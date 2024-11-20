@@ -194,7 +194,7 @@ async fn main(_spawner: Spawner) {
     config_uart.baudrate = uarte::Baudrate::BAUD115200;
 
     #[cfg(feature = "uart-pins-mpu")]
-    let (rxd, txd, baud_rate) = (p.P0_14, p.P0_12, uarte::Baudrate::BAUD1M);
+    let (rxd, txd, baud_rate) = (p.P0_14, p.P0_12, uarte::Baudrate::BAUD460800);
 
     #[cfg(feature = "uart-pins-console")]
     let (rxd, txd, baud_rate) = (p.P0_16, p.P0_18, uarte::Baudrate::BAUD115200);

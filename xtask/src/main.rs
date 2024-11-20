@@ -18,14 +18,15 @@ struct XtaskArgs {
 #[derive(Subcommand)]
 enum Commands {
     /// Build a full flashable firmware image with:
-    /// Softdevice - s112_nrf52_7.2.0_softdevice.hex
-    /// Bootloader in release version (MPU UART pins, baud rate 1M)
-    /// Memory protection ( no probe access and bootloader and SD MBR area protected )
+    /// SoftDevice - s112_nrf52_7.2.0_softdevice.hex
+    /// Bootloader in release version (MPU UART pins - baud rate 460800)
+    /// Memory protection (no probe access and bootloader and SD MBR area protected)
     #[command(verbatim_doc_comment)]
     BuildFwImage,
+
     /// Build a full package image with SD, bootloader and application without:
     /// Flash protection
-    /// UART mpu pins (console pins, baudrate 115200)
+    /// UART pins are redirected to the console at 115200 baud rate
     #[command(verbatim_doc_comment)]
     BuildFwDebugImage,
 }
