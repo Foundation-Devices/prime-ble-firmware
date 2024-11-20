@@ -85,9 +85,9 @@ async fn main(spawner: Spawner) {
     info!("Uart console pins - 115200 BAUD");
 
     #[cfg(feature = "uart-pins-mpu")]
-    let baud_rate = uarte::Baudrate::BAUD1M;
+    let baud_rate = uarte::Baudrate::BAUD460800;
     #[cfg(feature = "uart-pins-mpu")]
-    info!("Uart MPU pins - 1M BAUD");
+    info!("Uart MPU pins - 460800 BAUD");
 
     let mut config_uart = uarte::Config::default();
     config_uart.parity = uarte::Parity::EXCLUDED;

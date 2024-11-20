@@ -14,14 +14,6 @@ use postcard::accumulator::{CobsAccumulator, FeedResult};
 use postcard::to_slice_cobs;
 use sha2::Sha256 as ShaChallenge;
 
-// #[inline(never)]
-// pub async fn send_to_uart<'a>(msg: HostProtocolMessage<'_>, tx: &'a mut BufferedUarteTx<'a, UARTE0>) {
-//     let cobs_tx = to_slice_cobs(&msg, &mut send_buf).unwrap();
-//     let _ = tx.write_all(cobs_tx).await;
-//     let _ = tx.flush().await;
-//     assert_out_irq().await;
-// }
-
 /// Helper function to signal the MPU via GPIO
 /// Sends a falling edge pulse on the IRQ line
 async fn assert_out_irq() {
@@ -38,10 +30,55 @@ async fn assert_out_irq() {
     }
 }
 
+#[cfg(any(feature = "debug", feature = "bluetooth-test"))]
+/// Logs performance metrics if 1.5s has passed since the last log
+fn log_performance(timer_pkt: &mut Instant, rx_packet: &mut bool, pkt_counter: &mut u64, data_counter: &mut u64, timer_tot: &mut Instant) {
+    if timer_pkt.elapsed().as_millis() > 1500 && *rx_packet {
+        info!("Total packet number: {}", pkt_counter);
+        info!("Total packet time: {}", timer_tot.elapsed().as_millis() - 1500);
+        info!("Total data incoming: {}", data_counter);
+        if (timer_tot.elapsed().as_secs()) > 0 {
+            let rate = (*data_counter as f32 / (timer_tot.elapsed().as_millis() - 1500) as f32) * 1000.0;
+            info!("Rough data rate : {}", rate);
+        }
+        *data_counter = 0;
+        *pkt_counter = 0;
+        *rx_packet = false;
+        *timer_pkt = Instant::now();
+        *timer_tot = Instant::now();
+    }
+}
+
+#[cfg(any(feature = "debug", feature = "bluetooth-test"))]
+/// Logs the time taken to process an infra packet
+fn log_infra_packet(timer_pkt: &mut Instant, rx_packet: &mut bool, data_counter: &mut u64, pkt_counter: &mut u64, timer_tot: &mut Instant, data: &[u8]) {
+    if !*rx_packet {
+        *rx_packet = true;
+        *timer_tot = Instant::now();
+    }
+    info!("Infra packet time: {}", timer_pkt.elapsed().as_millis());
+    *timer_pkt = Instant::now();
+    *data_counter += data.len() as u64;
+    *pkt_counter += 1;
+}
+
 /// Main communication task that handles incoming UART messages from the MPU
 /// Decodes COBS-encoded messages and routes them to appropriate handlers
 #[embassy_executor::task]
 pub async fn comms_task(uart: BufferedUarte<'static, UARTE0, TIMER1>) {
+
+    // Rough performance metrics
+    #[cfg(any(feature = "debug", feature = "bluetooth-test"))]
+    let mut data_counter: u64 = 0;
+    #[cfg(any(feature = "debug", feature = "bluetooth-test"))]
+    let mut pkt_counter: u64 = 0;
+    #[cfg(any(feature = "debug", feature = "bluetooth-test"))]
+    let mut rx_packet = false;
+    #[cfg(any(feature = "debug", feature = "bluetooth-test"))]
+    let mut timer_pkt: Instant = Instant::now();
+    #[cfg(any(feature = "debug", feature = "bluetooth-test"))]
+    let mut timer_tot: Instant = Instant::now();
+
     let mut send_buf = [0u8; COBS_MAX_MSG_SIZE];
 
     // Split UART into RX and TX
@@ -54,13 +91,23 @@ pub async fn comms_task(uart: BufferedUarte<'static, UARTE0, TIMER1>) {
     let mut cobs_buf: CobsAccumulator<COBS_MAX_MSG_SIZE> = CobsAccumulator::new();
     loop {
         {
+            #[cfg(any(feature = "debug", feature = "bluetooth-test"))]
+            log_performance(&mut timer_pkt, &mut rx_packet, &mut pkt_counter, &mut data_counter, &mut timer_tot);
+
             // Check for new BLE data to send to MPU
             if let Ok(data) = BT_DATA_RX.try_receive() {
                 send_buf.fill(0); // Clear the buffer from any previous data
-                let msg = HostProtocolMessage::Bluetooth(Bluetooth::ReceivedData(data.as_slice()));
-                let cobs_tx = to_slice_cobs(&msg, &mut send_buf).unwrap();
-                let _ = tx.write_all(cobs_tx).await;
+
+                #[cfg(any(feature = "debug", feature = "bluetooth-test"))]
+                log_infra_packet(&mut timer_pkt, &mut rx_packet, &mut data_counter, &mut pkt_counter, &mut timer_tot, &data);
+
+                // let msg = HostProtocolMessage::Bluetooth(Bluetooth::ReceivedData(data.as_slice()));
+                // let cobs_tx = to_slice_cobs(&msg, &mut send_buf).unwrap();
+                // Measure time taken to send packet to UART
+                let now = Instant::now();
+                let _ = tx.write_all(data.as_slice()).await;
                 let _ = tx.flush().await;
+                info!("Elapsed for packet to UART - {}", now.elapsed().as_micros());
                 assert_out_irq().await;
                 // Try to send another packet if there is more data to send
                 if !BT_DATA_RX.is_empty() {
@@ -74,14 +121,9 @@ pub async fn comms_task(uart: BufferedUarte<'static, UARTE0, TIMER1>) {
                 send_buf.fill(0);
 
                 // Exit if no data received
-                let num = match n {
-                    Ok(n) => n,
-                    Err(_) => break,
-                };
-
-                if num == 0 {
+                let Ok(num) = n else {
                     break;
-                }
+                };
 
                 let buf = &raw_buf[..num];
                 let mut window = buf;
@@ -155,12 +197,10 @@ async fn bluetooth_handler(msg: Bluetooth<'_>) -> Option<HostProtocolMessage<'_>
         Bluetooth::Enable => {
             info!("Bluetooth enabled");
             BT_STATE.store(true, core::sync::atomic::Ordering::Relaxed);
-            return None;
         }
         Bluetooth::Disable => {
             info!("Bluetooth disabled");
             BT_STATE.store(false, core::sync::atomic::Ordering::Relaxed);
-            return None;
         }
         Bluetooth::GetSignalStrength => {
             let msg = HostProtocolMessage::Bluetooth(Bluetooth::SignalStrength(RSSI_VALUE.load(core::sync::atomic::Ordering::Relaxed)));
@@ -171,9 +211,7 @@ async fn bluetooth_handler(msg: Bluetooth<'_>) -> Option<HostProtocolMessage<'_>
             let msg = HostProtocolMessage::Bluetooth(Bluetooth::AckFirmwareVersion { version });
             return Some(msg);
         }
-        Bluetooth::SignalStrength(_) => {
-            return None;
-        }
+        Bluetooth::SignalStrength(_) => {}
         Bluetooth::SendData(data) => {
             // Only accept data packets within MTU size limit
             if data.len() <= MTU {
@@ -182,7 +220,6 @@ async fn bluetooth_handler(msg: Bluetooth<'_>) -> Option<HostProtocolMessage<'_>
                     let _ = buffer_tx_bt.push(Vec::from_slice(data).unwrap());
                 }
             }
-            return None;
         }
         Bluetooth::GetBtAddress => {
             let msg = HostProtocolMessage::Bluetooth(Bluetooth::AckBtAaddress {
@@ -190,16 +227,11 @@ async fn bluetooth_handler(msg: Bluetooth<'_>) -> Option<HostProtocolMessage<'_>
             });
             return Some(msg);
         }
-        Bluetooth::ReceivedData(_) => {
-            return None;
-        }
-        Bluetooth::AckFirmwareVersion { .. } => {
-            return None;
-        }
-        Bluetooth::AckBtAaddress { .. } => {
-            return None;
-        }
+        Bluetooth::ReceivedData(_) => {}
+        Bluetooth::AckFirmwareVersion { .. } => {}
+        Bluetooth::AckBtAaddress { .. } => {}
     }
+    None
 }
 
 /// Handles HMAC challenge-response authentication
@@ -209,18 +241,16 @@ fn hmac_challenge_response(nonce: u64) -> HostProtocolMessage<'static> {
     let secret_as_slice = unsafe { core::slice::from_raw_parts(UICR_SECRET_START as *const u8, UICR_SECRET_SIZE as usize) };
 
     // Calculate HMAC response
-    let result = if let Ok(mut mac) = HmacSha256::new_from_slice(secret_as_slice) {
+    if let Ok(mut mac) = HmacSha256::new_from_slice(secret_as_slice) {
         mac.update(&nonce.to_be_bytes());
         let result = mac.finalize().into_bytes();
         info!("{=[u8;32]:#X}", result.into());
         HostProtocolMessage::ChallengeResult { result: result.into() }
     } else {
         HostProtocolMessage::ChallengeResult { result: [0xFF; 32] }
-    };
-    result
+    }
 }
 
-// #[embassy_executor::task]
 // pub async fn send_bt_uart_no_cobs(uart_tx: &'static mut BufferedUarteTx<'static, UARTE0>) {
 //     let mut send_buf = [0u8; COBS_MAX_MSG_SIZE];
 //     let mut data_counter: u64 = 0;

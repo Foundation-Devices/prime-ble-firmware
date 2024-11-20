@@ -23,7 +23,7 @@ use panic_probe as _;
 
 use consts::*;
 use core::cell::RefCell;
-use cosign2::Header;
+use cosign2::{Header, VerificationResult};
 use crc::{Crc, CRC_32_ISCSI};
 use defmt::info;
 use embassy_executor::Spawner;
@@ -139,7 +139,7 @@ fn update_chunk<'a>(boot_status: &'a mut BootState, idx: usize, data: &'a [u8], 
 /// Sends a message over UART using COBS encoding
 #[inline(never)]
 pub fn ack_msg_send(message: HostProtocolMessage, tx: &mut UarteTx<UARTE0>) {
-    let mut buf_cobs = [0_u8; 48];
+    let mut buf_cobs = [0_u8; COBS_MAX_MSG_SIZE];
     let cobs_ack = to_slice_cobs(&message, &mut buf_cobs).unwrap();
     let _ = tx.blocking_write(cobs_ack);
     assert_out_irq();
@@ -194,7 +194,7 @@ async fn main(_spawner: Spawner) {
     config_uart.baudrate = uarte::Baudrate::BAUD115200;
 
     #[cfg(feature = "uart-pins-mpu")]
-    let (rxd, txd, baud_rate) = (p.P0_14, p.P0_12, uarte::Baudrate::BAUD1M);
+    let (rxd, txd, baud_rate) = (p.P0_14, p.P0_12, uarte::Baudrate::BAUD460800);
 
     #[cfg(feature = "uart-pins-console")]
     let (rxd, txd, baud_rate) = (p.P0_16, p.P0_18, uarte::Baudrate::BAUD115200);
@@ -218,34 +218,16 @@ async fn main(_spawner: Spawner) {
     // Initialize flash controller
     let mut flash = Nvmc::new(p.NVMC);
 
-    // Track firmware validity
-    let mut fw_is_valid: bool;
-
-    // Verify firmware on startup
-    {
-        let image_slice = get_fw_image_slice(BASE_APP_ADDR, APP_SIZE);
-        match check_fw(image_slice) {
-            (msg, true) => {
-                fw_is_valid = true;
-                info!("fw is valid");
-                ack_msg_send(msg, &mut tx)
-            }
-            (msg, false) => {
-                fw_is_valid = false;
-                info!("fw is invalid");
-                ack_msg_send(msg, &mut tx)
-            }
-        }
-    }
-
     // Check if secrets are sealed
     let seal = unsafe { &*nrf52805_pac::UICR::ptr() }.customer[SEAL_IDX].read().customer().bits();
 
-    // Send startup message
-    let mut buf = [0; 10];
-    buf.copy_from_slice(b"Bootloader");
-    let _ = tx.write(&buf).await;
-
+    // Send startup message (console only)
+    #[cfg(feature = "uart-pins-console")]
+    {
+        let mut buf = [0; 10];
+        buf.copy_from_slice(b"Bootloader");
+        let _ = tx.write(&buf).await;
+    }
     let mut boot_status: BootState = Default::default();
 
     // Main command processing loop
@@ -319,13 +301,11 @@ async fn main(_spawner: Spawner) {
                                 Bootloader::VerifyFirmware => {
                                     let image_slice = get_fw_image_slice(BASE_APP_ADDR, APP_SIZE);
                                     match check_fw(image_slice) {
-                                        (msg, true) => {
-                                            fw_is_valid = true;
+                                        (msg, VerificationResult::Valid) => {
                                             ack_msg_send(msg, &mut tx);
                                             info!("fw is valid");
                                         }
-                                        (msg, false) => {
-                                            fw_is_valid = false;
+                                        (msg, VerificationResult::Invalid) => {
                                             ack_msg_send(msg, &mut tx);
                                             info!("fw is invalid");
                                         }
@@ -352,8 +332,10 @@ async fn main(_spawner: Spawner) {
                                 Bootloader::BootFirmware => {
                                     // Double check firmware validity before jumping
                                     let image_slice = get_fw_image_slice(BASE_APP_ADDR, APP_SIZE);
-                                    let (_, is_valid) = check_fw(image_slice);
-                                    if is_valid && fw_is_valid {
+                                    let (msg, verif_res) = check_fw(image_slice);
+                                    ack_msg_send(msg, &mut tx);
+
+                                    if let VerificationResult::Valid = verif_res {
                                         // Clean up UART resources before jumping
                                         drop(tx);
                                         drop(rx);
@@ -362,15 +344,6 @@ async fn main(_spawner: Spawner) {
                                             jump_to_app();
                                         }
                                     }
-
-                                    // If we get here, firmware verification failed
-                                    ack_msg_send(
-                                        HostProtocolMessage::Bootloader(Bootloader::AckVerifyFirmware {
-                                            result: false,
-                                            hash: [0xFF; 32],
-                                        }),
-                                        &mut tx,
-                                    );
                                 }
                                 _ => (),
                             },
