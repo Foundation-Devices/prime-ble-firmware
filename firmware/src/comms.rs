@@ -51,7 +51,14 @@ fn log_performance(timer_pkt: &mut Instant, rx_packet: &mut bool, pkt_counter: &
 
 #[cfg(any(feature = "debug", feature = "bluetooth-test"))]
 /// Logs the time taken to process an infra packet
-fn log_infra_packet(timer_pkt: &mut Instant, rx_packet: &mut bool, data_counter: &mut u64, pkt_counter: &mut u64, timer_tot: &mut Instant, data: &[u8]) {
+fn log_infra_packet(
+    timer_pkt: &mut Instant,
+    rx_packet: &mut bool,
+    data_counter: &mut u64,
+    pkt_counter: &mut u64,
+    timer_tot: &mut Instant,
+    data: &[u8],
+) {
     if !*rx_packet {
         *rx_packet = true;
         *timer_tot = Instant::now();
@@ -66,7 +73,6 @@ fn log_infra_packet(timer_pkt: &mut Instant, rx_packet: &mut bool, data_counter:
 /// Decodes COBS-encoded messages and routes them to appropriate handlers
 #[embassy_executor::task]
 pub async fn comms_task(uart: BufferedUarte<'static, UARTE0, TIMER1>) {
-
     // Rough performance metrics
     #[cfg(any(feature = "debug", feature = "bluetooth-test"))]
     let mut data_counter: u64 = 0;
@@ -99,7 +105,14 @@ pub async fn comms_task(uart: BufferedUarte<'static, UARTE0, TIMER1>) {
                 send_buf.fill(0); // Clear the buffer from any previous data
 
                 #[cfg(any(feature = "debug", feature = "bluetooth-test"))]
-                log_infra_packet(&mut timer_pkt, &mut rx_packet, &mut data_counter, &mut pkt_counter, &mut timer_tot, &data);
+                log_infra_packet(
+                    &mut timer_pkt,
+                    &mut rx_packet,
+                    &mut data_counter,
+                    &mut pkt_counter,
+                    &mut timer_tot,
+                    &data,
+                );
 
                 // let msg = HostProtocolMessage::Bluetooth(Bluetooth::ReceivedData(data.as_slice()));
                 // let cobs_tx = to_slice_cobs(&msg, &mut send_buf).unwrap();

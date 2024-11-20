@@ -156,8 +156,5 @@ async fn main(spawner: Spawner) {
         } else {
             Timer::after_millis(100).await;
         }
-        else {
-            Timer::after_millis(100).await;
-        }
     }
 }
