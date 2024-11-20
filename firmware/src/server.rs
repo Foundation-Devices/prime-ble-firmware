@@ -102,7 +102,7 @@ async fn notify_data_tx<'a>(server: &'a Server, connection: &'a Connection) {
         }
 
         // Sleep for one millisecond.
-        Timer::after(Duration::from_nanos(10)).await
+        Timer::after_millis(1).await
     }
 }
 
