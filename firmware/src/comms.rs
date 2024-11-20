@@ -34,12 +34,14 @@ async fn assert_out_irq() {
 /// Logs performance metrics if 1.5s has passed since the last log
 fn log_performance(timer_pkt: &mut Instant, rx_packet: &mut bool, pkt_counter: &mut u64, data_counter: &mut u64, timer_tot: &mut Instant) {
     if timer_pkt.elapsed().as_millis() > 1500 && *rx_packet {
-        info!("Total packet number: {}", pkt_counter);
-        info!("Total packet time: {}", timer_tot.elapsed().as_millis() - 1500);
-        info!("Total data incoming: {}", data_counter);
+        let pkt_time = timer_tot.elapsed().as_millis() - 1500;
+        info!(
+            "Total packet number: {}, time: {} ms, data incoming: {} bytes",
+            pkt_counter, pkt_time, data_counter
+        );
         if (timer_tot.elapsed().as_secs()) > 0 {
-            let rate = (*data_counter as f32 / (timer_tot.elapsed().as_millis() - 1500) as f32) * 1000.0;
-            info!("Rough data rate : {}", rate);
+            let rate = (*data_counter as f32 / pkt_time as f32) * 8.0;
+            info!("Rough data rate: {} kbps", rate);
         }
         *data_counter = 0;
         *pkt_counter = 0;
