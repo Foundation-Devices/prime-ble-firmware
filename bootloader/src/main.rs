@@ -348,7 +348,9 @@ async fn main(_spawner: Spawner) {
                                 Bootloader::BootFirmware => {
                                     // Double check firmware validity before jumping
                                     let image_slice = get_fw_image_slice(BASE_APP_ADDR, APP_SIZE);
-                                    let (_, is_valid) = check_fw(image_slice);
+                                    let (msg, is_valid) = check_fw(image_slice);
+                                    ack_msg_send(msg, &mut tx);
+
                                     if is_valid && fw_is_valid {
                                         // Clean up UART resources before jumping
                                         drop(tx);
@@ -358,15 +360,6 @@ async fn main(_spawner: Spawner) {
                                             jump_to_app();
                                         }
                                     }
-
-                                    // If we get here, firmware verification failed
-                                    ack_msg_send(
-                                        HostProtocolMessage::Bootloader(Bootloader::AckVerifyFirmware {
-                                            result: false,
-                                            hash: [0xFF; 32],
-                                        }),
-                                        &mut tx,
-                                    );
                                 }
                                 _ => (),
                             },
