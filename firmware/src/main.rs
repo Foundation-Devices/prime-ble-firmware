@@ -161,8 +161,6 @@ async fn main(spawner: Spawner) {
     *BT_ADDRESS.lock().await = address;
 
     loop {
-        Timer::after_millis(1).await;
-
         if BT_STATE.load(core::sync::atomic::Ordering::Relaxed) {
             let run_bluetooth_fut = run_bluetooth(sd, &server);
             let stop_bluetooth_fut = stop_bluetooth();
@@ -172,6 +170,9 @@ async fn main(spawner: Spawner) {
             info!("Starting BLE advertisement");
             // source of this idea https://github.com/embassy-rs/nrf-softdevice/blob/master/examples/src/bin/ble_peripheral_onoff.rs
             futures::future::select(run_bluetooth_fut, stop_bluetooth_fut).await;
+        }
+        else {
+            Timer::after_millis(100).await;
         }
     }
 }
