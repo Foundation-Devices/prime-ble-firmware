@@ -20,15 +20,17 @@ fn main() {
     // Put `memory.x` in our output directory and ensure it's
     // on the linker search path.
     let out = &PathBuf::from(env::var_os("OUT_DIR").unwrap());
-    #[cfg(all(feature = "default", not(feature = "bluetooth-test")))]
-    let _ = std::fs::copy("./memory_signed.x", "./memory.x");
 
-    #[cfg(any(feature = "debug", feature = "bluetooth-test"))]
-    let _ = std::fs::copy("./memory_unsigned.x", "./memory.x");
-
+    #[cfg(all(not(feature = "debug"), not(feature = "bluetooth-test")))]
     File::create(out.join("./memory.x"))
         .unwrap()
-        .write_all(include_bytes!("./memory.x"))
+        .write_all(include_bytes!("./memory_signed.x"))
+        .unwrap();
+
+    #[cfg(any(feature = "debug", feature = "bluetooth-test"))]
+    File::create(out.join("./memory.x"))
+        .unwrap()
+        .write_all(include_bytes!("./memory_unsigned.x"))
         .unwrap();
 
     println!("cargo:rustc-link-search={}", out.display());
@@ -37,7 +39,10 @@ fn main() {
     // any file in the project changes. By specifying `memory.x`
     // here, we ensure the build script is only re-run when
     // `memory.x` is changed.
-    println!("cargo:rerun-if-changed=./memory.x");
+    #[cfg(all(not(feature = "debug"), not(feature = "bluetooth-test")))]
+    println!("cargo:rerun-if-changed=./memory_signed.x");
+    #[cfg(any(feature = "debug", feature = "bluetooth-test"))]
+    println!("cargo:rerun-if-changed=./memory_unsigned.x");
 
     println!("cargo:rustc-link-arg-bins=--nmagic");
     println!("cargo:rustc-link-arg-bins=-Tlink.x");
