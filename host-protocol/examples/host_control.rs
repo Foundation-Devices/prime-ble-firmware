@@ -6,7 +6,6 @@ use tokio_serial::SerialPortBuilderExt;
 
 #[derive(Clone, Debug, PartialEq, ValueEnum)]
 enum Command {
-    ListPort,
     Reset,
     Enable,
     Disable,
@@ -24,43 +23,47 @@ impl From<Command> for HostProtocolMessage<'_> {
             Command::Rssi => HostProtocolMessage::Bluetooth(Bluetooth::GetSignalStrength),
             Command::Address => HostProtocolMessage::Bluetooth(Bluetooth::GetBtAddress),
             Command::FwVersion => HostProtocolMessage::Bluetooth(Bluetooth::GetFirmwareVersion),
-            _ => unreachable!(),
         }
     }
 }
 
 #[derive(Debug, Parser)]
 struct Args {
+    #[arg(short, long)]
+    list_ports: bool,
     #[arg(short, long, default_value_t = String::from("/dev/ttyUSB0"))]
     port: String,
     #[arg(short, long, default_value_t = 460800)]
     baudrate: u32,
     #[arg(short, long, value_enum)]
-    cmd: Command,
+    cmd: Option<Command>,
 }
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
-    env_logger::init();
+    pretty_env_logger::init();
 
     let args = Args::parse();
 
-    match args.cmd {
-        Command::ListPort => {
-            let ports = tokio_serial::available_ports().unwrap();
-            let ports: Vec<String> = ports.into_iter().map(|p| p.port_name).collect();
-            for port in ports {
-                println!("{}", port);
-            }
+    if args.list_ports {
+        let ports = tokio_serial::available_ports().unwrap();
+        let ports: Vec<String> = ports.into_iter().map(|p| p.port_name).collect();
+        println!("List of available serial ports:");
+        for port in ports {
+            println!("- {}", port);
         }
-        cmd => {
-            let mut serial = tokio_serial::new(&args.port, args.baudrate).open_native_async()?;
-            let mut buf = [0; 512]; // Buffer large enough for all messages
-            let msg = postcard::to_slice_cobs::<HostProtocolMessage>(&cmd.into(), &mut buf)?;
-            println!(">>{:02x?}", msg);
-            serial.write_all(msg).await?;
-        }
-    };
+        return Ok(());
+    }
+
+    if let Some(cmd) = args.cmd {
+        let mut serial = tokio_serial::new(&args.port, args.baudrate).open_native_async()?;
+        let mut buf = [0; 512]; // Buffer large enough for all messages
+        let msg = postcard::to_slice_cobs::<HostProtocolMessage>(&cmd.into(), &mut buf)?;
+        println!(">>{:02x?}", msg);
+        serial.write_all(msg).await?;
+    } else {
+        println!("Choose a command to be send.");
+    }
 
     Ok(())
 }
