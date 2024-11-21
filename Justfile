@@ -1,6 +1,13 @@
 # SPDX-FileCopyrightText: 2024 Foundation Devices, Inc. <hello@foundation.xyz>
 # SPDX-License-Identifier: GPL-3.0-or-later
 
+# Install requirments
+install:
+    cargo install cargo-binutils
+    rustup component add llvm-tools
+    rustup target add thumbv7em-none-eabi
+    CC="" cargo install --path ../keyOS/imports/cosign2/cosign2-bin --bin cosign2
+
 # Build production firmware package
 build:
     cargo xtask build-fw-image
@@ -24,3 +31,11 @@ bootloader-debug:
 # Run COBS protocol size validation tests
 cobs-size-test:
     cd host-protocol && cargo test -- --nocapture
+
+# Send Host Protocol Enable Bluetooth command
+enable-ble:
+    cargo run --example host_control -- -c enable
+
+# Send data by BLE to "Passport Prime" peripheral
+ble-send:
+    cargo run -p host-ble -- -w
