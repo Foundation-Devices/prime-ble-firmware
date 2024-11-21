@@ -5,7 +5,6 @@
 #![no_main]
 
 mod comms;
-mod consts;
 mod nus;
 mod server;
 

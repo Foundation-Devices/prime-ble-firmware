@@ -5,8 +5,10 @@
 resolver = "2"
 
 members = [
+    "consts",
     "firmware",
     "bootloader",
+    "host-ble",
     "host-protocol",
     "xtask",
 ]

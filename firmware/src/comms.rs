@@ -1,7 +1,7 @@
 // Standard imports for BLE communication and cryptographic operations
-use crate::consts::{BT_MAX_NUM_PKT, MTU, UICR_SECRET_SIZE, UICR_SECRET_START};
 use crate::{BT_ADDRESS, BT_DATA_TX, IRQ_OUT_PIN};
 use crate::{BT_DATA_RX, BT_STATE, RSSI_VALUE};
+use consts::{BT_MAX_NUM_PKT, MTU, UICR_SECRET_SIZE, UICR_SECRET_START};
 use defmt::info;
 use embassy_nrf::buffered_uarte::BufferedUarte;
 use embassy_nrf::peripherals::{TIMER1, UARTE0};

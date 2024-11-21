@@ -1,13 +1,13 @@
 // SPDX-FileCopyrightText: 2024 Foundation Devices, Inc. <hello@foundationdevices.com>
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-use crate::consts::{ATT_MTU, DEVICE_NAME, SERVICES_LIST, SHORT_NAME};
 use crate::nus::*;
 use crate::BT_DATA_TX;
 use crate::{BT_STATE, RSSI_VALUE};
+use consts::{ATT_MTU, DEVICE_NAME, SERVICES_LIST, SHORT_NAME};
 use core::mem;
 use defmt::{info, *};
-use embassy_time::{Duration, Timer};
+use embassy_time::Timer;
 use futures::future::{select, Either};
 use futures::pin_mut;
 use nrf_softdevice::ble::advertisement_builder::{ExtendedAdvertisementBuilder, ExtendedAdvertisementPayload, Flag, ServiceList};
