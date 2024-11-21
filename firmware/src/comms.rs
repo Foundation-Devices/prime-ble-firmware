@@ -248,6 +248,9 @@ async fn bluetooth_handler(msg: Bluetooth<'_>) -> Option<HostProtocolMessage<'_>
                 let mut buffer_tx_bt = BT_DATA_TX.lock().await;
                 if buffer_tx_bt.len() < BT_MAX_NUM_PKT {
                     let _ = buffer_tx_bt.push(Vec::from_slice(data).unwrap());
+                } else {
+                    let msg = HostProtocolMessage::Bluetooth(Bluetooth::UartBufferFull);
+                    return Some(msg);
                 }
             }
         }
@@ -260,6 +263,7 @@ async fn bluetooth_handler(msg: Bluetooth<'_>) -> Option<HostProtocolMessage<'_>
         Bluetooth::ReceivedData(_) => {}
         Bluetooth::AckFirmwareVersion { .. } => {}
         Bluetooth::AckBtAaddress { .. } => {}
+        Bluetooth::UartBufferFull => {}
     }
     None
 }
