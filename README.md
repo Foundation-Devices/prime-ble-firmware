@@ -26,8 +26,8 @@ The firmware and bootloader communicate with the main MCU via UART using the COB
    cargo install cargo-binutils
    ```
    ```bash
-   # Install LLVM toolchain and srec_cat for hex file manipulation
-   apt install llvm libclang-dev libsrecord*
+   # Install LLVM toolchain
+   apt install llvm libclang-dev
    ```
    ```bash
    # Add LLVM tools component for binary inspection

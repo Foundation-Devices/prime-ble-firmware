@@ -1,5 +1,6 @@
 use cargo_metadata::semver::Version;
 use clap::{Parser, Subcommand};
+use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 use std::process::{exit, Command, Stdio};
 use std::{env, fs};
@@ -33,20 +34,6 @@ enum Commands {
 
 fn project_root() -> PathBuf {
     Path::new(&env!("CARGO_MANIFEST_DIR")).ancestors().nth(1).unwrap().to_path_buf()
-}
-
-fn srecord() -> PathBuf {
-    which::which("srec_cat").unwrap_or_else(|_| {
-        tracing::error!("SRecord tools not found. Please install them:");
-        println!("\nOn Ubuntu/Debian:");
-        println!("   sudo apt-get install srecord");
-        println!("\nOn macOS:");
-        println!("   brew install srecord");
-        println!("\nOn Windows:");
-        println!("   1. Download from http://srecord.sourceforge.net/");
-        println!("   2. Add the installation directory to your PATH environment variable");
-        panic!("srecord tools must be installed to continue")
-    })
 }
 
 pub fn cargo() -> String {
@@ -364,69 +351,122 @@ fn sign_bt_firmware() {
     }
 }
 
+enum MergeableFile<P: AsRef<Path>> {
+    IHex(P),
+    Binary(P, u32),
+}
+
+fn merge_files<P: AsRef<Path>>(inputs: Vec<MergeableFile<P>>, output: P) {
+    let mut records = vec![];
+
+    inputs.into_iter().for_each(|file| {
+        match file {
+            MergeableFile::IHex(path) => {
+                let mut file = fs::File::open(path).expect("unable to open input file");
+                let mut data = String::new();
+                file.read_to_string(&mut data).expect("unable to read the whole file");
+
+                // wrap ihex::Reader on string
+                let ihex = ihex::Reader::new(&data);
+
+                let mut upper_address = 0u32;
+                // iterate through ihex records
+                for record in ihex {
+                    let record = record.expect("error while parsing ihex file");
+                    match record {
+                        ihex::Record::StartSegmentAddress { cs, ip } => {
+                            upper_address = ((cs as u32) << 4) + (ip as u32);
+                        }
+                        ihex::Record::StartLinearAddress(addr) => {
+                            upper_address = addr << 16;
+                        }
+                        ihex::Record::ExtendedSegmentAddress(addr) => {
+                            upper_address = (addr as u32) << 4;
+                        }
+                        ihex::Record::ExtendedLinearAddress(addr) => {
+                            upper_address = (addr as u32) << 16;
+                        }
+                        ihex::Record::Data { offset, value } => {
+                            let address = upper_address + (offset as u32);
+                            records.push((address, value));
+                        }
+                        ihex::Record::EndOfFile => {
+                            // nothing to do
+                        }
+                    }
+                }
+            }
+            MergeableFile::Binary(path, global_offset) => {
+                let mut file = fs::File::open(path).expect("unable to open input file");
+
+                let mut data = vec![];
+                file.read_to_end(&mut data).expect("unable to read the whole file");
+
+                // fill records with slice of 32 bytes from data
+                for (i, chunk) in data.chunks(32).enumerate() {
+                    let address = global_offset + (i as u32) * 32;
+                    records.push((address, chunk.to_vec()));
+                }
+            }
+        }
+    });
+
+    // sort all records by addresses
+    records.sort_by_key(|(addr, _)| *addr);
+
+    // prepare records for output file
+    let mut out_records = vec![];
+
+    // get first record to store starting upper address
+    let (addr, _) = records[0];
+    let mut segment_upper_address = addr >> 16;
+    out_records.push(ihex::Record::StartLinearAddress(segment_upper_address));
+
+    // iterate through records and push them to output vector
+    for (addr, value) in records.iter() {
+        let upper = addr >> 16;
+
+        // write extend linear address record if it has changed
+        if upper != segment_upper_address {
+            out_records.push(ihex::Record::ExtendedLinearAddress(upper as u16));
+        }
+
+        let offset = addr & 0xffff;
+        out_records.push(ihex::Record::Data {
+            offset: offset as u16,
+            value: value.clone(),
+        });
+        segment_upper_address = upper;
+    }
+
+    // push EOF record
+    out_records.push(ihex::Record::EndOfFile);
+
+    // create ihex file
+    let data = ihex::create_object_file_representation(&out_records).expect("error while create ihex object");
+
+    // write output file
+    let mut file = fs::File::create(output).expect("unable to create output file");
+    file.write_all(data.as_bytes()).expect("unable to write ihex object to file");
+}
+
 fn build_bt_package() {
-    tracing::info!("Converting bin signed package to hex file with starting offset 0x19800");
-    let status = Command::new(srecord())
-        .current_dir(project_root())
-        .args([
-            "./BtPackage/BT_application_signed.bin",
-            "-Binary",
-            "-o",
-            "./BtPackage/BT_application_signed.hex",
-            "-Intel",
-        ])
-        .status()
-        .expect("Running Cargo failed");
-    if !status.success() {
-        tracing::error!("Converting bin to hex failed");
-        exit(-1);
-    }
+    tracing::info!("Merging softdevice, bootloader and BT signed application (with 0x19000 offset) in single hex");
+    merge_files(
+        vec![
+            MergeableFile::Binary(project_root().join("BtPackage/BT_application_signed.bin"), 0x19000),
+            MergeableFile::IHex(project_root().join("BtPackage/bootloader.hex")),
+            MergeableFile::IHex(project_root().join("misc/s112_nrf52_7.2.0_softdevice.hex")),
+        ],
+        project_root().join("BtPackage/BTApp_Full_Image2.hex"),
+    );
 
-    let status = Command::new(srecord().clone())
-        .current_dir(project_root())
-        .args([
-            "./BtPackage/BT_application_signed.hex",
-            "-Intel",
-            "-offset",
-            "0x19000",
-            "-o",
-            "./BtPackage/BT_application_signed.hex",
-            "-Intel",
-        ])
-        .status()
-        .expect("Running Cargo failed");
-    if !status.success() {
-        tracing::error!("Converting bin to hex failed");
-        exit(-1);
-    }
-
-    tracing::info!("Merging softdevice bootloader and BT signed application in single hex");
-    let status = Command::new(srecord())
-        .current_dir(project_root())
-        .args([
-            "./BtPackage/BT_application_signed.hex",
-            "-Intel",
-            "./BtPackage/bootloader.hex",
-            "-Intel",
-            "./misc/s112_nrf52_7.2.0_softdevice.hex",
-            "-Intel",
-            "-o",
-            "./BtPackage/BTApp_Full_Image.hex",
-            "-Intel",
-        ])
-        .status()
-        .expect("Running Cargo failed");
-    if !status.success() {
-        tracing::error!("Merging signed package failed");
-        exit(-1);
-    }
-
-    tracing::info!("Removing single hex files");
+    tracing::info!("Removing temporary files");
     let status = Command::new("rm")
         .current_dir(project_root().join("BtPackage"))
         .arg("-rf")
         .arg("bootloader.hex")
-        .arg("BT_application_signed.hex")
+        .arg("BT_application_signed.bin")
         .arg("BtApp.hex")
         .status()
         .expect("Running rm failed");
@@ -438,27 +478,16 @@ fn build_bt_package() {
 
 fn build_bt_package_debug() {
     tracing::info!("Merging softdevice bootloader and BT signed application in single hex");
-    let status = Command::new(srecord())
-        .current_dir(project_root())
-        .args([
-            "./BtPackageDebug/BtappDebug.hex",
-            "-Intel",
-            "./BtPackageDebug/bootloaderDebug.hex",
-            "-Intel",
-            "./misc/s112_nrf52_7.2.0_softdevice.hex",
-            "-Intel",
-            "-o",
-            "./BtPackageDebug/BTApp_Full_Image_debug.hex",
-            "-Intel",
-        ])
-        .status()
-        .expect("Running Cargo failed");
-    if !status.success() {
-        tracing::error!("Merging signed package failed");
-        exit(-1);
-    }
+    merge_files(
+        vec![
+            MergeableFile::IHex(project_root().join("BtPackageDebug/BtappDebug.hex")),
+            MergeableFile::IHex(project_root().join("BtPackageDebug/bootloaderDebug.hex")),
+            MergeableFile::IHex(project_root().join("misc/s112_nrf52_7.2.0_softdevice.hex")),
+        ],
+        project_root().join("BtPackageDebug/BTApp_Full_Image_debug.hex"),
+    );
 
-    tracing::info!("Removing single hex files");
+    tracing::info!("Removing temporary files");
     let status = Command::new("rm")
         .current_dir(project_root().join("BtPackageDebug"))
         .arg("-rf")
