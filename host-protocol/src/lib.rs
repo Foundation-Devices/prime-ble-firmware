@@ -37,8 +37,6 @@ pub enum Bluetooth<'a> {
     GetBtAddress,
     /// Send bt address
     AckBtAaddress { bt_address: [u8; 6] },
-    /// Uart buffer is full wait ble to flush all
-    UartBufferFull,
 }
 
 /// Bootloader-specific messages for firmware updates and verification.
