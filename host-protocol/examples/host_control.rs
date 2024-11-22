@@ -61,6 +61,35 @@ async fn main() -> Result<(), Box<dyn Error>> {
         let msg = postcard::to_slice_cobs::<HostProtocolMessage>(&cmd.into(), &mut buf)?;
         println!(">>{:02x?}", msg);
         serial.write_all(msg).await?;
+        serial.flush().await?;
+
+        // Wait for response
+        if let Err(_) = tokio::time::timeout(
+            std::time::Duration::from_secs(1),
+            tokio::io::AsyncReadExt::read(&mut serial, &mut buf),
+        )
+        .await
+        {
+            println!("No response from device");
+            return Ok(());
+        }
+        // Parse response
+        let cobs_buf = buf.as_mut_slice();
+        let ans: HostProtocolMessage = postcard::from_bytes_cobs(cobs_buf).unwrap();
+        match ans {
+            HostProtocolMessage::Bluetooth(Bluetooth::AckFirmwareVersion { version }) => {
+                println!("Firmware version: {version}");
+            }
+            HostProtocolMessage::Bluetooth(Bluetooth::SignalStrength(rssi)) => {
+                println!("RSSI: {rssi}");
+            }
+            HostProtocolMessage::Bluetooth(Bluetooth::AckBtAaddress { bt_address }) => {
+                println!("BT address: {:02x?}", bt_address);
+            }
+            _ => {
+                println!("<{ans:?}");
+            }
+        }
     } else {
         println!("Choose a command to be send.");
     }

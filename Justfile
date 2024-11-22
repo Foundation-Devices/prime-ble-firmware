@@ -41,6 +41,22 @@ cobs-size-test:
 enable-ble:
     cargo run --example host_control -- -c enable
 
+# Send Host Protocol Disable Bluetooth command
+disable-ble:
+    cargo run --example host_control -- -c disable
+
+# Send Host Protocol Get Firmware Version command
+firmware-version:
+    cargo run --example host_control -- -c fw-version
+
+# Send Host Protocol Get Signal Strength command
+rssi:
+    cargo run --example host_control -- -c rssi
+
+# Send Host Protocol Get BT Address command
+bt-address:
+    cargo run --example host_control -- -c address
+
 # Send data by BLE to "Passport Prime" peripheral
 ble-send:
     cargo run -p host-ble -- -w

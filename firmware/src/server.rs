@@ -208,6 +208,8 @@ pub async fn run_bluetooth(sd: &'static Softdevice, server: &Server) {
         }
         // Force false
         BT_STATE.store(true, core::sync::atomic::Ordering::Relaxed);
+        // Clear RSSI value
+        RSSI_VALUE.store(0, core::sync::atomic::Ordering::Relaxed);
     }
 }
 
