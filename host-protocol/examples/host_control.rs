@@ -1,6 +1,6 @@
 use clap::{Parser, ValueEnum};
 use host_protocol::{Bluetooth, Bootloader, HostProtocolMessage};
-use std::{error::Error, path::{Path, PathBuf}};
+use std::error::Error;
 use tokio::io::AsyncWriteExt;
 use tokio_serial::SerialPortBuilderExt;
 use crc::{Crc, CRC_32_ISCSI};
