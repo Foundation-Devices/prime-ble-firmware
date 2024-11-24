@@ -458,7 +458,7 @@ fn build_bt_package() {
             MergeableFile::IHex(project_root().join("BtPackage/bootloader.hex")),
             MergeableFile::IHex(project_root().join("misc/s112_nrf52_7.2.0_softdevice.hex")),
         ],
-        project_root().join("BtPackage/BTApp_Full_Image2.hex"),
+        project_root().join("BtPackage/BTApp_Full_Image.hex"),
     );
 
     tracing::info!("Removing temporary files");
