@@ -1348,6 +1348,7 @@ name = "host-protocol"
 version = "0.1.0"
 dependencies = [
  "clap",
+ "crc",
  "postcard",
  "pretty_env_logger",
  "serde",
