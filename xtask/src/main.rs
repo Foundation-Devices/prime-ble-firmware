@@ -466,7 +466,6 @@ fn build_bt_package() {
         .current_dir(project_root().join("BtPackage"))
         .arg("-rf")
         .arg("bootloader.hex")
-        .arg("BT_application_signed.bin")
         .arg("BtApp.hex")
         .status()
         .expect("Running rm failed");
