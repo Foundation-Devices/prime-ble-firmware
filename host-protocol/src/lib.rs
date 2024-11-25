@@ -27,12 +27,18 @@ pub enum Bluetooth<'a> {
 
     /// Send raw data over BLE connection
     SendData(&'a [u8]),
+    /// Request latest received data (if any)
+    GetReceivedData,
     /// Data received over BLE connection
     ReceivedData(&'a [u8]),
+    /// No data has been received since last `GetReceivedData` request
+    NoReceivedData,
+
     /// Request BLE firmware version
     GetFirmwareVersion,
     /// Response with firmware version string
     AckFirmwareVersion { version: &'a str },
+
     /// Get bt address
     GetBtAddress,
     /// Send bt address
