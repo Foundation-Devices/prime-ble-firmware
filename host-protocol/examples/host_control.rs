@@ -38,7 +38,7 @@ struct Args {
     list_ports: bool,
     #[arg(short, long, default_value_t = String::from("/dev/ttyUSB0"))]
     port: String,
-    #[arg(short, long, default_value_t = 115200)]
+    #[arg(short, long, default_value_t = 460800)]
     baudrate: u32,
     #[arg(short, long, value_enum)]
     cmd: Option<Command>,
