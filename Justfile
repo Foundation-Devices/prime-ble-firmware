@@ -57,6 +57,10 @@ rssi:
 bt-address:
     cargo run --example host_control -- -c address
 
+# Update application firmware
+update-app:
+    cargo run --example host_control -- -c update-app
+
 # Send data by BLE to "Passport Prime" peripheral
 ble-send:
     cargo run -p host-ble -- -w

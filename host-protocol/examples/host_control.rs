@@ -1,8 +1,11 @@
 use clap::{Parser, ValueEnum};
-use host_protocol::{Bluetooth, HostProtocolMessage};
+use host_protocol::{Bluetooth, Bootloader, HostProtocolMessage};
 use std::error::Error;
 use tokio::io::AsyncWriteExt;
 use tokio_serial::SerialPortBuilderExt;
+use crc::{Crc, CRC_32_ISCSI};
+
+const CHUNK_SIZE: usize = 256;
 
 #[derive(Clone, Debug, PartialEq, ValueEnum)]
 enum Command {
@@ -12,6 +15,7 @@ enum Command {
     Rssi,
     Address,
     FwVersion,
+    UpdateApp,
 }
 
 impl From<Command> for HostProtocolMessage<'_> {
@@ -23,6 +27,7 @@ impl From<Command> for HostProtocolMessage<'_> {
             Command::Rssi => HostProtocolMessage::Bluetooth(Bluetooth::GetSignalStrength),
             Command::Address => HostProtocolMessage::Bluetooth(Bluetooth::GetBtAddress),
             Command::FwVersion => HostProtocolMessage::Bluetooth(Bluetooth::GetFirmwareVersion),
+            Command::UpdateApp => HostProtocolMessage::Bootloader(Bootloader::EraseFirmware),
         }
     }
 }
@@ -65,7 +70,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
         // Wait for response
         if let Err(_) = tokio::time::timeout(
-            std::time::Duration::from_secs(1),
+            std::time::Duration::from_secs(5),
             tokio::io::AsyncReadExt::read(&mut serial, &mut buf),
         )
         .await
@@ -85,6 +90,54 @@ async fn main() -> Result<(), Box<dyn Error>> {
             }
             HostProtocolMessage::Bluetooth(Bluetooth::AckBtAaddress { bt_address }) => {
                 println!("BT address: {:02x?}", bt_address);
+            }
+            HostProtocolMessage::Bootloader(Bootloader::AckEraseFirmware) => {
+                println!("Erased Application firmware!");
+                println!("Using file in BtPackage folder to update - BT_application_signed.bin ");
+                let update_file = include_bytes!("../../BtPackage/BT_application_signed.bin");
+                for app_chunk in update_file.chunks(CHUNK_SIZE).enumerate() {
+                    // Prepare cobs packet to send to bootloader
+                    let block = Bootloader::WriteFirmwareBlock {
+                        block_idx: app_chunk.0,
+                        block_data: app_chunk.1,
+                    };
+                    println!("Preparing chunk idx {}", app_chunk.0);
+                    let crc = Crc::<u32>::new(&CRC_32_ISCSI);
+                    let crc_pkt = crc.checksum(app_chunk.1);
+
+                    let block_msg =
+                    postcard::to_slice_cobs(&HostProtocolMessage::Bootloader(block.clone()), &mut buf).unwrap();
+                    serial.write_all(block_msg).await?;
+                    serial.flush().await?;
+                    match tokio::time::timeout(std::time::Duration::from_millis(100), tokio::io::AsyncReadExt::read(&mut serial, &mut buf)).await{
+                        Ok(Ok(_)) => {
+                            println!("Chunk {} sent!", app_chunk.0);
+                            let cobs_buf = buf.as_mut_slice();
+                            let msg: HostProtocolMessage = postcard::from_bytes_cobs(cobs_buf).unwrap();
+                        
+                            match msg {
+                                HostProtocolMessage::Bootloader(Bootloader::AckWithIdxCrc { block_idx, crc }) => {
+                                    if (block_idx == app_chunk.0) && (crc == crc_pkt) {
+                                        println!("ACK packet {} with CRC {}", block_idx, crc);
+                                    } else {
+                                        println!("CRC mismatch");
+                                        break;
+                                    }
+                                },
+                                HostProtocolMessage::Bootloader(Bootloader::NackWithIdx { block_idx }) => {
+                                    println!("Chunk {} not acknowledged!", block_idx);
+                                    break;
+                                }
+                                _ => ()
+                            }
+                        }
+                        Err(_) => {
+                            println!("No response from device");
+                            break;
+                        }
+                        _ => ()
+                    }
+                }
             }
             _ => {
                 println!("<{ans:?}");
