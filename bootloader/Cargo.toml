@@ -27,9 +27,12 @@ debug =[
 nrf52805 = [
     "embassy-nrf/nrf52805",
     "nrf-softdevice/nrf52805",
-    "nrf-softdevice/s112",
     "nrf-softdevice/critical-section-impl"
 ]
+
+s112 = ["nrf-softdevice/s112", "nrf-softdevice-s112"]
+
+s113 = ["nrf-softdevice/s113", "nrf-softdevice-s113"]
 
 # Activate APP Protection on nrf MCU
 # https://infocenter.nordicsemi.com/topic/ps_nrf52805/uicr.html?cp=5_6_0_3_4_0_5#register.APPROTECT
@@ -75,7 +78,8 @@ sha2 = { version = "0.10.8", default-features = false }
 hmac = "0.12.1"
 cosign2 = { git = "https://github.com/Foundation-Devices/keyOS", default-features = false }
 critical-section = "1.1"
-nrf-softdevice-s112 = { git = "https://github.com/embassy-rs/nrf-softdevice.git" }
+nrf-softdevice-s112 = { git = "https://github.com/embassy-rs/nrf-softdevice.git", optional = true }
+nrf-softdevice-s113 = { git = "https://github.com/embassy-rs/nrf-softdevice.git", optional = true }
 nrf-softdevice = { git = "https://github.com/embassy-rs/nrf-softdevice.git", features = ["defmt", "evt-max-size-256", "ble-peripheral"] }
 nrf52805-pac = "0.12.2"
 

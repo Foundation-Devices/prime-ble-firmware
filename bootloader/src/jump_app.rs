@@ -9,7 +9,10 @@ use cortex_m::peripheral::NVIC;
 use defmt::info;
 use embassy_nrf::interrupt::Interrupt;
 use nrf_softdevice_mbr as mbr;
+#[cfg(all(feature = "boot-signed-fw", feature = "s112"))]
 use nrf_softdevice_s112::sd_softdevice_vector_table_base_set;
+#[cfg(all(feature = "boot-signed-fw", feature = "s113"))]
+use nrf_softdevice_s113::sd_softdevice_vector_table_base_set;
 
 /// Sets up the SoftDevice IRQ forwarding for unsigned firmware
 ///

@@ -17,6 +17,6 @@ members = [
 [profile.release]
 debug = 2
 lto = true
-opt-level = "s"  # Optimize for size
+opt-level = "z"   # Optimize for size
 panic = "abort"
 codegen-units = 1
