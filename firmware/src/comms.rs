@@ -210,7 +210,7 @@ async fn bluetooth_handler<'a>(cobs_buf: &mut [u8; COBS_MAX_MSG_SIZE], tx: &mut 
             None
         }
         Bluetooth::GetBtAddress => {
-            let msg = HostProtocolMessage::Bluetooth(Bluetooth::AckBtAaddress {
+            let msg = HostProtocolMessage::Bluetooth(Bluetooth::AckBtAddress {
                 bt_address: *BT_ADDRESS.lock().await,
             });
             Some(msg)
@@ -218,7 +218,7 @@ async fn bluetooth_handler<'a>(cobs_buf: &mut [u8; COBS_MAX_MSG_SIZE], tx: &mut 
         Bluetooth::ReceivedData(_) => None,
         Bluetooth::NoReceivedData => None,
         Bluetooth::AckFirmwareVersion { .. } => None,
-        Bluetooth::AckBtAaddress { .. } => None,
+        Bluetooth::AckBtAddress { .. } => None,
     };
 
     if let Some(msg) = msg {
