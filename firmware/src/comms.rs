@@ -3,7 +3,7 @@ use crate::{BT_ADDRESS, BT_DATA_TX, IRQ_OUT_PIN};
 use crate::{BT_DATA_RX, BT_STATE, RSSI_VALUE};
 use consts::{BT_MAX_NUM_PKT, MTU, UICR_SECRET_SIZE, UICR_SECRET_START};
 use defmt::info;
-use embassy_nrf::buffered_uarte::BufferedUarte;
+use embassy_nrf::buffered_uarte::{BufferedUarte, BufferedUarteTx};
 use embassy_nrf::peripherals::{TIMER1, UARTE0};
 use embassy_time::{with_timeout, Duration, Instant};
 use embedded_io_async::Write;
@@ -102,37 +102,6 @@ pub async fn comms_task(uart: BufferedUarte<'static, UARTE0, TIMER1>) {
             #[cfg(any(feature = "debug", feature = "bluetooth-test"))]
             log_performance(&mut timer_pkt, &mut rx_packet, &mut pkt_counter, &mut data_counter, &mut timer_tot);
 
-            // Check for new BLE data to send to MPU
-            if let Ok(data) = BT_DATA_RX.try_receive() {
-                send_buf.fill(0); // Clear the buffer from any previous data
-
-                #[cfg(any(feature = "debug", feature = "bluetooth-test"))]
-                log_infra_packet(
-                    &mut timer_pkt,
-                    &mut rx_packet,
-                    &mut data_counter,
-                    &mut pkt_counter,
-                    &mut timer_tot,
-                    &data,
-                );
-                #[cfg(any(feature = "debug", feature = "bluetooth-test"))]
-                let data = data.as_slice();
-                #[cfg(not(any(feature = "debug", feature = "bluetooth-test")))]
-                let msg = HostProtocolMessage::Bluetooth(Bluetooth::ReceivedData(data.as_slice()));
-                #[cfg(not(any(feature = "debug", feature = "bluetooth-test")))]
-                let data = to_slice_cobs(&msg, &mut send_buf).unwrap();
-                // Measure time taken to send packet to UART
-                let now = Instant::now();
-                let _ = tx.write_all(data).await;
-                let _ = tx.flush().await;
-                info!("Elapsed for packet to UART - {}", now.elapsed().as_micros());
-                assert_out_irq().await;
-                // Try to send another packet if there is more data to send
-                if !BT_DATA_RX.is_empty() {
-                    continue;
-                }
-            }
-
             // Read data from UART
             if let Ok(n) = with_timeout(Duration::from_micros(200), rx.read(&mut raw_buf)).await {
                 // Clear the send buffer
@@ -155,21 +124,13 @@ pub async fn comms_task(uart: BufferedUarte<'static, UARTE0, TIMER1>) {
                         FeedResult::OverFull(new_wind) => {
                             info!("overfull");
                             let msg = HostProtocolMessage::PostcardError(PostcardError::OverFull);
-                            if let Ok(cobs_tx) = to_slice_cobs(&msg, &mut send_buf) {
-                                let _ = tx.write_all(cobs_tx).await;
-                                let _ = tx.flush().await;
-                                assert_out_irq().await;
-                            }
+                            send_cobs(&mut tx, msg).await;
                             new_wind
                         }
                         FeedResult::DeserError(new_wind) => {
                             info!("DeserError");
                             let msg = HostProtocolMessage::PostcardError(PostcardError::Deser);
-                            if let Ok(cobs_tx) = to_slice_cobs(&msg, &mut send_buf) {
-                                let _ = tx.write_all(cobs_tx).await;
-                                let _ = tx.flush().await;
-                                assert_out_irq().await;
-                            }
+                            send_cobs(&mut tx, msg).await;
                             new_wind
                         }
                         FeedResult::Success { data, remaining } => {
@@ -178,14 +139,7 @@ pub async fn comms_task(uart: BufferedUarte<'static, UARTE0, TIMER1>) {
                             match data {
                                 HostProtocolMessage::Bluetooth(bluetooth_msg) => {
                                     info!("Received HostProtocolMessage::Bluetooth");
-                                    let msg = bluetooth_handler(bluetooth_msg).await;
-                                    if let Some(msg) = msg {
-                                        if let Ok(cobs_tx) = to_slice_cobs(&msg, &mut send_buf) {
-                                            let _ = tx.write_all(cobs_tx).await;
-                                            let _ = tx.flush().await;
-                                            assert_out_irq().await;
-                                        }
-                                    }
+                                    bluetooth_handler(&mut send_buf, &mut tx, bluetooth_msg).await;
                                 }
                                 HostProtocolMessage::Bootloader(_) => (), // Handled in bootloader
                                 HostProtocolMessage::Reset => {
@@ -193,22 +147,14 @@ pub async fn comms_task(uart: BufferedUarte<'static, UARTE0, TIMER1>) {
                                 }
                                 HostProtocolMessage::ChallengeRequest { nonce } => {
                                     let msg = hmac_challenge_response(nonce);
-                                    if let Ok(cobs_tx) = to_slice_cobs(&msg, &mut send_buf) {
-                                        let _ = tx.write_all(cobs_tx).await;
-                                        let _ = tx.flush().await;
-                                        assert_out_irq().await;
-                                    }
+                                    send_cobs(&mut tx, msg).await;
                                 }
                                 HostProtocolMessage::GetState => {
                                     let msg = match BT_STATE.load(core::sync::atomic::Ordering::Relaxed) {
                                         true => HostProtocolMessage::AckState(State::Enabled),
                                         false => HostProtocolMessage::AckState(State::Disabled),
                                     };
-                                    if let Ok(cobs_tx) = to_slice_cobs(&msg, &mut send_buf) {
-                                        let _ = tx.write_all(cobs_tx).await;
-                                        let _ = tx.flush().await;
-                                        assert_out_irq().await;
-                                    }
+                                    send_cobs(&mut tx, msg).await;
                                 }
                                 _ => (),
                             };
@@ -222,26 +168,37 @@ pub async fn comms_task(uart: BufferedUarte<'static, UARTE0, TIMER1>) {
 }
 
 /// Handles Bluetooth-specific messages received from the MPU
-async fn bluetooth_handler(msg: Bluetooth<'_>) -> Option<HostProtocolMessage<'_>> {
-    match msg {
+async fn bluetooth_handler<'a>(cobs_buf: &mut [u8; COBS_MAX_MSG_SIZE], tx: &mut BufferedUarteTx<'static, UARTE0>, msg: Bluetooth<'a>) {
+    cobs_buf.fill(0);
+
+    let msg = match msg {
         Bluetooth::Enable => {
             info!("Bluetooth enabled");
             BT_STATE.store(true, core::sync::atomic::Ordering::Relaxed);
+            Some(HostProtocolMessage::Bluetooth(Bluetooth::AckEnable))
         }
         Bluetooth::Disable => {
             info!("Bluetooth disabled");
             BT_STATE.store(false, core::sync::atomic::Ordering::Relaxed);
+            Some(HostProtocolMessage::Bluetooth(Bluetooth::AckDisable))
         }
         Bluetooth::GetSignalStrength => {
             let msg = HostProtocolMessage::Bluetooth(Bluetooth::SignalStrength(RSSI_VALUE.load(core::sync::atomic::Ordering::Relaxed)));
-            return Some(msg);
+            Some(msg)
         }
         Bluetooth::GetFirmwareVersion => {
             let version = env!("CARGO_PKG_VERSION");
             let msg = HostProtocolMessage::Bluetooth(Bluetooth::AckFirmwareVersion { version });
-            return Some(msg);
+            Some(msg)
         }
-        Bluetooth::SignalStrength(_) => {}
+        Bluetooth::SignalStrength(_) => None,
+        Bluetooth::GetReceivedData => Some(if let Ok(data) = BT_DATA_RX.try_receive() {
+            let len = data.len();
+            cobs_buf[..len].copy_from_slice(data.as_slice());
+            HostProtocolMessage::Bluetooth(Bluetooth::ReceivedData(&cobs_buf[..len]))
+        } else {
+            HostProtocolMessage::Bluetooth(Bluetooth::NoReceivedData)
+        }),
         Bluetooth::SendData(data) => {
             // Only accept data packets within MTU size limit
             if data.len() <= MTU {
@@ -250,18 +207,25 @@ async fn bluetooth_handler(msg: Bluetooth<'_>) -> Option<HostProtocolMessage<'_>
                     let _ = buffer_tx_bt.push(Vec::from_slice(data).unwrap());
                 }
             }
+            None
         }
         Bluetooth::GetBtAddress => {
-            let msg = HostProtocolMessage::Bluetooth(Bluetooth::AckBtAaddress {
+            let msg = HostProtocolMessage::Bluetooth(Bluetooth::AckBtAddress {
                 bt_address: *BT_ADDRESS.lock().await,
             });
-            return Some(msg);
+            Some(msg)
         }
-        Bluetooth::ReceivedData(_) => {}
-        Bluetooth::AckFirmwareVersion { .. } => {}
-        Bluetooth::AckBtAaddress { .. } => {}
+        Bluetooth::ReceivedData(_) => None,
+        Bluetooth::NoReceivedData => None,
+        Bluetooth::AckFirmwareVersion { .. } => None,
+        Bluetooth::AckBtAddress { .. } => None,
+        Bluetooth::AckEnable => None,
+        Bluetooth::AckDisable => None,
+    };
+
+    if let Some(msg) = msg {
+        send_cobs(tx, msg).await
     }
-    None
 }
 
 /// Handles HMAC challenge-response authentication
@@ -278,5 +242,15 @@ fn hmac_challenge_response(nonce: u64) -> HostProtocolMessage<'static> {
         HostProtocolMessage::ChallengeResult { result: result.into() }
     } else {
         HostProtocolMessage::ChallengeResult { result: [0xFF; 32] }
+    }
+}
+
+async fn send_cobs(tx: &mut BufferedUarteTx<'_, UARTE0>, msg: HostProtocolMessage<'_>) {
+    let mut send_buf = [0u8; COBS_MAX_MSG_SIZE];
+
+    if let Ok(cobs_tx) = to_slice_cobs(&msg, &mut send_buf) {
+        let _ = tx.write_all(cobs_tx).await;
+        let _ = tx.flush().await;
+        assert_out_irq().await;
     }
 }

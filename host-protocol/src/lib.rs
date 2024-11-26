@@ -17,8 +17,12 @@ pub const COBS_MAX_MSG_SIZE: usize = 512;
 pub enum Bluetooth<'a> {
     /// Turn on the BLE radio
     Enable,
+    /// BLE radio enabled
+    AckEnable,
     /// Turn off the BLE radio
     Disable,
+    /// BLE radio disabled
+    AckDisable,
 
     /// Request current signal strength
     GetSignalStrength,
@@ -27,16 +31,22 @@ pub enum Bluetooth<'a> {
 
     /// Send raw data over BLE connection
     SendData(&'a [u8]),
+    /// Request latest received data (if any)
+    GetReceivedData,
     /// Data received over BLE connection
     ReceivedData(&'a [u8]),
+    /// No data has been received since last `GetReceivedData` request
+    NoReceivedData,
+
     /// Request BLE firmware version
     GetFirmwareVersion,
     /// Response with firmware version string
     AckFirmwareVersion { version: &'a str },
+
     /// Get bt address
     GetBtAddress,
     /// Send bt address
-    AckBtAaddress { bt_address: [u8; 6] },
+    AckBtAddress { bt_address: [u8; 6] },
 }
 
 /// Bootloader-specific messages for firmware updates and verification.
