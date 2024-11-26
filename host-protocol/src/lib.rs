@@ -17,8 +17,12 @@ pub const COBS_MAX_MSG_SIZE: usize = 512;
 pub enum Bluetooth<'a> {
     /// Turn on the BLE radio
     Enable,
+    /// BLE radio enabled
+    AckEnable,
     /// Turn off the BLE radio
     Disable,
+    /// BLE radio disabled
+    AckDisable,
 
     /// Request current signal strength
     GetSignalStrength,

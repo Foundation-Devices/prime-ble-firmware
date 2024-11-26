@@ -175,12 +175,12 @@ async fn bluetooth_handler<'a>(cobs_buf: &mut [u8; COBS_MAX_MSG_SIZE], tx: &mut 
         Bluetooth::Enable => {
             info!("Bluetooth enabled");
             BT_STATE.store(true, core::sync::atomic::Ordering::Relaxed);
-            None
+            Some(HostProtocolMessage::Bluetooth(Bluetooth::AckEnable))
         }
         Bluetooth::Disable => {
             info!("Bluetooth disabled");
             BT_STATE.store(false, core::sync::atomic::Ordering::Relaxed);
-            None
+            Some(HostProtocolMessage::Bluetooth(Bluetooth::AckDisable))
         }
         Bluetooth::GetSignalStrength => {
             let msg = HostProtocolMessage::Bluetooth(Bluetooth::SignalStrength(RSSI_VALUE.load(core::sync::atomic::Ordering::Relaxed)));
@@ -219,6 +219,8 @@ async fn bluetooth_handler<'a>(cobs_buf: &mut [u8; COBS_MAX_MSG_SIZE], tx: &mut 
         Bluetooth::NoReceivedData => None,
         Bluetooth::AckFirmwareVersion { .. } => None,
         Bluetooth::AckBtAddress { .. } => None,
+        Bluetooth::AckEnable => None,
+        Bluetooth::AckDisable => None,
     };
 
     if let Some(msg) = msg {
