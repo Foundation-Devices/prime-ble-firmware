@@ -15,13 +15,15 @@ struct XtaskArgs {
     #[command(subcommand)]
     command: Commands,
     #[arg(short, long)]
+    s113: bool,
+    #[arg(short, long)]
     verbose: bool,
 }
 
 #[derive(Subcommand)]
 enum Commands {
     /// Build a full flashable firmware image with:
-    /// SoftDevice - s112_nrf52_7.2.0_softdevice.hex
+    /// SoftDevice
     /// Bootloader in release version (MPU UART pins - baud rate 460800)
     /// Memory protection (no probe access and bootloader and SD MBR area protected)
     #[command(verbatim_doc_comment)]
@@ -138,13 +140,15 @@ fn build_tools_check_debug(verbose: bool) {
     }
 }
 
-fn build_bt_bootloader(verbose: bool) {
+fn build_bt_bootloader(verbose: bool, s113: bool) {
     tracing::info!("Building bootloader....");
     let mut cargo_cmd = Command::new(cargo());
-    let mut cmd = cargo_cmd
-        .current_dir(project_root().join("bootloader"))
-        .arg("build")
-        .arg("--release");
+    let mut cmd = cargo_cmd.current_dir(project_root().join("bootloader")).args([
+        "build",
+        "--release",
+        "--features",
+        if s113 { "s113" } else { "s112" },
+    ]);
     if !verbose {
         cmd = cmd.stdout(Stdio::null()).stderr(Stdio::null()).arg("--quiet");
     }
@@ -159,6 +163,8 @@ fn build_bt_bootloader(verbose: bool) {
     let mut cmd = cargo_cmd.current_dir(project_root().join("bootloader")).args([
         "objcopy",
         "--release",
+        "--features",
+        if s113 { "s113" } else { "s112" },
         "--",
         "-O",
         "ihex",
@@ -174,16 +180,16 @@ fn build_bt_bootloader(verbose: bool) {
     }
 }
 
-fn build_bt_bootloader_debug(verbose: bool) {
+fn build_bt_bootloader_debug(verbose: bool, s113: bool) {
     tracing::info!("Building debug bootloader....");
     let mut cargo_cmd = Command::new(cargo());
-    let mut cmd = cargo_cmd
-        .current_dir(project_root().join("bootloader"))
-        .arg("build")
-        .arg("--release")
-        .arg("--no-default-features")
-        .arg("--features")
-        .arg("debug");
+    let mut cmd = cargo_cmd.current_dir(project_root().join("bootloader")).args([
+        "build",
+        "--release",
+        "--no-default-features",
+        "--features",
+        if s113 { "debug,s113" } else { "debug,s112" },
+    ]);
     if !verbose {
         cmd = cmd.stdout(Stdio::null()).stderr(Stdio::null()).arg("--quiet");
     }
@@ -200,7 +206,7 @@ fn build_bt_bootloader_debug(verbose: bool) {
         "--release",
         "--no-default-features",
         "--features",
-        "debug",
+        if s113 { "debug,s113" } else { "debug,s112" },
         "--",
         "-O",
         "ihex",
@@ -216,10 +222,15 @@ fn build_bt_bootloader_debug(verbose: bool) {
     }
 }
 
-fn build_bt_firmware(verbose: bool) {
+fn build_bt_firmware(verbose: bool, s113: bool) {
     tracing::info!("Building application...");
     let mut cargo_cmd = Command::new(cargo());
-    let mut cmd = cargo_cmd.current_dir(project_root().join("firmware")).arg("build").arg("--release");
+    let mut cmd = cargo_cmd.current_dir(project_root().join("firmware")).args([
+        "build",
+        "--release",
+        "--features",
+        if s113 { "s113" } else { "s112" },
+    ]);
     if !verbose {
         cmd = cmd.stdout(Stdio::null()).stderr(Stdio::null()).arg("--quiet");
     }
@@ -231,10 +242,16 @@ fn build_bt_firmware(verbose: bool) {
 
     tracing::info!("Creating BT application hex file");
     let mut cargo_cmd = Command::new(cargo());
-    let mut cmd =
-        cargo_cmd
-            .current_dir(project_root().join("firmware"))
-            .args(["objcopy", "--release", "--", "-O", "ihex", "../BtPackage/BtApp.hex"]);
+    let mut cmd = cargo_cmd.current_dir(project_root().join("firmware")).args([
+        "objcopy",
+        "--release",
+        "--features",
+        if s113 { "s113" } else { "s112" },
+        "--",
+        "-O",
+        "ihex",
+        "../BtPackage/BtApp.hex",
+    ]);
     if !verbose {
         cmd = cmd.stdout(Stdio::null()).stderr(Stdio::null());
     }
@@ -252,9 +269,11 @@ fn build_bt_firmware(verbose: bool) {
     let mut cmd = cargo_cmd.current_dir(project_root().join("firmware")).args([
         "objcopy",
         "--release",
+        "--features",
+        if s113 { "s113" } else { "s112" },
         "--",
         "--pad-to",
-        "0x26000",
+        "0x27300",
         "-O",
         "binary",
         "../BtPackage/BT_application.bin",
@@ -269,16 +288,16 @@ fn build_bt_firmware(verbose: bool) {
     }
 }
 
-fn build_bt_debug_firmware(verbose: bool) {
+fn build_bt_debug_firmware(verbose: bool, s113: bool) {
     tracing::info!("Building debug application...");
     let mut cargo_cmd = Command::new(cargo());
-    let mut cmd = cargo_cmd
-        .current_dir(project_root().join("firmware"))
-        .arg("build")
-        .arg("--release")
-        .arg("--no-default-features")
-        .arg("--features")
-        .arg("debug");
+    let mut cmd = cargo_cmd.current_dir(project_root().join("firmware")).args([
+        "build",
+        "--release",
+        "--no-default-features",
+        "--features",
+        if s113 { "debug,s113" } else { "debug,s112" },
+    ]);
     if !verbose {
         cmd = cmd.stdout(Stdio::null()).stderr(Stdio::null()).arg("--quiet");
     }
@@ -294,7 +313,7 @@ fn build_bt_debug_firmware(verbose: bool) {
         "--release",
         "--no-default-features",
         "--features",
-        "debug",
+        if s113 { "debug,s113" } else { "debug,s112" },
         "--",
         "-O",
         "ihex",
@@ -454,13 +473,20 @@ fn merge_files<P: AsRef<Path>>(inputs: Vec<MergeableFile<P>>, output: P) {
     file.write_all(data.as_bytes()).expect("unable to write ihex object to file");
 }
 
-fn build_bt_package() {
-    tracing::info!("Merging softdevice, bootloader and BT signed application (with 0x19000 offset) in single hex");
+fn build_bt_package(s113: bool) {
+    tracing::info!("Merging softdevice, bootloader and BT signed application in single hex");
     merge_files(
         vec![
-            MergeableFile::Binary(project_root().join("BtPackage/BT_application_signed.bin"), 0x19000),
+            MergeableFile::IHex(project_root().join(if s113 {
+                "misc/s113_nrf52_7.2.0_softdevice.hex"
+            } else {
+                "misc/s112_nrf52_7.2.0_softdevice.hex"
+            })),
+            MergeableFile::Binary(
+                project_root().join("BtPackage/BT_application_signed.bin"),
+                if s113 { 0x1C000 } else { 0x19000 },
+            ),
             MergeableFile::IHex(project_root().join("BtPackage/bootloader.hex")),
-            MergeableFile::IHex(project_root().join("misc/s112_nrf52_7.2.0_softdevice.hex")),
         ],
         project_root().join("BtPackage/BTApp_Full_Image.hex"),
     );
@@ -479,13 +505,17 @@ fn build_bt_package() {
     }
 }
 
-fn build_bt_package_debug() {
+fn build_bt_package_debug(s113: bool) {
     tracing::info!("Merging softdevice bootloader and BT signed application in single hex");
     merge_files(
         vec![
+            MergeableFile::IHex(project_root().join(if s113 {
+                "misc/s113_nrf52_7.2.0_softdevice.hex"
+            } else {
+                "misc/s112_nrf52_7.2.0_softdevice.hex"
+            })),
             MergeableFile::IHex(project_root().join("BtPackageDebug/BtappDebug.hex")),
             MergeableFile::IHex(project_root().join("BtPackageDebug/bootloaderDebug.hex")),
-            MergeableFile::IHex(project_root().join("misc/s112_nrf52_7.2.0_softdevice.hex")),
         ],
         project_root().join("BtPackageDebug/BTApp_Full_Image_debug.hex"),
     );
@@ -519,16 +549,15 @@ fn main() {
     match args.command {
         Commands::BuildFwImage => {
             build_tools_check(args.verbose);
-            build_bt_bootloader(args.verbose);
-            build_bt_firmware(args.verbose);
+            build_bt_bootloader(args.verbose, args.s113);
             sign_bt_firmware();
-            build_bt_package();
+            build_bt_package(args.s113);
         }
         Commands::BuildFwDebugImage => {
             build_tools_check_debug(args.verbose);
-            build_bt_bootloader_debug(args.verbose);
-            build_bt_debug_firmware(args.verbose);
-            build_bt_package_debug();
+            build_bt_bootloader_debug(args.verbose, args.s113);
+            build_bt_debug_firmware(args.verbose, args.s113);
+            build_bt_package_debug(args.s113);
         }
     }
 }
