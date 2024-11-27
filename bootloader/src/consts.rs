@@ -7,6 +7,7 @@
 pub static BOOTLOADER_ADDR: u32 = 0x27300;
 
 /// 256B are needed for cosign2 signature
+#[cfg(feature = "boot-signed-fw")]
 const SIGNATURE_HEADER_SIZE: u32 = 0x100;
 
 /// Base address of the interrupt vector table for signed firmware
