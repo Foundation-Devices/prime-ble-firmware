@@ -88,7 +88,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
             HostProtocolMessage::Bluetooth(Bluetooth::SignalStrength(rssi)) => {
                 println!("RSSI: {rssi}");
             }
-            HostProtocolMessage::Bluetooth(Bluetooth::AckBtAaddress { bt_address }) => {
+            HostProtocolMessage::Bluetooth(Bluetooth::AckBtAddress { bt_address }) => {
                 println!("BT address: {:02x?}", bt_address);
             }
             HostProtocolMessage::Bootloader(Bootloader::AckEraseFirmware) => {
