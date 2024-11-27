@@ -6,7 +6,7 @@
 
 use crate::BT_DATA_RX;
 use consts::ATT_MTU;
-use defmt::info;
+use defmt::{error, info};
 use heapless::Vec;
 use nrf_softdevice::gatt_service;
 
@@ -32,6 +32,8 @@ impl Nus {
                     if BT_DATA_RX.try_send(data).is_err() {
                         info!("Error BT_DATA_RX");
                     }
+                } else {
+                    error!("Error BT_DATA_RX");
                 }
             }
         }
