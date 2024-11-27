@@ -6,10 +6,11 @@
 #[link_section = ".uicr_bootloader_start_address"]
 pub static BOOTLOADER_ADDR: u32 = 0x27300;
 
-const SIGNATURE_HEADER_SIZE: u32 = 0x800;
+/// 256B are needed for cosign2 signature
+const SIGNATURE_HEADER_SIZE: u32 = 0x100;
 
 /// Base address of the interrupt vector table for signed firmware
-/// When booting signed firmware, the interrupt vector table is placed at 0x19800,
+/// When booting signed firmware, the interrupt vector table is placed after SIGNATURE_HEADER_SIZE,
 /// which is after the SoftDevice but before the application code. This ensures proper
 /// interrupt handling while maintaining the security of the signed firmware.
 #[cfg(feature = "boot-signed-fw")]
@@ -22,7 +23,7 @@ pub const INT_VECTOR_TABLE_BASE: u32 = BASE_APP_ADDR + SIGNATURE_HEADER_SIZE;
 pub const INT_VECTOR_TABLE_BASE: u16 = 0x1000;
 
 /// Base address for the application in flash memory
-/// This is where the actual application firmware code begins in flash memory at 0x19000|0x1C800,
+/// This is where the actual application firmware code begins in flash memory at 0x19000|0x1C000,
 /// after the SoftDevice and before the bootloader region
 #[cfg(feature = "s112")]
 pub const BASE_APP_ADDR: u32 = 0x19000;
@@ -32,7 +33,7 @@ pub const BASE_APP_ADDR: u32 = 0x1C000;
 /// Size of the application area in flash memory (56.75KB for S112, 44.75KB for S113)
 /// This constant defines the maximum size available for the application firmware.
 /// Starting from BASE_APP_ADDR up to BASE_BOOTLOADER_APP
-/// consider that 2KB are needed for cosign2 signature so real fw app goes from
+/// consider that a header is needed for cosign2 signature so real fw app goes from
 /// BASE_APP_ADDR + SIGNATURE_HEADER_SIZE to BASE_BOOTLOADER_APP
 pub const APP_SIZE: u32 = BASE_BOOTLOADER_APP - BASE_APP_ADDR;
 
