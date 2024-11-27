@@ -21,12 +21,12 @@ use nrf_softdevice_s113::sd_softdevice_vector_table_base_set;
 #[cfg(feature = "boot-unsigned-fw")]
 unsafe fn sd_set_unsigned_fw() {
     // Set SD base address in case fw is just above
-    let addr = 0x1000;
+    let address = 0x1000;
 
     let mut cmd = mbr::sd_mbr_command_t {
         command: mbr::NRF_MBR_COMMANDS_SD_MBR_COMMAND_IRQ_FORWARD_ADDRESS_SET,
         params: mbr::sd_mbr_command_t__bindgen_ty_1 {
-            irq_forward_address_set: mbr::sd_mbr_command_irq_forward_address_set_t { address: addr },
+            irq_forward_address_set: mbr::sd_mbr_command_irq_forward_address_set_t { address },
         },
     };
     let ret = mbr::sd_mbr_command(&mut cmd);
@@ -40,10 +40,15 @@ unsafe fn sd_set_unsigned_fw() {
 #[cfg(feature = "boot-signed-fw")]
 unsafe fn sd_set_signed_fw() {
     // Set SD base address in case fw is in a specific location
+    #[cfg(feature = "s112")]
+    let address = 0x19000;
+    #[cfg(feature = "s113")]
+    let address = 0x1C000;
+
     let mut cmd = mbr::sd_mbr_command_t {
         command: mbr::NRF_MBR_COMMANDS_SD_MBR_COMMAND_INIT_SD,
         params: mbr::sd_mbr_command_t__bindgen_ty_1 {
-            irq_forward_address_set: mbr::sd_mbr_command_irq_forward_address_set_t { address: 0x19000 },
+            irq_forward_address_set: mbr::sd_mbr_command_irq_forward_address_set_t { address },
         },
     };
     let _ = mbr::sd_mbr_command(&mut cmd);
