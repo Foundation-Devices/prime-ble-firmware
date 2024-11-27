@@ -8,6 +8,8 @@ use embassy_nrf::peripherals::{TIMER1, UARTE0};
 #[cfg(any(feature = "debug", feature = "bluetooth-test"))]
 use embassy_time::Instant;
 use embassy_time::{with_timeout, Duration};
+#[cfg(any(feature = "debug", feature = "bluetooth-test"))]
+use embassy_time::Instant;
 use embedded_io_async::Write;
 use heapless::Vec;
 use hmac::{Hmac, Mac};
