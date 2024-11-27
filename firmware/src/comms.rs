@@ -9,7 +9,7 @@ use embassy_time::{with_timeout, Duration};
 use embedded_io_async::Write;
 use heapless::Vec;
 use hmac::{Hmac, Mac};
-use host_protocol::{Bluetooth, HostProtocolMessage, PostcardError, State, COBS_MAX_MSG_SIZE};
+use host_protocol::{Bluetooth, HostProtocolMessage, PostcardError, SendDataResponse, State, COBS_MAX_MSG_SIZE};
 use postcard::accumulator::{CobsAccumulator, FeedResult};
 use postcard::to_slice_cobs;
 use sha2::Sha256 as ShaChallenge;
@@ -200,10 +200,17 @@ async fn bluetooth_handler<'a>(cobs_buf: &mut [u8; COBS_MAX_MSG_SIZE], tx: &mut 
             if data.len() <= MTU {
                 let mut buffer_tx_bt = BT_DATA_TX.lock().await;
                 if buffer_tx_bt.len() < BT_MAX_NUM_PKT {
-                    let _ = buffer_tx_bt.push(Vec::from_slice(data).unwrap());
+                    if buffer_tx_bt.push(Vec::from_slice(data).unwrap()).is_err() {
+                        HostProtocolMessage::Bluetooth(Bluetooth::SendDataResponse(SendDataResponse::BufferFull))
+                    } else {
+                        HostProtocolMessage::Bluetooth(Bluetooth::SendDataResponse(SendDataResponse::Sent))
+                    }
+                } else {
+                    HostProtocolMessage::Bluetooth(Bluetooth::SendDataResponse(SendDataResponse::BufferFull))
                 }
+            } else {
+                HostProtocolMessage::Bluetooth(Bluetooth::SendDataResponse(SendDataResponse::DataTooLarge))
             }
-            HostProtocolMessage::Bluetooth(Bluetooth::AckSendData)
         }
         Bluetooth::GetBtAddress => HostProtocolMessage::Bluetooth(Bluetooth::AckBtAddress {
             bt_address: *BT_ADDRESS.lock().await,
@@ -216,7 +223,7 @@ async fn bluetooth_handler<'a>(cobs_buf: &mut [u8; COBS_MAX_MSG_SIZE], tx: &mut 
         | Bluetooth::AckBtAddress { .. }
         | Bluetooth::AckEnable
         | Bluetooth::AckDisable
-        | Bluetooth::AckSendData => HostProtocolMessage::InappropriateMessage(get_state()),
+        | Bluetooth::SendDataResponse(_) => HostProtocolMessage::InappropriateMessage(get_state()),
     };
 
     send_cobs(tx, msg).await
