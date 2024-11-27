@@ -353,6 +353,8 @@ fn sign_bt_firmware() {
         "./BtPackage/BT_application.bin",
         "-c",
         "cosign2.toml",
+        "--header-size",
+        "256",
         "-o",
         "./BtPackage/BT_application_signed.bin",
     ];
