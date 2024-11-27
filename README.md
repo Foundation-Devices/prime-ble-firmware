@@ -107,3 +107,23 @@ The unlocking requires a J-Link probe and cannot be done with ST-Link probe.
   ```
 
 - Power cycle the board and try to program the `SoftDevice` again.
+
+
+
+
+### Notes about `Access port protection` use and chip revisions
+
+As reported by [Informational Notice](./misc/in_153_v1.0.1.pdf) there was a change in the way 'Access port protection' is used in rev. B of the chip due to a possible attack.
+
+You can read about in [nrf52805 datasheet](./misc/nRF52805_PS_v1.4.pdf) at paragraph _4.8.2_ and you can read about the different methods of lock/unlock based on chip revision.
+
+Be careful that reading, with a probe-rs read command, info bytes at paragraph _4.4.1.9 INFO.VARIANT_ in datasheet we get from prime board rev. Y2 these values:
+
+ ```
+  00052805 41414130 00002004 
+```
+
+that are indicating that chip is still of rev. A not variant B with the updated protection command.
+
+As explained in Informational Notice chip of rev. A are still produced ( probably for legacy ) and in case we want to switch to patched protection sequence a different part number must be ordered.
+
