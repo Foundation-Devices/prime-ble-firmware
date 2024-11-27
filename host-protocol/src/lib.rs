@@ -305,7 +305,7 @@ fn calculate_bootloader_message_sizes() {
         ),
         (
             "AckBtAddress",
-            get_cobs_size(HostProtocolMessage::Bluetooth(Bluetooth::AckBtAaddress { bt_address: [0xFF; 6] })),
+            get_cobs_size(HostProtocolMessage::Bluetooth(Bluetooth::AckBtAddress { bt_address: [0xFF; 6] })),
         ),
     ];
 
