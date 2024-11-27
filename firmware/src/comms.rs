@@ -1,7 +1,7 @@
 // Standard imports for BLE communication and cryptographic operations
 use crate::{BT_ADDRESS, BT_DATA_TX, IRQ_OUT_PIN};
 use crate::{BT_DATA_RX, BT_STATE, RSSI_VALUE};
-use consts::{BT_MAX_NUM_PKT, MTU, UICR_SECRET_SIZE, UICR_SECRET_START};
+use consts::{BT_MAX_NUM_PKT, ATT_MTU, UICR_SECRET_SIZE, UICR_SECRET_START};
 use defmt::info;
 use embassy_nrf::buffered_uarte::{BufferedUarte, BufferedUarteTx};
 use embassy_nrf::peripherals::{TIMER1, UARTE0};
@@ -200,8 +200,8 @@ async fn bluetooth_handler<'a>(cobs_buf: &mut [u8; COBS_MAX_MSG_SIZE], tx: &mut 
             }
         }
         Bluetooth::SendData(data) => {
-            // Only accept data packets within MTU size limit
-            if data.len() <= MTU {
+            // Only accept data packets within ATT_MTU size limit
+            if data.len() <= ATT_MTU {
                 let mut buffer_tx_bt = BT_DATA_TX.lock().await;
                 if buffer_tx_bt.len() < BT_MAX_NUM_PKT {
                     if buffer_tx_bt.push(Vec::from_slice(data).unwrap()).is_err() {

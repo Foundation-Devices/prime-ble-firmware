@@ -6,7 +6,7 @@ use crate::BT_DATA_TX;
 use crate::{BT_STATE, RSSI_VALUE};
 use consts::{ATT_MTU, DEVICE_NAME, SERVICES_LIST, SHORT_NAME};
 use core::mem;
-use defmt::{info, *};
+use defmt::{error, info, unwrap};
 use embassy_time::Timer;
 use futures::future::{select, Either};
 use futures::pin_mut;
@@ -158,20 +158,32 @@ pub async fn run_bluetooth(sd: &'static Softdevice, server: &Server) {
         };
 
         // Start advertising
-        let conn = unwrap!(peripheral::advertise_connectable(sd, adv, &config).await);
+        let mut conn = unwrap!(peripheral::advertise_connectable(sd, adv, &config).await);
         info!("advertising done!");
 
-        // Request connection interval - trying to request a short one.
-        let conn_params = ble_gap_conn_params_t {
+        // Request connection param update
+        if let Err(e) = conn.set_conn_params(ble_gap_conn_params_t {
             conn_sup_timeout: 500,         // 5s
             max_conn_interval: ci_ms!(30), // 30ms
             min_conn_interval: ci_ms!(12), // 12ms
             slave_latency: 0,
-        };
+        }) {
+            error!("set_conn_params error - {:?}", e)
+        }
 
-        // Request connection param update
-        if let Err(e) = conn.set_conn_params(conn_params) {
-            info!("set_conn_params error - {:?}", e)
+        #[cfg(feature = "s113")]
+        {
+            if conn
+                .data_length_update(Some(&raw::ble_gap_data_length_params_t {
+                    max_tx_octets: 251,
+                    max_rx_octets: 251,
+                    max_tx_time_us: 2120,
+                    max_rx_time_us: 2120,
+                }))
+                .is_err()
+            {
+                error!("data_length_update error");
+            };
         }
 
         // Start rssi capture

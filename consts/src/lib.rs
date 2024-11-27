@@ -1,15 +1,8 @@
 #![no_std]
 
 /// Maximum Transfer Unit (MTU) size for BLE communication.
-/// This defines the maximum size of a single BLE data packet that can be sent.
-/// Set to 256 bytes to allow efficient data transfer while staying within BLE limits.
-pub const MTU: usize = 256;
-
-/// ATT MTU size includes 3 bytes of overhead on top of base MTU.
-/// The ATT protocol adds a 3-byte header to each MTU-sized packet:
-/// - 1 byte for Attribute Opcode
-/// - 2 bytes for Attribute Handle
-pub const ATT_MTU: usize = MTU + 3;
+/// Set to 247 bytes to allow efficient data transfer while staying within BLE limits.
+pub const ATT_MTU: usize = 247;
 
 /// Full device name advertised over BLE.
 /// This is the complete name that will appear when scanning for the device.
