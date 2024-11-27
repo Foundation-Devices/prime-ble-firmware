@@ -5,7 +5,7 @@ use consts::{BT_MAX_NUM_PKT, MTU, UICR_SECRET_SIZE, UICR_SECRET_START};
 use defmt::info;
 use embassy_nrf::buffered_uarte::{BufferedUarte, BufferedUarteTx};
 use embassy_nrf::peripherals::{TIMER1, UARTE0};
-use embassy_time::{with_timeout, Duration, Instant};
+use embassy_time::{with_timeout, Duration};
 use embedded_io_async::Write;
 use heapless::Vec;
 use hmac::{Hmac, Mac};
@@ -150,10 +150,7 @@ pub async fn comms_task(uart: BufferedUarte<'static, UARTE0, TIMER1>) {
                                     send_cobs(&mut tx, msg).await;
                                 }
                                 HostProtocolMessage::GetState => {
-                                    let msg = match BT_STATE.load(core::sync::atomic::Ordering::Relaxed) {
-                                        true => HostProtocolMessage::AckState(State::Enabled),
-                                        false => HostProtocolMessage::AckState(State::Disabled),
-                                    };
+                                    let msg = HostProtocolMessage::AckState(get_state());
                                     send_cobs(&mut tx, msg).await;
                                 }
                                 _ => (),
@@ -175,30 +172,29 @@ async fn bluetooth_handler<'a>(cobs_buf: &mut [u8; COBS_MAX_MSG_SIZE], tx: &mut 
         Bluetooth::Enable => {
             info!("Bluetooth enabled");
             BT_STATE.store(true, core::sync::atomic::Ordering::Relaxed);
-            Some(HostProtocolMessage::Bluetooth(Bluetooth::AckEnable))
+            HostProtocolMessage::Bluetooth(Bluetooth::AckEnable)
         }
         Bluetooth::Disable => {
             info!("Bluetooth disabled");
             BT_STATE.store(false, core::sync::atomic::Ordering::Relaxed);
-            Some(HostProtocolMessage::Bluetooth(Bluetooth::AckDisable))
+            HostProtocolMessage::Bluetooth(Bluetooth::AckDisable)
         }
         Bluetooth::GetSignalStrength => {
-            let msg = HostProtocolMessage::Bluetooth(Bluetooth::SignalStrength(RSSI_VALUE.load(core::sync::atomic::Ordering::Relaxed)));
-            Some(msg)
+            HostProtocolMessage::Bluetooth(Bluetooth::SignalStrength(RSSI_VALUE.load(core::sync::atomic::Ordering::Relaxed)))
         }
         Bluetooth::GetFirmwareVersion => {
             let version = env!("CARGO_PKG_VERSION");
-            let msg = HostProtocolMessage::Bluetooth(Bluetooth::AckFirmwareVersion { version });
-            Some(msg)
+            HostProtocolMessage::Bluetooth(Bluetooth::AckFirmwareVersion { version })
         }
-        Bluetooth::SignalStrength(_) => None,
-        Bluetooth::GetReceivedData => Some(if let Ok(data) = BT_DATA_RX.try_receive() {
-            let len = data.len();
-            cobs_buf[..len].copy_from_slice(data.as_slice());
-            HostProtocolMessage::Bluetooth(Bluetooth::ReceivedData(&cobs_buf[..len]))
-        } else {
-            HostProtocolMessage::Bluetooth(Bluetooth::NoReceivedData)
-        }),
+        Bluetooth::GetReceivedData => {
+            if let Ok(data) = BT_DATA_RX.try_receive() {
+                let len = data.len();
+                cobs_buf[..len].copy_from_slice(data.as_slice());
+                HostProtocolMessage::Bluetooth(Bluetooth::ReceivedData(&cobs_buf[..len]))
+            } else {
+                HostProtocolMessage::Bluetooth(Bluetooth::NoReceivedData)
+            }
+        }
         Bluetooth::SendData(data) => {
             // Only accept data packets within MTU size limit
             if data.len() <= MTU {
@@ -207,24 +203,29 @@ async fn bluetooth_handler<'a>(cobs_buf: &mut [u8; COBS_MAX_MSG_SIZE], tx: &mut 
                     let _ = buffer_tx_bt.push(Vec::from_slice(data).unwrap());
                 }
             }
-            None
+            HostProtocolMessage::Bluetooth(Bluetooth::AckSendData)
         }
-        Bluetooth::GetBtAddress => {
-            let msg = HostProtocolMessage::Bluetooth(Bluetooth::AckBtAddress {
-                bt_address: *BT_ADDRESS.lock().await,
-            });
-            Some(msg)
-        }
-        Bluetooth::ReceivedData(_) => None,
-        Bluetooth::NoReceivedData => None,
-        Bluetooth::AckFirmwareVersion { .. } => None,
-        Bluetooth::AckBtAddress { .. } => None,
-        Bluetooth::AckEnable => None,
-        Bluetooth::AckDisable => None,
+        Bluetooth::GetBtAddress => HostProtocolMessage::Bluetooth(Bluetooth::AckBtAddress {
+            bt_address: *BT_ADDRESS.lock().await,
+        }),
+
+        Bluetooth::ReceivedData(_)
+        | Bluetooth::SignalStrength(_)
+        | Bluetooth::NoReceivedData
+        | Bluetooth::AckFirmwareVersion { .. }
+        | Bluetooth::AckBtAddress { .. }
+        | Bluetooth::AckEnable
+        | Bluetooth::AckDisable
+        | Bluetooth::AckSendData => HostProtocolMessage::InappropriateMessage(get_state()),
     };
 
-    if let Some(msg) = msg {
-        send_cobs(tx, msg).await
+    send_cobs(tx, msg).await
+}
+
+fn get_state() -> State {
+    match BT_STATE.load(core::sync::atomic::Ordering::Relaxed) {
+        true => State::Enabled,
+        false => State::Disabled,
     }
 }
 

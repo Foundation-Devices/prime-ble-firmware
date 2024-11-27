@@ -31,6 +31,9 @@ pub enum Bluetooth<'a> {
 
     /// Send raw data over BLE connection
     SendData(&'a [u8]),
+    /// Acknowledge data sent over BLE connection
+    AckSendData,
+
     /// Request latest received data (if any)
     GetReceivedData,
     /// Data received over BLE connection
@@ -140,6 +143,9 @@ pub enum HostProtocolMessage<'a> {
     ChallengeResult { result: [u8; 32] },
     /// Postcard error
     PostcardError(PostcardError),
+
+    /// An inappropriate message was received for the current state
+    InappropriateMessage(State),
 }
 
 #[cfg(test)]
