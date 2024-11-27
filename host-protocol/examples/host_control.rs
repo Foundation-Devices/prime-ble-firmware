@@ -1,9 +1,9 @@
 use clap::{Parser, ValueEnum};
+use crc::{Crc, CRC_32_ISCSI};
 use host_protocol::{Bluetooth, Bootloader, HostProtocolMessage};
 use std::error::Error;
 use tokio::io::AsyncWriteExt;
 use tokio_serial::SerialPortBuilderExt;
-use crc::{Crc, CRC_32_ISCSI};
 
 const CHUNK_SIZE: usize = 256;
 
@@ -105,16 +105,20 @@ async fn main() -> Result<(), Box<dyn Error>> {
                     let crc = Crc::<u32>::new(&CRC_32_ISCSI);
                     let crc_pkt = crc.checksum(app_chunk.1);
 
-                    let block_msg =
-                    postcard::to_slice_cobs(&HostProtocolMessage::Bootloader(block.clone()), &mut buf).unwrap();
+                    let block_msg = postcard::to_slice_cobs(&HostProtocolMessage::Bootloader(block.clone()), &mut buf).unwrap();
                     serial.write_all(block_msg).await?;
                     serial.flush().await?;
-                    match tokio::time::timeout(std::time::Duration::from_millis(100), tokio::io::AsyncReadExt::read(&mut serial, &mut buf)).await{
+                    match tokio::time::timeout(
+                        std::time::Duration::from_millis(100),
+                        tokio::io::AsyncReadExt::read(&mut serial, &mut buf),
+                    )
+                    .await
+                    {
                         Ok(Ok(_)) => {
                             println!("Chunk {} sent!", app_chunk.0);
                             let cobs_buf = buf.as_mut_slice();
                             let msg: HostProtocolMessage = postcard::from_bytes_cobs(cobs_buf).unwrap();
-                        
+
                             match msg {
                                 HostProtocolMessage::Bootloader(Bootloader::AckWithIdxCrc { block_idx, crc }) => {
                                     if (block_idx == app_chunk.0) && (crc == crc_pkt) {
@@ -123,19 +127,19 @@ async fn main() -> Result<(), Box<dyn Error>> {
                                         println!("CRC mismatch");
                                         break;
                                     }
-                                },
+                                }
                                 HostProtocolMessage::Bootloader(Bootloader::NackWithIdx { block_idx }) => {
                                     println!("Chunk {} not acknowledged!", block_idx);
                                     break;
                                 }
-                                _ => ()
+                                _ => (),
                             }
                         }
                         Err(_) => {
                             println!("No response from device");
                             break;
                         }
-                        _ => ()
+                        _ => (),
                     }
                 }
             }

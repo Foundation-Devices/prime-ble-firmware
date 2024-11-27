@@ -31,6 +31,9 @@ pub enum Bluetooth<'a> {
 
     /// Send raw data over BLE connection
     SendData(&'a [u8]),
+    /// Response to data send request
+    SendDataResponse(SendDataResponse),
+
     /// Request latest received data (if any)
     GetReceivedData,
     /// Data received over BLE connection
@@ -121,6 +124,19 @@ pub enum PostcardError {
     OverFull,
 }
 
+/// Response codes for sending data over BLE connection
+#[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
+pub enum SendDataResponse {
+    /// Data sent successfully
+    Sent,
+
+    /// Data was not sent due to buffer being full
+    BufferFull,
+
+    /// Data was not sent due to being bigger than maximum MTU size
+    DataTooLarge,
+}
+
 /// Top-level message types for host-target communication
 #[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq)]
 pub enum HostProtocolMessage<'a> {
@@ -140,6 +156,9 @@ pub enum HostProtocolMessage<'a> {
     ChallengeResult { result: [u8; 32] },
     /// Postcard error
     PostcardError(PostcardError),
+
+    /// An inappropriate message was received for the current state
+    InappropriateMessage(State),
 }
 
 #[cfg(test)]
