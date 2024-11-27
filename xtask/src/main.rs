@@ -6,7 +6,7 @@ use std::process::{exit, Command, Stdio};
 use std::{env, fs};
 use tracing_subscriber::{fmt, prelude::*, EnvFilter};
 
-const FIRMWARE_VERSION: &str = "0.1.0";
+const FIRMWARE_VERSION: &str = "0.1.1";
 
 #[derive(Parser)]
 #[command(version, about, long_about = None)]
