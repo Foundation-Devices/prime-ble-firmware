@@ -166,7 +166,7 @@ fn flash_protect() {
         w.region41().enabled(); //0x29000-0x2A000
         w.region40().enabled(); //0x28000-0x29000
         w.region39().enabled(); //0x27000-0x28000
-        //w.region38().enabled(); //0x26000-0x27000
+                                //w.region38().enabled(); //0x26000-0x27000
         w
     });
     let bits_1 = unsafe { &*nrf52805_pac::BPROT::ptr() }.config1.read().bits();
