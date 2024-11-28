@@ -101,8 +101,8 @@ pub async fn comms_task(uart: BufferedUarte<'static, UARTE0, TIMER1>) {
     let mut cobs_buf: CobsAccumulator<COBS_MAX_MSG_SIZE> = CobsAccumulator::new();
     loop {
         {
-            #[cfg(any(feature = "debug", feature = "bluetooth-test"))]
-            log_performance(&mut timer_pkt, &mut rx_packet, &mut pkt_counter, &mut data_counter, &mut timer_tot);
+            // #[cfg(any(feature = "debug", feature = "bluetooth-test"))]
+            // log_performance(&mut timer_pkt, &mut rx_packet, &mut pkt_counter, &mut data_counter, &mut timer_tot);
 
             // Read data from UART
             if let Ok(n) = with_timeout(Duration::from_micros(200), rx.read(&mut raw_buf)).await {

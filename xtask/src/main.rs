@@ -380,7 +380,7 @@ enum MergeableFile<P: AsRef<Path>> {
     Binary(P, u32),
 }
 
-fn merge_files<P: AsRef<Path>>(inputs: Vec<MergeableFile<P>>, output: P) {
+fn merge_files<P: AsRef<Path>>(inputs: Vec<MergeableFile<P>>, patches: Option<Vec<(u32, u8)>>, output: P) {
     let mut records = vec![];
 
     inputs.into_iter().for_each(|file| {
@@ -446,13 +446,25 @@ fn merge_files<P: AsRef<Path>>(inputs: Vec<MergeableFile<P>>, output: P) {
     let mut segment_upper_address = addr >> 16;
     out_records.push(ihex::Record::StartLinearAddress(segment_upper_address));
 
+    let mut patches = patches.unwrap_or_default();
+    let mut patch = patches.pop();
+
     // iterate through records and push them to output vector
-    for (addr, value) in records.iter() {
+    for (addr, mut value) in records.into_iter() {
         let upper = addr >> 16;
 
         // write extend linear address record if it has changed
         if upper != segment_upper_address {
             out_records.push(ihex::Record::ExtendedLinearAddress(upper as u16));
+        }
+
+        // apply patches
+        if let Some((patch_addr, patch_value)) = patch {
+            let end = addr + value.len() as u32;
+            if (addr..end).contains(&patch_addr) {
+                value[(patch_addr - addr) as usize] = patch_value;
+                patch = patches.pop();
+            }
         }
 
         let offset = addr & 0xffff;
@@ -474,6 +486,14 @@ fn merge_files<P: AsRef<Path>>(inputs: Vec<MergeableFile<P>>, output: P) {
     file.write_all(data.as_bytes()).expect("unable to write ihex object to file");
 }
 
+fn patches_7_2_0(val: u8, s113: bool) -> Option<Vec<(u32, u8)>> {
+    if s113 {
+        Some(vec![(0x0001_AF1D, val), (0x0001_AE9D, val), (0x0000_3009, val), (0x0000_12F5, val)])
+    } else {
+        Some(vec![(0x0001_8AA5, val), (0x0001_8A25, val), (0x0000_3009, val), (0x0000_1315, val)])
+    }
+}
+
 fn build_bt_package(s113: bool) {
     tracing::info!("Merging softdevice, bootloader and BT signed application in single hex");
     merge_files(
@@ -485,10 +505,11 @@ fn build_bt_package(s113: bool) {
             })),
             MergeableFile::Binary(
                 project_root().join("BtPackage/BT_application_signed.bin"),
-                if s113 { 0x1C000 } else { 0x19000 },
+                if s113 { 0x1B800 } else { 0x19000 },
             ),
             MergeableFile::IHex(project_root().join("BtPackage/bootloader.hex")),
         ],
+        patches_7_2_0(if s113 { 0xB8 } else { 0x90 }, s113),
         project_root().join("BtPackage/BTApp_Full_Image.hex"),
     );
 
@@ -518,6 +539,7 @@ fn build_bt_package_debug(s113: bool) {
             MergeableFile::IHex(project_root().join("BtPackageDebug/BtappDebug.hex")),
             MergeableFile::IHex(project_root().join("BtPackageDebug/bootloaderDebug.hex")),
         ],
+        patches_7_2_0(if s113 { 0xB8 } else { 0x90 }, s113),
         project_root().join("BtPackageDebug/BTApp_Full_Image_debug.hex"),
     );
 

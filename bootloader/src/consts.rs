@@ -24,12 +24,12 @@ pub const INT_VECTOR_TABLE_BASE: u32 = BASE_APP_ADDR + SIGNATURE_HEADER_SIZE;
 pub const INT_VECTOR_TABLE_BASE: u16 = 0x1000;
 
 /// Base address for the application in flash memory
-/// This is where the actual application firmware code begins in flash memory at 0x19000|0x1C000,
+/// This is where the actual application firmware code begins in flash memory at 0x19000|0x1B800,
 /// after the SoftDevice and before the bootloader region
 #[cfg(feature = "s112")]
 pub const BASE_APP_ADDR: u32 = 0x19000;
 #[cfg(feature = "s113")]
-pub const BASE_APP_ADDR: u32 = 0x1C000;
+pub const BASE_APP_ADDR: u32 = 0x1B800;
 
 /// Size of the application area in flash memory (56.75KB for S112, 44.75KB for S113)
 /// This constant defines the maximum size available for the application firmware.
