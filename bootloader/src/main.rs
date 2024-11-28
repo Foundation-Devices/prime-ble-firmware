@@ -266,10 +266,6 @@ async fn main(_spawner: Spawner) {
                         info!("Remaining {} bytes", remaining.len());
 
                         match data {
-                            HostProtocolMessage::Bluetooth(_) => {
-                                ack_msg_send(HostProtocolMessage::InappropriateMessage(State::FirmwareUpgrade), &mut tx);
-                            }
-
                             HostProtocolMessage::Bootloader(boot_msg) => match boot_msg {
                                 // Handle firmware erase command
                                 Bootloader::EraseFirmware => {
