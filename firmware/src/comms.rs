@@ -1,13 +1,13 @@
 // Standard imports for BLE communication and cryptographic operations
 use crate::{BT_ADDRESS, BT_DATA_TX, IRQ_OUT_PIN};
 use crate::{BT_DATA_RX, BT_STATE, RSSI_VALUE};
-use consts::{BT_MAX_NUM_PKT, ATT_MTU, UICR_SECRET_SIZE, UICR_SECRET_START};
+use consts::{ATT_MTU, BT_MAX_NUM_PKT, UICR_SECRET_SIZE, UICR_SECRET_START};
 use defmt::info;
 use embassy_nrf::buffered_uarte::{BufferedUarte, BufferedUarteTx};
 use embassy_nrf::peripherals::{TIMER1, UARTE0};
-use embassy_time::{with_timeout, Duration};
 #[cfg(any(feature = "debug", feature = "bluetooth-test"))]
 use embassy_time::Instant;
+use embassy_time::{with_timeout, Duration};
 use embedded_io_async::Write;
 use heapless::Vec;
 use hmac::{Hmac, Mac};

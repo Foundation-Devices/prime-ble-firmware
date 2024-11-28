@@ -46,7 +46,9 @@ pub unsafe fn jump_to_app() -> ! {
     let mut cmd = mbr::sd_mbr_command_t {
         command,
         params: mbr::sd_mbr_command_t__bindgen_ty_1 {
-            irq_forward_address_set: mbr::sd_mbr_command_irq_forward_address_set_t { address: INT_VECTOR_TABLE_BASE },
+            irq_forward_address_set: mbr::sd_mbr_command_irq_forward_address_set_t {
+                address: INT_VECTOR_TABLE_BASE,
+            },
         },
     };
     let ret = mbr::sd_mbr_command(&mut cmd);
