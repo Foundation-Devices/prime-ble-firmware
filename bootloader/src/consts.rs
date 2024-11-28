@@ -21,7 +21,7 @@ pub const INT_VECTOR_TABLE_BASE: u32 = BASE_APP_ADDR + SIGNATURE_HEADER_SIZE;
 /// Points to the SoftDevice base address at 0x1000, which is where the interrupt vector table
 /// must be located for unsigned firmware to properly handle interrupts through the SoftDevice
 #[cfg(feature = "boot-unsigned-fw")]
-pub const INT_VECTOR_TABLE_BASE: u16 = 0x1000;
+pub const INT_VECTOR_TABLE_BASE: u32 = 0x1000;
 
 /// Base address for the application in flash memory
 /// This is where the actual application firmware code begins in flash memory at 0x19000|0x1B800,
