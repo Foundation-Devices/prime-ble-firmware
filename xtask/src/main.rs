@@ -273,7 +273,7 @@ fn build_bt_firmware(verbose: bool, s113: bool) {
         if s113 { "s113" } else { "s112" },
         "--",
         "--pad-to",
-        "0x27300",
+        "0x27200",
         "-O",
         "binary",
         "../BtPackage/BT_application.bin",

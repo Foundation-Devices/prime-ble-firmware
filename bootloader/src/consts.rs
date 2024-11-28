@@ -4,7 +4,7 @@
 /// to locate and execute the bootloader during startup. The UICR (User Information
 /// Configuration Registers) provide non-volatile storage for critical system parameters.
 #[link_section = ".uicr_bootloader_start_address"]
-pub static BOOTLOADER_ADDR: u32 = 0x27300;
+pub static BOOTLOADER_ADDR: u32 = 0x27200;
 
 /// 256B are needed for cosign2 signature
 #[cfg(feature = "boot-signed-fw")]
@@ -42,7 +42,7 @@ pub const APP_SIZE: u32 = BASE_BOOTLOADER_APP - BASE_APP_ADDR;
 /// This address (0x26000) marks where the bootloader code begins in flash.
 /// It must match the address specified in BOOTLOADER_ADDR above to ensure
 /// proper execution of the bootloader during device startup.
-pub const BASE_BOOTLOADER_APP: u32 = 0x27300;
+pub const BASE_BOOTLOADER_APP: u32 = 0x27200;
 
 /// Size of a flash memory page in bytes (4KB)
 /// This constant defines the size of a single flash memory page on the nRF52 microcontroller.
