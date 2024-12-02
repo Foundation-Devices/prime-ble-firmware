@@ -32,7 +32,7 @@ softdevice: flash-erase
 
 softdevice-s113: flash-erase
     cargo xtask --s113 patch-sd
-    probe-rs download ./misc/s113_nrf52_7.2.0_softdevice_patched.hex --chip nrf52805_xxAA --binary-format hex
+    probe-rs download ./misc/s113_nrf52_7.3.0_softdevice_patched.hex --chip nrf52805_xxAA --binary-format hex
 
 # Flash and run Bluetooth test app with UART MPU
 bluetooth-app: softdevice

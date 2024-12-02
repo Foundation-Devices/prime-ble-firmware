@@ -499,22 +499,34 @@ fn patches_7_2_0(val: u8, s113: bool) -> Option<Vec<(u32, u8)>> {
     }
 }
 
+fn patches_7_3_0(val: u8, s113: bool) -> Option<Vec<(u32, u8)>> {
+    if s113 {
+        Some(vec![(0x0001_AE39, val), (0x0001_ADB9, val), (0x0000_3009, val), (0x0000_12F5, val)])
+    } else {
+        Some(vec![(0x0001_89C1, val), (0x0001_8941, val), (0x0000_3009, val), (0x0000_1315, val)])
+    }
+}
+
 fn build_bt_package(s113: bool) {
     tracing::info!("Merging softdevice, bootloader and BT signed application in single hex");
     merge_files(
         vec![
             MergeableFile::IHex(project_root().join(if s113 {
-                "misc/s113_nrf52_7.2.0_softdevice.hex"
+                "misc/s113_nrf52_7.3.0_softdevice.hex"
             } else {
                 "misc/s112_nrf52_7.2.0_softdevice.hex"
             })),
             MergeableFile::Binary(
                 project_root().join("BtPackage/BT_application_signed.bin"),
-                if s113 { 0x1B500 } else { 0x19000 },
+                if s113 { 0x1B400 } else { 0x19000 },
             ),
             MergeableFile::IHex(project_root().join("BtPackage/bootloader.hex")),
         ],
-        patches_7_2_0(if s113 { 0xB5 } else { 0x90 }, s113),
+        if s113 {
+            patches_7_3_0(0xB4, s113)
+        } else {
+            patches_7_2_0(0x90, s113)
+        },
         project_root().join("BtPackage/BTApp_Full_Image.hex"),
     );
 
@@ -537,14 +549,18 @@ fn build_bt_package_debug(s113: bool) {
     merge_files(
         vec![
             MergeableFile::IHex(project_root().join(if s113 {
-                "misc/s113_nrf52_7.2.0_softdevice.hex"
+                "misc/s113_nrf52_7.3.0_softdevice.hex"
             } else {
                 "misc/s112_nrf52_7.2.0_softdevice.hex"
             })),
             MergeableFile::IHex(project_root().join("BtPackageDebug/BtappDebug.hex")),
             MergeableFile::IHex(project_root().join("BtPackageDebug/bootloaderDebug.hex")),
         ],
-        patches_7_2_0(if s113 { 0xB5 } else { 0x90 }, s113),
+        if s113 {
+            patches_7_3_0(0xB4, s113)
+        } else {
+            patches_7_2_0(0x90, s113)
+        },
         project_root().join("BtPackageDebug/BTApp_Full_Image_debug.hex"),
     );
 
@@ -565,13 +581,17 @@ fn build_bt_package_debug(s113: bool) {
 fn patch_sd(s113: bool) {
     merge_files(
         vec![MergeableFile::IHex(project_root().join(if s113 {
-            "misc/s113_nrf52_7.2.0_softdevice.hex"
+            "misc/s113_nrf52_7.3.0_softdevice.hex"
         } else {
             "misc/s112_nrf52_7.2.0_softdevice.hex"
         }))],
-        patches_7_2_0(if s113 { 0xB5 } else { 0x90 }, s113),
+        if s113 {
+            patches_7_3_0(0xB4, s113)
+        } else {
+            patches_7_2_0(0x90, s113)
+        },
         project_root().join(if s113 {
-            "misc/s113_nrf52_7.2.0_softdevice_patched.hex"
+            "misc/s113_nrf52_7.3.0_softdevice_patched.hex"
         } else {
             "misc/s112_nrf52_7.2.0_softdevice_patched.hex"
         }),
