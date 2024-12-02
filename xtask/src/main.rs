@@ -510,11 +510,11 @@ fn build_bt_package(s113: bool) {
             })),
             MergeableFile::Binary(
                 project_root().join("BtPackage/BT_application_signed.bin"),
-                if s113 { 0x1B800 } else { 0x19000 },
+                if s113 { 0x1B500 } else { 0x19000 },
             ),
             MergeableFile::IHex(project_root().join("BtPackage/bootloader.hex")),
         ],
-        patches_7_2_0(if s113 { 0xB8 } else { 0x90 }, s113),
+        patches_7_2_0(if s113 { 0xB5 } else { 0x90 }, s113),
         project_root().join("BtPackage/BTApp_Full_Image.hex"),
     );
 
@@ -544,7 +544,7 @@ fn build_bt_package_debug(s113: bool) {
             MergeableFile::IHex(project_root().join("BtPackageDebug/BtappDebug.hex")),
             MergeableFile::IHex(project_root().join("BtPackageDebug/bootloaderDebug.hex")),
         ],
-        patches_7_2_0(if s113 { 0xB8 } else { 0x90 }, s113),
+        patches_7_2_0(if s113 { 0xB5 } else { 0x90 }, s113),
         project_root().join("BtPackageDebug/BTApp_Full_Image_debug.hex"),
     );
 
@@ -569,7 +569,7 @@ fn patch_sd(s113: bool) {
         } else {
             "misc/s112_nrf52_7.2.0_softdevice.hex"
         }))],
-        patches_7_2_0(if s113 { 0xB8 } else { 0x90 }, s113),
+        patches_7_2_0(if s113 { 0xB5 } else { 0x90 }, s113),
         project_root().join(if s113 {
             "misc/s113_nrf52_7.2.0_softdevice_patched.hex"
         } else {
