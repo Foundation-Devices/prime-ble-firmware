@@ -32,6 +32,10 @@ enum Commands {
     /// UART pins are redirected to the console at 115200 baud rate
     #[command(verbatim_doc_comment)]
     BuildFwDebugImage,
+
+    /// Patch SoftDevice hex file to save some space at the end of it
+    #[command(verbatim_doc_comment)]
+    PatchSd,
 }
 
 fn project_root() -> PathBuf {
@@ -557,6 +561,22 @@ fn build_bt_package_debug(s113: bool) {
     }
 }
 
+fn patch_sd(s113: bool) {
+    merge_files(
+        vec![MergeableFile::IHex(project_root().join(if s113 {
+            "misc/s113_nrf52_7.2.0_softdevice.hex"
+        } else {
+            "misc/s112_nrf52_7.2.0_softdevice.hex"
+        }))],
+        patches_7_2_0(if s113 { 0xB8 } else { 0x90 }, s113),
+        project_root().join(if s113 {
+            "misc/s113_nrf52_7.2.0_softdevice_patched.hex"
+        } else {
+            "misc/s112_nrf52_7.2.0_softdevice_patched.hex"
+        }),
+    );
+}
+
 fn main() {
     // Adding some info tracing just for logging activity
     env::set_var("RUST_LOG", "info");
@@ -582,6 +602,9 @@ fn main() {
             build_bt_bootloader_debug(args.s113);
             build_bt_debug_firmware(args.s113);
             build_bt_package_debug(args.s113);
+        }
+        Commands::PatchSd => {
+            patch_sd(args.s113);
         }
     }
 }
