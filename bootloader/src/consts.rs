@@ -33,16 +33,16 @@ pub const BASE_APP_ADDR: u32 = 0x1B400;
 
 /// Size of the application area in flash memory (56.75KB for S112, 44.75KB for S113)
 /// This constant defines the maximum size available for the application firmware.
-/// Starting from BASE_APP_ADDR up to BASE_BOOTLOADER_APP
+/// Starting from BASE_APP_ADDR up to BASE_BOOTLOADER_ADDR
 /// consider that a header is needed for cosign2 signature so real fw app goes from
-/// BASE_APP_ADDR + SIGNATURE_HEADER_SIZE to BASE_BOOTLOADER_APP
-pub const APP_SIZE: u32 = BASE_BOOTLOADER_APP - BASE_APP_ADDR;
+/// BASE_APP_ADDR + SIGNATURE_HEADER_SIZE to BASE_BOOTLOADER_ADDR
+pub const APP_SIZE: u32 = BASE_BOOTLOADER_ADDR - BASE_APP_ADDR;
 
 /// Start address of the bootloader application code in flash memory
 /// This address (0x26000) marks where the bootloader code begins in flash.
 /// It must match the address specified in BOOTLOADER_ADDR above to ensure
 /// proper execution of the bootloader during device startup.
-pub const BASE_BOOTLOADER_APP: u32 = 0x27000;
+pub const BASE_BOOTLOADER_ADDR: u32 = 0x27000;
 
 /// Size of a flash memory page in bytes (4KB)
 /// This constant defines the size of a single flash memory page on the nRF52 microcontroller.

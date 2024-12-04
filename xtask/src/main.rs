@@ -266,8 +266,7 @@ fn build_bt_firmware(verbose: bool, s113: bool) {
     }
 
     // Created a full populated flash image to avoid the signed fw is different from the slice to check.
-    // We will always get the full slice of flash where app is flashed ( 0x19000 up to 0x25800 )
-    // Then signing we will have from 0x19000 up to 0x19800 the cosign2 header.
+    // We will always get the full slice of flash where app is flashed ( BASE_APP_ADDR up to BASE_BOOTLOADER_ADDR )
     tracing::info!("Creating BT application bin file");
     let mut cargo_cmd = Command::new(cargo());
     let mut cmd = cargo_cmd.current_dir(project_root().join("firmware")).args([

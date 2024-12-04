@@ -99,7 +99,7 @@ fn update_chunk<'a>(boot_status: &'a mut BootState, idx: usize, data: &'a [u8], 
 
     // Validate write is within application area
     match cursor {
-        (BASE_APP_ADDR..=BASE_BOOTLOADER_APP) => {}
+        (BASE_APP_ADDR..=BASE_BOOTLOADER_ADDR) => {}
         _ => {
             ack_msg_send(
                 HostProtocolMessage::Bootloader(Bootloader::FirmwareOutOfBounds { block_idx: idx }),
@@ -269,7 +269,7 @@ async fn main(_spawner: Spawner) {
                                 // Handle firmware erase command
                                 Bootloader::EraseFirmware => {
                                     info!("Erase firmware");
-                                    if flash.erase(BASE_APP_ADDR, BASE_BOOTLOADER_APP).is_ok() {
+                                    if flash.erase(BASE_APP_ADDR, BASE_BOOTLOADER_ADDR).is_ok() {
                                         ack_msg_send(HostProtocolMessage::Bootloader(Bootloader::AckEraseFirmware), &mut tx);
                                         boot_status = Default::default();
                                     }
