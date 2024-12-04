@@ -33,15 +33,15 @@ ble-sec = ["nrf-softdevice/ble-sec"]
 
 nrf52805 = ["embassy-nrf/nrf52805", "nrf-softdevice/nrf52805"]
 
-s112 = ["nrf-softdevice/s112", "nrf-softdevice-s112"]
+s112 = ["nrf-softdevice/s112", "nrf-softdevice-s112", "bluetooth-PHY2"]
 
-s113 = ["nrf-softdevice/s113", "nrf-softdevice-s113"]
+s113 = ["nrf-softdevice/s113", "nrf-softdevice-s113", "consts/dle"]
 
 # Bluetooth test -use this to test bluetooth without the MPU
 # using memory_unsigned.x
 bluetooth-test = []
 
-#Activate PHY2
+# Ask for PHY2
 bluetooth-PHY2 = []
 
 # Cobs format for MCU

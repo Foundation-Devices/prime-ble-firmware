@@ -1,8 +1,8 @@
 // Standard imports for BLE communication and cryptographic operations
 use crate::{BT_ADDRESS, BT_DATA_TX, IRQ_OUT_PIN};
 use crate::{BT_DATA_RX, BT_STATE, RSSI_VALUE};
-use consts::{ATT_MTU, BT_MAX_NUM_PKT, UICR_SECRET_SIZE, UICR_SECRET_START};
-use defmt::info;
+use consts::{APP_MTU, BT_MAX_NUM_PKT, UICR_SECRET_SIZE, UICR_SECRET_START};
+use defmt::{debug, trace};
 use embassy_nrf::buffered_uarte::{BufferedUarte, BufferedUarteTx};
 use embassy_nrf::peripherals::{TIMER1, UARTE0};
 #[cfg(any(feature = "debug", feature = "bluetooth-test"))]
@@ -37,13 +37,13 @@ async fn assert_out_irq() {
 fn log_performance(timer_pkt: &mut Instant, rx_packet: &mut bool, pkt_counter: &mut u64, data_counter: &mut u64, timer_tot: &mut Instant) {
     if timer_pkt.elapsed().as_millis() > 1500 && *rx_packet {
         let pkt_time = timer_tot.elapsed().as_millis() - 1500;
-        info!(
+        debug!(
             "Total packet number: {}, time: {} ms, data incoming: {} bytes",
             pkt_counter, pkt_time, data_counter
         );
         if (timer_tot.elapsed().as_secs()) > 0 {
             let rate = (*data_counter as f32 / pkt_time as f32) * 8.0;
-            info!("Rough data rate: {} kbps", rate);
+            debug!("Rough data rate: {} kbps", rate);
         }
         *data_counter = 0;
         *pkt_counter = 0;
@@ -67,7 +67,7 @@ fn log_infra_packet(
         *rx_packet = true;
         *timer_tot = Instant::now();
     }
-    info!("Infra packet time: {}", timer_pkt.elapsed().as_millis());
+    debug!("Infra packet time: {}", timer_pkt.elapsed().as_millis());
     *timer_pkt = Instant::now();
     *data_counter += data.len() as u64;
     *pkt_counter += 1;
@@ -124,23 +124,24 @@ pub async fn comms_task(uart: BufferedUarte<'static, UARTE0, TIMER1>) {
                             break 'cobs;
                         }
                         FeedResult::OverFull(new_wind) => {
-                            info!("overfull");
+                            trace!("overfull");
                             let msg = HostProtocolMessage::PostcardError(PostcardError::OverFull);
                             send_cobs(&mut tx, msg).await;
                             new_wind
                         }
                         FeedResult::DeserError(new_wind) => {
-                            info!("DeserError");
+                            trace!("DeserError");
                             let msg = HostProtocolMessage::PostcardError(PostcardError::Deser);
                             send_cobs(&mut tx, msg).await;
                             new_wind
                         }
                         FeedResult::Success { data, remaining } => {
-                            info!("Remaining {} bytes", remaining.len());
+                            trace!("Success");
+                            debug!("Remaining {} bytes", remaining.len());
                             // Route message to appropriate handler based on type
                             match data {
                                 HostProtocolMessage::Bluetooth(bluetooth_msg) => {
-                                    info!("Received HostProtocolMessage::Bluetooth");
+                                    trace!("Received HostProtocolMessage::Bluetooth");
                                     bluetooth_handler(&mut send_buf, &mut tx, bluetooth_msg).await;
                                 }
                                 HostProtocolMessage::Bootloader(_) => (), // Handled in bootloader
@@ -172,12 +173,12 @@ async fn bluetooth_handler<'a>(cobs_buf: &mut [u8; COBS_MAX_MSG_SIZE], tx: &mut 
 
     let msg = match msg {
         Bluetooth::Enable => {
-            info!("Bluetooth enabled");
+            trace!("Bluetooth enabled");
             BT_STATE.store(true, core::sync::atomic::Ordering::Relaxed);
             HostProtocolMessage::Bluetooth(Bluetooth::AckEnable)
         }
         Bluetooth::Disable => {
-            info!("Bluetooth disabled");
+            trace!("Bluetooth disabled");
             BT_STATE.store(false, core::sync::atomic::Ordering::Relaxed);
             HostProtocolMessage::Bluetooth(Bluetooth::AckDisable)
         }
@@ -198,8 +199,8 @@ async fn bluetooth_handler<'a>(cobs_buf: &mut [u8; COBS_MAX_MSG_SIZE], tx: &mut 
             }
         }
         Bluetooth::SendData(data) => {
-            // Only accept data packets within ATT_MTU size limit
-            if data.len() <= ATT_MTU {
+            // Only accept data packets within APP_MTU size limit
+            if data.len() <= APP_MTU {
                 let mut buffer_tx_bt = BT_DATA_TX.lock().await;
                 if buffer_tx_bt.len() < BT_MAX_NUM_PKT {
                     if buffer_tx_bt.push(Vec::from_slice(data).unwrap()).is_err() {
@@ -248,7 +249,7 @@ fn hmac_challenge_response(nonce: u64) -> HostProtocolMessage<'static> {
     if let Ok(mut mac) = HmacSha256::new_from_slice(secret_as_slice) {
         mac.update(&nonce.to_be_bytes());
         let result = mac.finalize().into_bytes();
-        info!("{=[u8;32]:#X}", result.into());
+        debug!("{=[u8;32]:#X}", result.into());
         HostProtocolMessage::ChallengeResult { result: result.into() }
     } else {
         HostProtocolMessage::ChallengeResult { result: [0xFF; 32] }

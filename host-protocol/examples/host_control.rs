@@ -16,6 +16,7 @@ enum Command {
     Address,
     FwVersion,
     UpdateApp,
+    SendData,
 }
 
 impl From<Command> for HostProtocolMessage<'_> {
@@ -28,6 +29,7 @@ impl From<Command> for HostProtocolMessage<'_> {
             Command::Address => HostProtocolMessage::Bluetooth(Bluetooth::GetBtAddress),
             Command::FwVersion => HostProtocolMessage::Bluetooth(Bluetooth::GetFirmwareVersion),
             Command::UpdateApp => HostProtocolMessage::Bootloader(Bootloader::EraseFirmware),
+            Command::SendData => HostProtocolMessage::Bluetooth(Bluetooth::SendData(&[0x30; 200])),
         }
     }
 }

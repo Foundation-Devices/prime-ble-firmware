@@ -6,18 +6,18 @@ use crate::BT_DATA_TX;
 use crate::{BT_STATE, RSSI_VALUE};
 use consts::{ATT_MTU, DEVICE_NAME, SERVICES_LIST, SHORT_NAME};
 use core::mem;
-use defmt::{error, info, unwrap};
+use defmt::{debug, error, info, unwrap};
 use embassy_time::Timer;
 use futures::future::{select, Either};
 use futures::pin_mut;
 use nrf_softdevice::ble::advertisement_builder::{ExtendedAdvertisementBuilder, ExtendedAdvertisementPayload, Flag, ServiceList};
-use nrf_softdevice::ble::gatt_server::notify_value;
+use nrf_softdevice::ble::gatt_server::{notify_value, NotifyValueError};
 use nrf_softdevice::ble::peripheral;
 #[cfg(feature = "bluetooth-PHY2")]
 use nrf_softdevice::ble::PhySet;
 use nrf_softdevice::ble::{gatt_server, Connection};
 use nrf_softdevice::gatt_server;
-use nrf_softdevice::{raw, Softdevice};
+use nrf_softdevice::{raw, RawError, Softdevice};
 use raw::ble_gap_conn_params_t;
 
 // Get connection interval with macro
@@ -25,7 +25,7 @@ use raw::ble_gap_conn_params_t;
 macro_rules! ci_ms {
     ($a:expr) => {{
         let ms = ($a as f32 * 1000.0) / 1250.0;
-        info!("ci units: {}", ms);
+        debug!("ci units: {}", ms);
         ms as u16
     }};
 }
@@ -89,7 +89,11 @@ async fn notify_data_tx<'a>(server: &'a Server, connection: &'a Connection) {
                     Ok(_) => {
                         buffer.remove(0);
                     }
-                    Err(e) => info!("Error on nus send {:?}", e),
+                    Err(NotifyValueError::Raw(RawError::BleGattsSysAttrMissing)) => {
+                        // Ignore this error, no need to be spammed just because
+                        // we are waiting for sys attrs to be available
+                    }
+                    Err(e) => error!("Error on nus send {:?}", e),
                 }
             }
 
@@ -112,11 +116,11 @@ pub async fn update_phy(mut conn: Connection) {
     Timer::after_secs(2).await;
     // Request PHY2
     if conn.phy_update(PhySet::M2, PhySet::M2).is_err() {
-        info!("phy_update error");
+        error!("phy_update error");
     }
 }
 
-// Set parameter for data event extension on Sd112
+// Set parameter for data event extension on SD112
 pub fn set_data_event_ext() -> u32 {
     let ret = unsafe {
         raw::sd_ble_opt_set(
@@ -130,7 +134,7 @@ pub fn set_data_event_ext() -> u32 {
             },
         )
     };
-    info!("ret from conn length {}", ret);
+    debug!("set_data_event_ext: {}", ret);
     ret
 }
 
@@ -158,21 +162,34 @@ pub async fn run_bluetooth(sd: &'static Softdevice, server: &Server) {
         };
 
         // Start advertising
+        #[cfg(feature = "s112")]
+        let conn = unwrap!(peripheral::advertise_connectable(sd, adv, &config).await);
+        #[cfg(feature = "s113")]
         let mut conn = unwrap!(peripheral::advertise_connectable(sd, adv, &config).await);
         info!("advertising done!");
 
-        // Request connection param update
-        if let Err(e) = conn.set_conn_params(ble_gap_conn_params_t {
+        #[cfg(feature = "s112")]
+        let gap_conn_param = ble_gap_conn_params_t {
             conn_sup_timeout: 500,         // 5s
-            max_conn_interval: ci_ms!(30), // 30ms
-            min_conn_interval: ci_ms!(12), // 12ms
+            max_conn_interval: ci_ms!(10), // 15ms - having frequent connection allows to optimize BLE throughput without DLE
+            min_conn_interval: ci_ms!(10), // 10ms
             slave_latency: 0,
-        }) {
+        };
+        #[cfg(feature = "s113")]
+        let gap_conn_param = ble_gap_conn_params_t {
+            conn_sup_timeout: 500,         // 5s
+            max_conn_interval: ci_ms!(50), // 50ms
+            min_conn_interval: ci_ms!(45), // 45ms - do not permit too low connection interval to not perturb BLE throughput
+            slave_latency: 0,
+        };
+        // Request connection param update
+        if let Err(e) = conn.set_conn_params(gap_conn_param) {
             error!("set_conn_params error - {:?}", e)
         }
 
         #[cfg(feature = "s113")]
         {
+            // Enable to biggest LL payload size to optimize BLE throughput
             if conn
                 .data_length_update(Some(&raw::ble_gap_data_length_params_t {
                     max_tx_octets: 251,
@@ -194,6 +211,8 @@ pub async fn run_bluetooth(sd: &'static Softdevice, server: &Server) {
         let gatt_fut = gatt_server::run(&conn, server, |e| server.handle_event(e));
         let tx_fut = notify_data_tx(server, &conn);
 
+        // No need to ask for PHY2, even with PHY1 the BLE maximum app data throughput (measured to 860kbps)
+        // is higher than the UART maximum throughput (estimated to 360kbps at 460800bps baudrate)
         #[cfg(feature = "bluetooth-PHY2")]
         let _phy_upd = update_phy(conn.clone()).await;
 
@@ -209,13 +228,13 @@ pub async fn run_bluetooth(sd: &'static Softdevice, server: &Server) {
         // proc macro when applied to the Server struct above
         // server.run(&conn, &config).await;
         // Turn on message on bt
-        //server.handle_event(ServerEvent::Nus(NusEvent::TxCccdWrite { notifications: true }));
+        // server.handle_event(ServerEvent::Nus(NusEvent::TxCccdWrite { notifications: true }));
         match select(tx_fut, gatt_fut).await {
             Either::Left((_, _)) => {
-                info!("Tx error")
+                error!("Tx error")
             }
             Either::Right((e, _)) => {
-                info!("gatt_server run exited with error: {:?}", e);
+                info!("gatt_server run exited: {:?}", e);
             }
         }
         // Force false

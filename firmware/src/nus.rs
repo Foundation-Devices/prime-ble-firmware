@@ -6,7 +6,7 @@
 
 use crate::BT_DATA_RX;
 use consts::ATT_MTU;
-use defmt::{error, info};
+use defmt::{debug, error, info};
 use heapless::Vec;
 use nrf_softdevice::gatt_service;
 
@@ -23,16 +23,11 @@ impl Nus {
     pub(crate) fn handle(&self, event: NusEvent) {
         match event {
             NusEvent::TxCccdWrite { notifications } => {
-                info!("Enable UART: {}", notifications);
+                info!("Enable NUS: {}", notifications);
             }
             NusEvent::RxWrite(data) => {
-                // If we receive something bigger for some reasons discard it
-                if data.len() <= ATT_MTU && !BT_DATA_RX.is_full() {
-                    // info!("Received: {} bytes {:?}", data.len(), data);
-                    if BT_DATA_RX.try_send(data).is_err() {
-                        info!("Error BT_DATA_RX");
-                    }
-                } else {
+                debug!("Received: {} bytes 0x{:02x}", data.len(), data[0]);
+                if BT_DATA_RX.try_send(data).is_err() {
                     error!("Error BT_DATA_RX");
                 }
             }
