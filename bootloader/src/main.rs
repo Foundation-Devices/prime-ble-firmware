@@ -155,7 +155,7 @@ fn flash_protect() {
     let bits_0 = unsafe { &*nrf52805_pac::BPROT::ptr() }.config0.read().bits();
     info!("CONFIG0_BITS : {}", bits_0);
 
-    // Protect bootloader area (0x26000-0x30000)
+    // Protect bootloader area (0x27000-0x30000)
     unsafe { &*nrf52805_pac::BPROT::ptr() }.config1.write(|w| {
         w.region47().enabled(); //0x2F000-0x30000
         w.region46().enabled(); //0x2E000-0x2F000
@@ -166,7 +166,6 @@ fn flash_protect() {
         w.region41().enabled(); //0x29000-0x2A000
         w.region40().enabled(); //0x28000-0x29000
         w.region39().enabled(); //0x27000-0x28000
-        //w.region38().enabled(); //0x26000-0x27000
         w
     });
     let bits_1 = unsafe { &*nrf52805_pac::BPROT::ptr() }.config1.read().bits();

@@ -277,7 +277,7 @@ fn build_bt_firmware(verbose: bool, s113: bool) {
         if s113 { "s113" } else { "s112" },
         "--",
         "--pad-to",
-        "0x27200",
+        "0x27000",
         "-O",
         "binary",
         "../BtPackage/BT_application.bin",
@@ -614,6 +614,7 @@ fn main() {
         Commands::BuildFwImage => {
             build_tools_check(args.verbose);
             build_bt_bootloader(args.verbose, args.s113);
+            build_bt_firmware(args.verbose, args.s113);
             sign_bt_firmware();
             build_bt_package(args.s113);
         }
