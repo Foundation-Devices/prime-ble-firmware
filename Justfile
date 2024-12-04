@@ -49,10 +49,10 @@ bluetooth-app-debug-s113: softdevice-s113
     cd firmware && cargo run -r --no-default-features --features debug,s113
 
 # Flash and run debug version of bootloader without flash protection and unsigned firmware
-bootloader-debug:
+bootloader-debug: softdevice
     cd bootloader && cargo run -r --no-default-features --features debug,s112
 
-bootloader-debug-s113:
+bootloader-debug-s113: softdevice-s113
     cd bootloader && cargo run -r --no-default-features --features debug,s113
 
 # Run COBS protocol size validation tests

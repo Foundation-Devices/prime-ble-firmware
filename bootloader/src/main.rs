@@ -25,7 +25,7 @@ use consts::*;
 use core::cell::RefCell;
 use cosign2::{Header, VerificationResult};
 use crc::{Crc, CRC_32_ISCSI};
-use defmt::info;
+use defmt::{debug, error, info, trace};
 use embassy_executor::Spawner;
 use embassy_nrf::{
     bind_interrupts,
@@ -37,7 +37,7 @@ use embassy_nrf::{
 };
 use embassy_sync::blocking_mutex::CriticalSectionMutex;
 use embassy_sync::blocking_mutex::Mutex;
-use embedded_storage::nor_flash::NorFlash;
+use embedded_storage::nor_flash::{NorFlash, ReadNorFlash};
 use hmac::{Hmac, Mac};
 use host_protocol::COBS_MAX_MSG_SIZE;
 use host_protocol::{Bootloader, SecretSaveResponse};
@@ -114,8 +114,8 @@ fn update_chunk<'a>(boot_status: &'a mut BootState, idx: usize, data: &'a [u8], 
             boot_status.offset += data.len() as u32;
             // Update status and sector tracking
             boot_status.actual_sector = BASE_APP_ADDR + (boot_status.offset / FLASH_PAGE) * FLASH_PAGE;
-            info!("Updating flash page starting at addr: {:02X}", boot_status.actual_sector);
-            info!("offset : {:02X}", boot_status.actual_sector + boot_status.offset % FLASH_PAGE);
+            debug!("Updating flash page starting at addr: {:02X}", boot_status.actual_sector);
+            debug!("offset : {:02X}", boot_status.actual_sector + boot_status.offset % FLASH_PAGE);
 
             // Calculate CRC of written data
             let crc = Crc::<u32>::new(&CRC_32_ISCSI);
@@ -153,7 +153,7 @@ fn flash_protect() {
     // Protect Nordic MBR area
     unsafe { &*nrf52805_pac::BPROT::ptr() }.config0.write(|w| w.region0().enabled());
     let bits_0 = unsafe { &*nrf52805_pac::BPROT::ptr() }.config0.read().bits();
-    info!("CONFIG0_BITS : {}", bits_0);
+    debug!("CONFIG0_BITS : {}", bits_0);
 
     // Protect bootloader area (0x27000-0x30000)
     unsafe { &*nrf52805_pac::BPROT::ptr() }.config1.write(|w| {
@@ -169,14 +169,14 @@ fn flash_protect() {
         w
     });
     let bits_1 = unsafe { &*nrf52805_pac::BPROT::ptr() }.config1.read().bits();
-    info!("CONFIG1_BITS : {}", bits_1);
+    debug!("CONFIG1_BITS : {}", bits_1);
 
     // Enable protection even in debug mode
     unsafe { &*nrf52805_pac::BPROT::ptr() }
         .disableindebug
         .write(|w| unsafe { w.bits(0x00) });
     let disabledebug = unsafe { &*nrf52805_pac::BPROT::ptr() }.disableindebug.read().bits();
-    info!("DISABLE : {}", disabledebug);
+    debug!("DISABLE : {}", disabledebug);
 }
 
 /// Main bootloader entry point
@@ -190,13 +190,12 @@ async fn main(_spawner: Spawner) {
     // Configure UART
     let mut config_uart = uarte::Config::default();
     config_uart.parity = uarte::Parity::EXCLUDED;
-    config_uart.baudrate = uarte::Baudrate::BAUD115200;
 
     #[cfg(feature = "uart-pins-mpu")]
     let (rxd, txd, baud_rate) = (p.P0_14, p.P0_12, uarte::Baudrate::BAUD460800);
 
     #[cfg(feature = "uart-pins-console")]
-    let (rxd, txd, baud_rate) = (p.P0_16, p.P0_18, uarte::Baudrate::BAUD115200);
+    let (rxd, txd, baud_rate) = (p.P0_16, p.P0_18, uarte::Baudrate::BAUD460800);
 
     config_uart.baudrate = baud_rate;
 
@@ -246,32 +245,62 @@ async fn main(_spawner: Spawner) {
             'cobs: while !window.is_empty() {
                 window = match cobs_buf.feed_ref::<HostProtocolMessage>(window) {
                     FeedResult::Consumed => {
-                        info!("consumed");
+                        trace!("consumed");
                         break 'cobs;
                     }
                     FeedResult::OverFull(new_wind) => {
-                        info!("overfull");
+                        trace!("overfull");
                         let msg = HostProtocolMessage::PostcardError(PostcardError::OverFull);
                         ack_msg_send(msg, &mut tx);
                         new_wind
                     }
                     FeedResult::DeserError(new_wind) => {
-                        info!("DeserError");
+                        trace!("DeserError");
                         let msg = HostProtocolMessage::PostcardError(PostcardError::Deser);
                         ack_msg_send(msg, &mut tx);
                         new_wind
                     }
                     FeedResult::Success { data, remaining } => {
-                        info!("Remaining {} bytes", remaining.len());
+                        trace!("Success");
+                        debug!("Remaining {} bytes", remaining.len());
 
                         match data {
                             HostProtocolMessage::Bootloader(boot_msg) => match boot_msg {
                                 // Handle firmware erase command
                                 Bootloader::EraseFirmware => {
-                                    info!("Erase firmware");
-                                    if flash.erase(BASE_APP_ADDR, BASE_BOOTLOADER_ADDR).is_ok() {
-                                        ack_msg_send(HostProtocolMessage::Bootloader(Bootloader::AckEraseFirmware), &mut tx);
-                                        boot_status = Default::default();
+                                    trace!("Erase firmware");
+                                    let start = BASE_APP_ADDR / FLASH_PAGE * FLASH_PAGE;
+                                    debug!("start: 0x{:08X}", start);
+                                    if start == BASE_APP_ADDR {
+                                        if flash.erase(BASE_APP_ADDR, BASE_BOOTLOADER_ADDR).is_ok() {
+                                            ack_msg_send(HostProtocolMessage::Bootloader(Bootloader::AckEraseFirmware), &mut tx);
+                                            boot_status = Default::default();
+                                        } else {
+                                            ack_msg_send(HostProtocolMessage::Bootloader(Bootloader::NackEraseFirmware), &mut tx);
+                                            error!("erase error");
+                                        }
+                                    } else {
+                                        let mut saved = [0; (BASE_APP_ADDR % FLASH_PAGE) as usize];
+                                        if flash.read(start, &mut saved).is_err() {
+                                            ack_msg_send(HostProtocolMessage::Bootloader(Bootloader::NackEraseFirmwareRead), &mut tx);
+                                            error!("read error");
+                                        } else {
+                                            if flash.erase(start, BASE_BOOTLOADER_ADDR).is_ok() {
+                                                boot_status = Default::default();
+                                                if flash.write(start, &saved).is_err() {
+                                                    ack_msg_send(
+                                                        HostProtocolMessage::Bootloader(Bootloader::NackEraseFirmwareWrite),
+                                                        &mut tx,
+                                                    );
+                                                    error!("write error");
+                                                } else {
+                                                    ack_msg_send(HostProtocolMessage::Bootloader(Bootloader::AckEraseFirmware), &mut tx);
+                                                }
+                                            } else {
+                                                ack_msg_send(HostProtocolMessage::Bootloader(Bootloader::NackEraseFirmware), &mut tx);
+                                                error!("erase error");
+                                            }
+                                        };
                                     }
                                 }
                                 // Handle firmware block write
@@ -360,12 +389,12 @@ async fn main(_spawner: Spawner) {
                                 type HmacSha256 = Hmac<ShaChallenge>;
                                 let secret_as_slice =
                                     unsafe { core::slice::from_raw_parts(UICR_SECRET_START as *const u8, UICR_SECRET_SIZE as usize) };
-                                info!("slice {:02X}", secret_as_slice);
+                                debug!("slice {:02X}", secret_as_slice);
 
                                 let result = if let Ok(mut mac) = HmacSha256::new_from_slice(secret_as_slice) {
                                     mac.update(&nonce.to_be_bytes());
                                     let result = mac.finalize().into_bytes();
-                                    info!("{=[u8;32]:#X}", result.into());
+                                    debug!("{=[u8;32]:#X}", result.into());
                                     HostProtocolMessage::ChallengeResult { result: result.into() }
                                 } else {
                                     HostProtocolMessage::ChallengeResult { result: [0xFF; 32] }

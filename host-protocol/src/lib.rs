@@ -59,6 +59,12 @@ pub enum Bootloader<'a> {
     EraseFirmware,
     /// Acknowledge firmware erasure complete
     AckEraseFirmware,
+    /// Negative acknowledgment of firmware erase, error during Read unaligned chunk
+    NackEraseFirmwareRead,
+    /// Negative acknowledgment of firmware erase, error during Erasing
+    NackEraseFirmware,
+    /// Negative acknowledgment of firmware erase, error during Write back unaligned chunk
+    NackEraseFirmwareWrite,
     /// Request firmware verification
     VerifyFirmware,
     /// Result of firmware verification with hash
