@@ -5,7 +5,7 @@ use consts::{APP_MTU, BT_MAX_NUM_PKT, UICR_SECRET_SIZE, UICR_SECRET_START};
 use defmt::{debug, trace};
 use embassy_nrf::buffered_uarte::{BufferedUarte, BufferedUarteTx};
 use embassy_nrf::peripherals::{TIMER1, UARTE0};
-#[cfg(any(feature = "debug", feature = "bluetooth-test"))]
+#[cfg(feature = "analytics")]
 use embassy_time::Instant;
 use embassy_time::{with_timeout, Duration};
 use embedded_io_async::Write;
@@ -32,7 +32,7 @@ async fn assert_out_irq() {
     }
 }
 
-#[cfg(any(feature = "debug", feature = "bluetooth-test"))]
+#[cfg(feature = "analytics")]
 /// Logs performance metrics if 1.5s has passed since the last log
 fn log_performance(timer_pkt: &mut Instant, rx_packet: &mut bool, pkt_counter: &mut u64, data_counter: &mut u64, timer_tot: &mut Instant) {
     if timer_pkt.elapsed().as_millis() > 1500 && *rx_packet {
@@ -53,7 +53,7 @@ fn log_performance(timer_pkt: &mut Instant, rx_packet: &mut bool, pkt_counter: &
     }
 }
 
-#[cfg(any(feature = "debug", feature = "bluetooth-test"))]
+#[cfg(feature = "analytics")]
 /// Logs the time taken to process an infra packet
 fn log_infra_packet(
     timer_pkt: &mut Instant,
@@ -78,15 +78,15 @@ fn log_infra_packet(
 #[embassy_executor::task]
 pub async fn comms_task(uart: BufferedUarte<'static, UARTE0, TIMER1>) {
     // Rough performance metrics
-    #[cfg(any(feature = "debug", feature = "bluetooth-test"))]
+    #[cfg(feature = "analytics")]
     let mut data_counter: u64 = 0;
-    #[cfg(any(feature = "debug", feature = "bluetooth-test"))]
+    #[cfg(feature = "analytics")]
     let mut pkt_counter: u64 = 0;
-    #[cfg(any(feature = "debug", feature = "bluetooth-test"))]
+    #[cfg(feature = "analytics")]
     let mut rx_packet = false;
-    #[cfg(any(feature = "debug", feature = "bluetooth-test"))]
+    #[cfg(feature = "analytics")]
     let mut timer_pkt: Instant = Instant::now();
-    #[cfg(any(feature = "debug", feature = "bluetooth-test"))]
+    #[cfg(feature = "analytics")]
     let mut timer_tot: Instant = Instant::now();
 
     let mut send_buf = [0u8; COBS_MAX_MSG_SIZE];
@@ -101,7 +101,7 @@ pub async fn comms_task(uart: BufferedUarte<'static, UARTE0, TIMER1>) {
     let mut cobs_buf: CobsAccumulator<COBS_MAX_MSG_SIZE> = CobsAccumulator::new();
     loop {
         {
-            #[cfg(any(feature = "debug", feature = "bluetooth-test"))]
+            #[cfg(feature = "analytics")]
             log_performance(&mut timer_pkt, &mut rx_packet, &mut pkt_counter, &mut data_counter, &mut timer_tot);
 
             // Read data from UART

@@ -17,6 +17,7 @@ default = [
 ]
 
 debug = [
+    "analytics",
     "ble-gatt-server",
     "ble-gatt-client",
     "ble-sec",
@@ -33,9 +34,8 @@ s112 = ["nrf-softdevice/s112", "nrf-softdevice-s112", "bluetooth-PHY2"]
 
 s113 = ["nrf-softdevice/s113", "nrf-softdevice-s113", "consts/dle"]
 
-# Bluetooth test -use this to test bluetooth without the MPU
-# using memory_unsigned.x
-bluetooth-test = []
+# Print some statistics while running
+analytics = []
 
 # Ask for PHY2
 bluetooth-PHY2 = []
