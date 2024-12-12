@@ -75,7 +75,7 @@ pub const UICR_SECRET_START: u32 = 0x10001080;
 /// the 8 UICR registers used (8 registers * 4 bytes per register = 32 bytes total).
 pub const UICR_SECRET_SIZE: u8 = 0x20;
 
-#[cfg(feature = "no-dbg-access")]
+#[cfg(not(feature = "debug"))]
 #[used]
 #[link_section = ".uicr_appprotection"]
 pub static APP_PROTECTION: u8 = 0x00;

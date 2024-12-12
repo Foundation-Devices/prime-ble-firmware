@@ -9,20 +9,13 @@ version = "0.1.1"
 publish = false
 
 [features]
-default = ["signed-firmware", "flash-protect", "no-dbg-access"]
+default = ["signed-firmware"]
 
 debug = []
 
 # Choose which SoftDevice to use
 s112 = ["nrf-softdevice/s112", "nrf-softdevice-s112"]
 s113 = ["nrf-softdevice/s113", "nrf-softdevice-s113"]
-
-# Activate APP Protection on nrf MCU
-# https://infocenter.nordicsemi.com/topic/ps_nrf52805/uicr.html?cp=5_6_0_3_4_0_5#register.APPROTECT
-# We should check for this part code to check version
-# https://infocenter.nordicsemi.com/pdf/in_153_v1.0.pdf?cp=18_4
-no-dbg-access = []
-flash-protect = []
 
 # Bootloader jumps to application with cosign2 header
 signed-firmware = []

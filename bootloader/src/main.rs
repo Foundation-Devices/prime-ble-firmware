@@ -145,10 +145,14 @@ pub fn ack_msg_send(message: HostProtocolMessage, tx: &mut UarteTx<UARTE0>) {
     assert_out_irq();
 }
 
-#[cfg(feature = "flash-protect")]
+#[cfg(not(feature = "debug"))]
 /// Configures flash memory protection for bootloader and MBR regions
 ///
 /// Uses Nordic's BPROT peripheral to prevent modification of critical code regions
+/// Activate APP Protection on nrf MCU
+/// https://infocenter.nordicsemi.com/topic/ps_nrf52805/uicr.html?cp=5_6_0_3_4_0_5#register.APPROTECT
+/// We should check for this part code to check version
+/// https://infocenter.nordicsemi.com/pdf/in_153_v1.0.pdf?cp=18_4
 fn flash_protect() {
     // Protect Nordic MBR area
     unsafe { &*nrf52805_pac::BPROT::ptr() }.config0.write(|w| w.region0().enabled());
@@ -182,7 +186,7 @@ fn flash_protect() {
 /// Main bootloader entry point
 #[embassy_executor::main]
 async fn main(_spawner: Spawner) {
-    #[cfg(feature = "flash-protect")]
+    #[cfg(not(feature = "debug"))]
     flash_protect();
 
     let p = embassy_nrf::init(Default::default());
