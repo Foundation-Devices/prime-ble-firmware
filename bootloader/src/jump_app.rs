@@ -9,42 +9,10 @@ use cortex_m::peripheral::NVIC;
 use defmt::info;
 use embassy_nrf::interrupt::Interrupt;
 use nrf_softdevice_mbr as mbr;
+#[cfg(all(feature = "boot-signed-fw", feature = "s112"))]
 use nrf_softdevice_s112::sd_softdevice_vector_table_base_set;
-
-/// Sets up the SoftDevice IRQ forwarding for unsigned firmware
-///
-/// This configures the Master Boot Record (MBR) to forward interrupts to the
-/// SoftDevice at address 0x1000, which is required for unsigned firmware.
-#[cfg(feature = "boot-unsigned-fw")]
-unsafe fn sd_set_unsigned_fw() {
-    // Set SD base address in case fw is just above
-    let addr = 0x1000;
-
-    let mut cmd = mbr::sd_mbr_command_t {
-        command: mbr::NRF_MBR_COMMANDS_SD_MBR_COMMAND_IRQ_FORWARD_ADDRESS_SET,
-        params: mbr::sd_mbr_command_t__bindgen_ty_1 {
-            irq_forward_address_set: mbr::sd_mbr_command_irq_forward_address_set_t { address: addr },
-        },
-    };
-    let ret = mbr::sd_mbr_command(&mut cmd);
-    info!("ret forward irq mbr result {}", ret);
-}
-
-/// Sets up the SoftDevice for signed firmware
-///
-/// This initializes the SoftDevice at address 0x19000, which is required
-/// for signed firmware that is placed at a specific location in flash.
-#[cfg(feature = "boot-signed-fw")]
-unsafe fn sd_set_signed_fw() {
-    // Set SD base address in case fw is in a specific location
-    let mut cmd = mbr::sd_mbr_command_t {
-        command: mbr::NRF_MBR_COMMANDS_SD_MBR_COMMAND_INIT_SD,
-        params: mbr::sd_mbr_command_t__bindgen_ty_1 {
-            irq_forward_address_set: mbr::sd_mbr_command_irq_forward_address_set_t { address: 0x19000 },
-        },
-    };
-    let _ = mbr::sd_mbr_command(&mut cmd);
-}
+#[cfg(all(feature = "boot-signed-fw", feature = "s113"))]
+use nrf_softdevice_s113::sd_softdevice_vector_table_base_set;
 
 /// Boots the application assuming softdevice is present.
 ///
@@ -64,11 +32,27 @@ unsafe fn sd_set_signed_fw() {
 /// This modifies the stack pointer and reset vector and will run code placed in the active partition.
 /// This function never returns as it jumps directly to the application code.
 pub unsafe fn jump_to_app() -> ! {
-    #[cfg(feature = "boot-signed-fw")]
-    sd_set_signed_fw();
-
     #[cfg(feature = "boot-unsigned-fw")]
-    sd_set_unsigned_fw();
+    // Set SD base address in case fw is just above
+    // This configures the Master Boot Record (MBR) to forward interrupts to the
+    // SoftDevice at address 0x1000, which is required for unsigned firmware.
+    let command = mbr::NRF_MBR_COMMANDS_SD_MBR_COMMAND_IRQ_FORWARD_ADDRESS_SET;
+    #[cfg(feature = "boot-signed-fw")]
+    // Set SD base address in case fw is in a specific location
+    // This initializes the SoftDevice at address BASE_APP_ADDR, which is required
+    // for signed firmware that is placed at a specific location in flash.
+    let command = mbr::NRF_MBR_COMMANDS_SD_MBR_COMMAND_INIT_SD;
+
+    let mut cmd = mbr::sd_mbr_command_t {
+        command,
+        params: mbr::sd_mbr_command_t__bindgen_ty_1 {
+            irq_forward_address_set: mbr::sd_mbr_command_irq_forward_address_set_t {
+                address: INT_VECTOR_TABLE_BASE,
+            },
+        },
+    };
+    let ret = mbr::sd_mbr_command(&mut cmd);
+    info!("ret forward irq mbr result {}", ret);
 
     // Disable active interrupts
     NVIC::mask(Interrupt::UARTE0_UART0);

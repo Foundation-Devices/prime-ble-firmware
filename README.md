@@ -117,10 +117,13 @@ As reported by [Informational Notice](./misc/in_153_v1.0.1.pdf) there was a chan
 
 You can read about in [nrf52805 datasheet](./misc/nRF52805_PS_v1.4.pdf) at paragraph _4.8.2_ and you can read about the different methods of lock/unlock based on chip revision.
 
-Be careful that reading, with a probe-rs read command, info bytes at paragraph _4.4.1.9 INFO.VARIANT_ in datasheet we get from prime board rev. Y2 these values:
+Be careful that reading, with a probe-rs read command, info bytes at paragraph _4.4.1.9 INFO.VARIANT_ in datasheet we get from prime board rev. Y2/A1 these values:
 
- ```
-  00052805 41414130 00002004 
+```bash
+$ probe-rs read --chip nrf52805_xxAA b32 0x10000100 3
+00052805 41414130 00002004
+         ^^^^^^^^
+           AAA0: build code Axx with Access port controlled by hardware only
 ```
 
 that are indicating that chip is still of rev. A not variant B with the updated protection command.

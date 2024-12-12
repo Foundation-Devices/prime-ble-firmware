@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 [target.'cfg(all(target_arch = "arm", target_os = "none"))']
-runner = "probe-rs run --chip nrf52805_xxAA"
+runner = "probe-rs run --chip nrf52805_xxAA --restore-unwritten"
 
 [build]
 target = "thumbv7em-none-eabi"   # Cortex-M4 and Cortex-M7 (no FPU)
@@ -11,5 +11,5 @@ target = "thumbv7em-none-eabi"   # Cortex-M4 and Cortex-M7 (no FPU)
 DEFMT_LOG = "debug"
 
 [alias]
-deb = "run -r --no-default-features --features debug"
-bluetooth-app = "run -r --features bluetooth-test"
+deb = "run -r --no-default-features --features debug,s112"
+bluetooth-app = "run -r --features bluetooth-test,s112"

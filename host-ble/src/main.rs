@@ -16,10 +16,13 @@ struct Args {
     enumerate: bool,
     #[arg(short, long)]
     write_data: bool,
+    #[arg(short, long)]
+    read_data: bool,
 }
 
 const NUS_UUID: Uuid = Uuid::from_u128(consts::NUS_UUID);
 const WRITE_CHARACTERISTIC_UUID: Uuid = Uuid::from_u128(0x6E400002_B5A3_F393_E0A9_E50E24DCCA9E);
+const READ_CHARACTERISTIC_UUID: Uuid = Uuid::from_u128(0x6E400003_B5A3_F393_E0A9_E50E24DCCA9E);
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
@@ -54,7 +57,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let central = if wanted_adapter.is_some() {
         wanted_adapter.unwrap()
     } else {
-        let first = adapter_list.into_iter().nth(0).unwrap();
+        let first = adapter_list.into_iter().next().unwrap();
         println!(
             "Wanted adapter not found, using first available one: {}",
             first.adapter_info().await?
@@ -115,14 +118,30 @@ async fn main() -> Result<(), Box<dyn Error>> {
                     }
                 }
                 if args.write_data {
-                    let chars = peripheral.characteristics();
-                    let cmd_char = chars
+                    let characteristics = peripheral.characteristics();
+                    let write_charac = characteristics
                         .iter()
                         .find(|c| c.uuid == WRITE_CHARACTERISTIC_UUID)
                         .expect("Unable to find characterics");
-                    let data = [8u8; 250];
+                    let data9 = [9u8; consts::APP_MTU];
+                    let data10 = [10u8; consts::APP_MTU];
                     println!("Writing data to {}...", name);
-                    peripheral.write(&cmd_char, &data, WriteType::WithoutResponse).await?;
+                    tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
+                    peripheral.write(write_charac, &data9, WriteType::WithoutResponse).await?;
+                    peripheral.write(write_charac, &data10, WriteType::WithoutResponse).await?;
+                    peripheral.write(write_charac, &data9, WriteType::WithoutResponse).await?;
+                    peripheral.write(write_charac, &data10, WriteType::WithoutResponse).await?;
+                }
+                if args.read_data {
+                    let characteristics = peripheral.characteristics();
+                    let read_charac = characteristics
+                        .iter()
+                        .find(|c| c.uuid == READ_CHARACTERISTIC_UUID)
+                        .expect("Unable to find characterics");
+                    println!("Reading data from {}...", name);
+                    tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
+                    let data = peripheral.read(read_charac).await?;
+                    println!("Read {:02x?}", data);
                 }
                 println!("Disconnecting from {}...", name);
                 peripheral.disconnect().await.expect("Error disconnecting from BLE peripheral");

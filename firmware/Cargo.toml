@@ -25,23 +25,23 @@ debug = [
     "ble-gatt-client",
     "ble-sec",
     "nrf52805",
-    ]
+]
 
 ble-gatt-server = ["nrf-softdevice/ble-gatt-server"]
 ble-gatt-client = ["nrf-softdevice/ble-gatt-client"]
 ble-sec = ["nrf-softdevice/ble-sec"]
 
-nrf52805 = [
-    "embassy-nrf/nrf52805",
-    "nrf-softdevice/nrf52805",
-    "nrf-softdevice/s112",
-]
+nrf52805 = ["embassy-nrf/nrf52805", "nrf-softdevice/nrf52805"]
+
+s112 = ["nrf-softdevice/s112", "nrf-softdevice-s112", "bluetooth-PHY2"]
+
+s113 = ["nrf-softdevice/s113", "nrf-softdevice-s113", "consts/dle"]
 
 # Bluetooth test -use this to test bluetooth without the MPU
 # using memory_unsigned.x
 bluetooth-test = []
 
-#Activate PHY2
+# Ask for PHY2
 bluetooth-PHY2 = []
 
 # Cobs format for MCU
@@ -76,8 +76,9 @@ fixed = "1.24.0"
 heapless = { version = "0.8.0", features = ["defmt-03"] }
 atomic-pool = "1.0.1"
 static_cell = "2.0.0"
-nrf-softdevice-s112 = { git = "https://github.com/embassy-rs/nrf-softdevice.git" }
-postcard                = { version = "1.0.8" }
+nrf-softdevice-s112 = { git = "https://github.com/embassy-rs/nrf-softdevice.git", optional = true }
+nrf-softdevice-s113 = { git = "https://github.com/embassy-rs/nrf-softdevice.git", optional = true }
+postcard = { version = "1.0.8" }
 serde = { version = "1.0.200", default-features = false }
 cobs = { version = "0.2.3", default-features = false }
 sha2 = { version = "0.10.8", default-features = false }
