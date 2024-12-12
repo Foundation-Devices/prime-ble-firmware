@@ -9,16 +9,13 @@ version = "0.1.1"
 publish = false
 
 [features]
-default = ["signed-firmware"]
+default = []
 
 debug = []
 
 # Choose which SoftDevice to use
 s112 = ["nrf-softdevice/s112", "nrf-softdevice-s112"]
 s113 = ["nrf-softdevice/s113", "nrf-softdevice-s113"]
-
-# Bootloader jumps to application with cosign2 header
-signed-firmware = []
 
 [dependencies]
 cortex-m = "0.7.7"

@@ -9,9 +9,9 @@ use cortex_m::peripheral::NVIC;
 use defmt::info;
 use embassy_nrf::interrupt::Interrupt;
 use nrf_softdevice_mbr as mbr;
-#[cfg(all(feature = "signed-firmware", feature = "s112"))]
+#[cfg(all(not(feature = "debug"), feature = "s112"))]
 use nrf_softdevice_s112::sd_softdevice_vector_table_base_set;
-#[cfg(all(feature = "signed-firmware", feature = "s113"))]
+#[cfg(all(not(feature = "debug"), feature = "s113"))]
 use nrf_softdevice_s113::sd_softdevice_vector_table_base_set;
 
 /// Boots the application assuming softdevice is present.
@@ -32,12 +32,12 @@ use nrf_softdevice_s113::sd_softdevice_vector_table_base_set;
 /// This modifies the stack pointer and reset vector and will run code placed in the active partition.
 /// This function never returns as it jumps directly to the application code.
 pub unsafe fn jump_to_app() -> ! {
-    #[cfg(not(feature = "signed-firmware"))]
+    #[cfg(not(not(feature = "debug")))]
     // Set SD base address in case fw is just above
     // This configures the Master Boot Record (MBR) to forward interrupts to the
     // SoftDevice at address 0x1000, which is required for unsigned firmware.
     let command = mbr::NRF_MBR_COMMANDS_SD_MBR_COMMAND_IRQ_FORWARD_ADDRESS_SET;
-    #[cfg(feature = "signed-firmware")]
+    #[cfg(not(feature = "debug"))]
     // Set SD base address in case fw is in a specific location
     // This initializes the SoftDevice at address BASE_APP_ADDR, which is required
     // for signed firmware that is placed at a specific location in flash.
@@ -60,7 +60,7 @@ pub unsafe fn jump_to_app() -> ! {
 
     // Probably this critical section is redundant, but keepin it for softdevice.
     critical_section::with(|_| {
-        #[cfg(feature = "signed-firmware")]
+        #[cfg(not(feature = "debug"))]
         sd_softdevice_vector_table_base_set(INT_VECTOR_TABLE_BASE);
 
         let addr_header = INT_VECTOR_TABLE_BASE;
