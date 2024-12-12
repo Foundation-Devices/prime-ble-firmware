@@ -39,24 +39,24 @@ softdevice-s113: flash-erase
 
 # Flash and run Bluetooth test app with UART MPU
 bluetooth-app: softdevice
-    cd firmware && cargo run -r --features bluetooth-test,s112
+    cd firmware && cargo run --release --features bluetooth-test,s112
 
 bluetooth-app-s113: softdevice-s113
-    cd firmware && cargo run -r --features bluetooth-test,s113
+    cd firmware && cargo run --release --features bluetooth-test,s113
 
 # Flash and run debug version of main application without Cobs encoding and console UART
 bluetooth-app-debug: softdevice
-    cd firmware && cargo run -r --no-default-features --features debug,s112
+    cd firmware && cargo run --release --features debug,s112
 
 bluetooth-app-debug-s113: softdevice-s113
-    cd firmware && cargo run -r --no-default-features --features debug,s113
+    cd firmware && cargo run --release --features debug,s113
 
 # Flash and run debug version of bootloader without flash protection and unsigned firmware
 bootloader-debug: softdevice
-    cd bootloader && cargo run -r --no-default-features --features debug,s112
+    cd bootloader && cargo run --release --no-default-features --features debug,s112
 
 bootloader-debug-s113: softdevice-s113
-    cd bootloader && cargo run -r --no-default-features --features debug,s113
+    cd bootloader && cargo run --release --no-default-features --features debug,s113
 
 # Run COBS protocol size validation tests
 cobs-size-test:

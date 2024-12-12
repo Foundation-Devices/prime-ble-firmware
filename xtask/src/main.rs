@@ -297,7 +297,6 @@ fn build_bt_debug_firmware(verbose: bool, s113: bool) {
     let mut cmd = cargo_cmd.current_dir(project_root().join("firmware")).args([
         "build",
         "--release",
-        "--no-default-features",
         "--features",
         if s113 { "debug,s113" } else { "debug,s112" },
     ]);
@@ -314,7 +313,6 @@ fn build_bt_debug_firmware(verbose: bool, s113: bool) {
     let mut cmd = cargo_cmd.current_dir(project_root().join("firmware")).args([
         "objcopy",
         "--release",
-        "--no-default-features",
         "--features",
         if s113 { "debug,s113" } else { "debug,s112" },
         "--",

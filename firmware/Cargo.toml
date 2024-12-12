@@ -9,25 +9,10 @@ version = "0.1.1"
 publish = false
 
 [features]
-default = [
-    "nrf-softdevice/ble-gatt-server",
-    "nrf-softdevice/ble-gatt-client",
-    "nrf-softdevice/ble-sec",
-    "embassy-nrf/nrf52805",
-    "nrf-softdevice/nrf52805",
-]
+debug = ["analytics"]
 
-debug = [
-    "analytics",
-    "nrf-softdevice/ble-gatt-server",
-    "nrf-softdevice/ble-gatt-client",
-    "nrf-softdevice/ble-sec",
-    "embassy-nrf/nrf52805",
-    "nrf-softdevice/nrf52805",
-]
-
+# Choose which SoftDevice to use
 s112 = ["nrf-softdevice/s112", "nrf-softdevice-s112", "ble-phy2"]
-
 s113 = ["nrf-softdevice/s113", "nrf-softdevice-s113", "consts/dle"]
 
 # Print some statistics while running
@@ -52,6 +37,7 @@ embassy-sync = { version = "0.6.0" }
 embassy-nrf = { version = "0.2.0", features = [
     "defmt",
     "gpiote",
+    "nrf52805",
     "time-driver-rtc1",
 ] }
 embedded-io-async = { version = "0.6.1", features = ["defmt-03"] }
@@ -62,11 +48,15 @@ defmt = "0.3.5"
 defmt-rtt = "0.4.0"
 panic-probe = { version = "0.3.1", features = ["print-defmt"] }
 nrf-softdevice = { git = "https://github.com/embassy-rs/nrf-softdevice.git", features = [
+    "ble-gatt-client",
+    "ble-gatt-server",
+    "ble-peripheral",
+    "ble-rssi",
+    "ble-sec",
+    "critical-section-impl",
     "defmt",
     "evt-max-size-512",
-    "ble-rssi",
-    "ble-peripheral",
-    "critical-section-impl",
+    "nrf52805",
 ] }
 embedded-storage = "0.3.1"
 embedded-storage-async = "0.4.1"
