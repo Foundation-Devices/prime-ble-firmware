@@ -5,11 +5,10 @@
 runner = "probe-rs run --chip nrf52805_xxAA"
 
 [build]
-target = "thumbv7em-none-eabi"   # Cortex-M4 and Cortex-M7 (no FPU)
+target = "thumbv7em-none-eabi" # Cortex-M4 and Cortex-M7 (no FPU)
 
 [env]
 DEFMT_LOG = "debug"
 
 [alias]
-deb = "run -r --no-default-features --features debug,s112"
-
+deb = "run --release --features debug,s112"
