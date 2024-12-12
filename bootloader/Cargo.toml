@@ -9,9 +9,9 @@ version = "0.1.1"
 publish = false
 
 [features]
-default = ["boot-signed-fw", "flash-protect", "no-dbg-access"]
+default = ["signed-firmware", "flash-protect", "no-dbg-access"]
 
-debug = ["boot-unsigned-fw"]
+debug = []
 
 # Choose which SoftDevice to use
 s112 = ["nrf-softdevice/s112", "nrf-softdevice-s112"]
@@ -25,10 +25,7 @@ no-dbg-access = []
 flash-protect = []
 
 # Bootloader jumps to application with cosign2 header
-boot-signed-fw = []
-
-# Bootloader jumps to application without cosign2 header
-boot-unsigned-fw = []
+signed-firmware = []
 
 [dependencies]
 cortex-m = "0.7.7"
