@@ -5,14 +5,13 @@
 resolver = "2"
 
 members = [
+    "bootloader",
     "consts",
     "firmware",
-    "bootloader",
     "host-ble",
     "host-protocol",
     "xtask",
 ]
-
 
 [profile.release]
 debug = 2
