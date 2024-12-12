@@ -5,6 +5,8 @@ use consts::{BT_MAX_NUM_PKT, MTU, UICR_SECRET_SIZE, UICR_SECRET_START};
 use defmt::info;
 use embassy_nrf::buffered_uarte::{BufferedUarte, BufferedUarteTx};
 use embassy_nrf::peripherals::{TIMER1, UARTE0};
+#[cfg(any(feature = "debug", feature = "bluetooth-test"))]
+use embassy_time::Instant;
 use embassy_time::{with_timeout, Duration};
 use embedded_io_async::Write;
 use heapless::Vec;
