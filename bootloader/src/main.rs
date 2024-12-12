@@ -191,10 +191,10 @@ async fn main(_spawner: Spawner) {
     let mut config_uart = uarte::Config::default();
     config_uart.parity = uarte::Parity::EXCLUDED;
 
-    #[cfg(feature = "uart-pins-mpu")]
+    #[cfg(not(feature = "debug"))]
     let (rxd, txd, baud_rate) = (p.P0_14, p.P0_12, uarte::Baudrate::BAUD460800);
 
-    #[cfg(feature = "uart-pins-console")]
+    #[cfg(feature = "debug")]
     let (rxd, txd, baud_rate) = (p.P0_16, p.P0_18, uarte::Baudrate::BAUD460800);
 
     config_uart.baudrate = baud_rate;
@@ -220,7 +220,7 @@ async fn main(_spawner: Spawner) {
     let seal = unsafe { &*nrf52805_pac::UICR::ptr() }.customer[SEAL_IDX].read().customer().bits();
 
     // Send startup message (console only)
-    #[cfg(feature = "uart-pins-console")]
+    #[cfg(feature = "debug")]
     {
         let mut buf = [0; 10];
         buf.copy_from_slice(b"Bootloader");

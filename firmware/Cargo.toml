@@ -10,7 +10,6 @@ publish = false
 
 [features]
 default = [
-    "uart-pins-mpu",
     "ble-gatt-server",
     "ble-gatt-client",
     "ble-sec",
@@ -18,7 +17,6 @@ default = [
 ]
 
 debug = [
-    "uart-pins-console",
     "ble-gatt-server",
     "ble-gatt-client",
     "ble-sec",
@@ -41,12 +39,6 @@ bluetooth-test = []
 
 # Ask for PHY2
 bluetooth-PHY2 = []
-
-# Target comm protocol to the UART console (used for developing)
-uart-pins-console = []
-
-# Target comm protocol to the MPU (used for production)
-uart-pins-mpu = []
 
 [dependencies]
 embassy-executor = { version = "0.6.0", features = [
