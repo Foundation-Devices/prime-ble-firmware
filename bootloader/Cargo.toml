@@ -10,24 +10,12 @@ publish = false
 
 
 [features]
-default = [
-    "embassy-nrf/nrf52805",
-    "nrf-softdevice/nrf52805",
-    "nrf-softdevice/critical-section-impl",
-    "boot-signed-fw",
-    "flash-protect",
-    "no-dbg-access",
-]
+default = ["boot-signed-fw", "flash-protect", "no-dbg-access"]
 
-debug = [
-    "embassy-nrf/nrf52805",
-    "nrf-softdevice/nrf52805",
-    "nrf-softdevice/critical-section-impl",
-    "boot-unsigned-fw",
-]
+debug = ["boot-unsigned-fw"]
 
+# Choose which SoftDevice to use
 s112 = ["nrf-softdevice/s112", "nrf-softdevice-s112"]
-
 s113 = ["nrf-softdevice/s113", "nrf-softdevice-s113"]
 
 # Activate APP Protection on nrf MCU
@@ -59,6 +47,7 @@ embassy-sync = { version = "0.6.0" }
 embassy-nrf = { version = "0.2.0", features = [
     "defmt",
     "gpiote",
+    "nrf52805",
     "time-driver-rtc1",
 ] }
 embedded-io-async = { version = "0.6.1", features = ["defmt-03"] }
@@ -84,9 +73,11 @@ critical-section = "1.1"
 nrf-softdevice-s112 = { git = "https://github.com/embassy-rs/nrf-softdevice.git", optional = true }
 nrf-softdevice-s113 = { git = "https://github.com/embassy-rs/nrf-softdevice.git", optional = true }
 nrf-softdevice = { git = "https://github.com/embassy-rs/nrf-softdevice.git", features = [
+    "ble-peripheral",
+    "critical-section-impl",
     "defmt",
     "evt-max-size-256",
-    "ble-peripheral",
+    "nrf52805",
 ] }
 nrf52805-pac = "0.12.2"
 
