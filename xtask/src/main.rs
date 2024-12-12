@@ -14,6 +14,8 @@ const FIRMWARE_VERSION: &str = "0.1.1";
 struct XtaskArgs {
     #[command(subcommand)]
     command: Commands,
+    #[arg(short, long)]
+    verbose: bool,
 }
 
 #[derive(Subcommand)]
@@ -40,16 +42,15 @@ pub fn cargo() -> String {
     env::var("CARGO").unwrap_or_else(|_| "cargo".to_string())
 }
 
-fn build_tools_check() {
+fn build_tools_check(verbose: bool) {
     tracing::info!("BUILDING PRODUCTION PACKAGE");
     tracing::info!("Checking cargo binutils install state");
-    let status = Command::new(cargo())
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .current_dir(project_root())
-        .args(["objcopy", "--version"])
-        .status()
-        .expect("Running Cargo objcopy version fails");
+    let mut cargo_cmd = Command::new(cargo());
+    let mut cmd = cargo_cmd.current_dir(project_root()).args(["objcopy", "--version"]);
+    if !verbose {
+        cmd = cmd.stdout(Stdio::null()).stderr(Stdio::null());
+    }
+    let status = cmd.status().expect("Running Cargo objcopy version fails");
     if !status.success() {
         tracing::info!("Please install cargo binutils with these commands:");
         tracing::info!("cargo install cargo-binutils");
@@ -58,13 +59,14 @@ fn build_tools_check() {
     }
 
     tracing::info!("Cargo clean...");
-    let status = Command::new(cargo())
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
+    let mut cargo_cmd = Command::new(cargo());
+    let mut cmd = cargo_cmd
         .current_dir(project_root())
-        .args(["clean", "-r", "-p", "firmware", "-p", "bootloader"])
-        .status()
-        .expect("Running Cargo clean fails");
+        .args(["clean", "--release", "-p", "firmware", "-p", "bootloader"]);
+    if !verbose {
+        cmd = cmd.stdout(Stdio::null()).stderr(Stdio::null());
+    }
+    let status = cmd.status().expect("Running Cargo clean fails");
     if !status.success() {
         tracing::info!("Cargo clean not working");
         exit(-1);
@@ -88,16 +90,15 @@ fn build_tools_check() {
     }
 }
 
-fn build_tools_check_debug() {
+fn build_tools_check_debug(verbose: bool) {
     tracing::warn!("BUILDING DEBUG PACKAGE!!!");
     tracing::info!("Checking cargo binutils install state");
-    let status = Command::new(cargo())
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .current_dir(project_root())
-        .args(["objcopy", "--version"])
-        .status()
-        .expect("Running Cargo objcopy version fails");
+    let mut cargo_cmd = Command::new(cargo());
+    let mut cmd = cargo_cmd.current_dir(project_root()).args(["objcopy", "--version"]);
+    if !verbose {
+        cmd = cmd.stdout(Stdio::null()).stderr(Stdio::null());
+    }
+    let status = cmd.status().expect("Running Cargo objcopy version fails");
     if !status.success() {
         tracing::info!("Please install cargo binutils with these commands:");
         tracing::info!("cargo install cargo-binutils");
@@ -106,13 +107,14 @@ fn build_tools_check_debug() {
     }
 
     tracing::info!("Cargo clean...");
-    let status = Command::new(cargo())
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
+    let mut cargo_cmd = Command::new(cargo());
+    let mut cmd = cargo_cmd
         .current_dir(project_root())
-        .args(["clean", "-r", "-p", "firmware", "-p", "bootloader"])
-        .status()
-        .expect("Running Cargo clean fails");
+        .args(["clean", "--release", "--package", "firmware", "--package", "bootloader"]);
+    if !verbose {
+        cmd = cmd.stdout(Stdio::null()).stderr(Stdio::null());
+    }
+    let status = cmd.status().expect("Running Cargo clean fails");
     if !status.success() {
         tracing::info!("Cargo clean not working");
         exit(-1);
@@ -136,103 +138,107 @@ fn build_tools_check_debug() {
     }
 }
 
-fn build_bt_bootloader() {
+fn build_bt_bootloader(verbose: bool) {
     tracing::info!("Building bootloader....");
-    let status = Command::new(cargo())
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
+    let mut cargo_cmd = Command::new(cargo());
+    let mut cmd = cargo_cmd
         .current_dir(project_root().join("bootloader"))
         .arg("build")
-        .arg("-r")
-        .arg("-q")
-        .status()
-        .expect("Running Cargo failed");
+        .arg("--release");
+    if !verbose {
+        cmd = cmd.stdout(Stdio::null()).stderr(Stdio::null()).arg("--quiet");
+    }
+    let status = cmd.status().expect("Running Cargo failed");
     if !status.success() {
         tracing::error!("Bootloader build failed");
         exit(-1);
     }
 
     tracing::info!("Generating bootloader hex file...");
-    let status = Command::new(cargo())
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .current_dir(project_root().join("bootloader"))
-        .args(["objcopy", "--release", "--", "-O", "ihex", "../BtPackage/bootloader.hex"])
-        .status()
-        .expect("Running Cargo objcopy failed");
+    let mut cargo_cmd = Command::new(cargo());
+    let mut cmd = cargo_cmd.current_dir(project_root().join("bootloader")).args([
+        "objcopy",
+        "--release",
+        "--",
+        "-O",
+        "ihex",
+        "../BtPackage/bootloader.hex",
+    ]);
+    if !verbose {
+        cmd = cmd.stdout(Stdio::null()).stderr(Stdio::null());
+    }
+    let status = cmd.status().expect("Running Cargo objcopy failed");
     if !status.success() {
         tracing::error!("Bootloader hex generation failed");
         exit(-1);
     }
 }
 
-fn build_bt_bootloader_debug() {
+fn build_bt_bootloader_debug(verbose: bool) {
     tracing::info!("Building debug bootloader....");
-    let status = Command::new(cargo())
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
+    let mut cargo_cmd = Command::new(cargo());
+    let mut cmd = cargo_cmd
         .current_dir(project_root().join("bootloader"))
         .arg("build")
-        .arg("-r")
-        .arg("-q")
+        .arg("--release")
         .arg("--no-default-features")
         .arg("--features")
-        .arg("debug")
-        .status()
-        .expect("Running Cargo failed");
+        .arg("debug");
+    if !verbose {
+        cmd = cmd.stdout(Stdio::null()).stderr(Stdio::null()).arg("--quiet");
+    }
+    let status = cmd.status().expect("Running Cargo failed");
     if !status.success() {
         tracing::error!("Bootloader build failed");
         exit(-1);
     }
 
     tracing::info!("Generating bootloader hex file...");
-    let status = Command::new(cargo())
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .current_dir(project_root().join("bootloader"))
-        .args([
-            "objcopy",
-            "--release",
-            "--no-default-features",
-            "--features",
-            "debug",
-            "--",
-            "-O",
-            "ihex",
-            "../BtPackageDebug/bootloaderDebug.hex",
-        ])
-        .status()
-        .expect("Running Cargo objcopy failed");
+    let mut cargo_cmd = Command::new(cargo());
+    let mut cmd = cargo_cmd.current_dir(project_root().join("bootloader")).args([
+        "objcopy",
+        "--release",
+        "--no-default-features",
+        "--features",
+        "debug",
+        "--",
+        "-O",
+        "ihex",
+        "../BtPackageDebug/bootloaderDebug.hex",
+    ]);
+    if !verbose {
+        cmd = cmd.stdout(Stdio::null()).stderr(Stdio::null());
+    }
+    let status = cmd.status().expect("Running Cargo objcopy failed");
     if !status.success() {
         tracing::error!("Bootloader hex generation failed");
         exit(-1);
     }
 }
 
-fn build_bt_firmware() {
+fn build_bt_firmware(verbose: bool) {
     tracing::info!("Building application...");
-    let status = Command::new(cargo())
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .current_dir(project_root().join("firmware"))
-        .arg("build")
-        .arg("-r")
-        .arg("-q")
-        .status()
-        .expect("Running Cargo failed");
+    let mut cargo_cmd = Command::new(cargo());
+    let mut cmd = cargo_cmd.current_dir(project_root().join("firmware")).arg("build").arg("--release");
+    if !verbose {
+        cmd = cmd.stdout(Stdio::null()).stderr(Stdio::null()).arg("--quiet");
+    }
+    let status = cmd.status().expect("Running Cargo failed");
     if !status.success() {
         tracing::error!("Firmware build failed");
         exit(-1);
     }
 
     tracing::info!("Creating BT application hex file");
-    let status = Command::new(cargo())
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .current_dir(project_root().join("firmware"))
-        .args(["objcopy", "--release", "--", "-O", "ihex", "../BtPackage/BtApp.hex"])
-        .status()
-        .expect("Running Cargo objcopy failed");
+    let mut cargo_cmd = Command::new(cargo());
+    let mut cmd =
+        cargo_cmd
+            .current_dir(project_root().join("firmware"))
+            .args(["objcopy", "--release", "--", "-O", "ihex", "../BtPackage/BtApp.hex"]);
+    if !verbose {
+        cmd = cmd.stdout(Stdio::null()).stderr(Stdio::null());
+    }
+    let status = cmd.status().expect("Running Cargo objcopy failed");
     if !status.success() {
         tracing::error!("Firmware build failed");
         exit(-1);
@@ -242,64 +248,62 @@ fn build_bt_firmware() {
     // We will always get the full slice of flash where app is flashed ( 0x19000 up to 0x25800 )
     // Then signing we will have from 0x19000 up to 0x19800 the cosign2 header.
     tracing::info!("Creating BT application bin file");
-    let status = Command::new(cargo())
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .current_dir(project_root().join("firmware"))
-        .args([
-            "objcopy",
-            "--release",
-            "--",
-            "--pad-to",
-            "0x26000",
-            "-O",
-            "binary",
-            "../BtPackage/BT_application.bin",
-        ])
-        .status()
-        .expect("Running Cargo objcopy failed");
+    let mut cargo_cmd = Command::new(cargo());
+    let mut cmd = cargo_cmd.current_dir(project_root().join("firmware")).args([
+        "objcopy",
+        "--release",
+        "--",
+        "--pad-to",
+        "0x26000",
+        "-O",
+        "binary",
+        "../BtPackage/BT_application.bin",
+    ]);
+    if !verbose {
+        cmd = cmd.stdout(Stdio::null()).stderr(Stdio::null());
+    }
+    let status = cmd.status().expect("Running Cargo objcopy failed");
     if !status.success() {
         tracing::error!("Firmware build failed");
         exit(-1);
     }
 }
 
-fn build_bt_debug_firmware() {
+fn build_bt_debug_firmware(verbose: bool) {
     tracing::info!("Building debug application...");
-    let status = Command::new(cargo())
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
+    let mut cargo_cmd = Command::new(cargo());
+    let mut cmd = cargo_cmd
         .current_dir(project_root().join("firmware"))
         .arg("build")
-        .arg("-r")
-        .arg("-q")
+        .arg("--release")
         .arg("--no-default-features")
         .arg("--features")
-        .arg("debug")
-        .status()
-        .expect("Running Cargo failed");
+        .arg("debug");
+    if !verbose {
+        cmd = cmd.stdout(Stdio::null()).stderr(Stdio::null()).arg("--quiet");
+    }
+    let status = cmd.status().expect("Running Cargo failed");
     if !status.success() {
         panic!("Firmware build failed");
     }
 
     tracing::info!("Creating BT application hex file");
-    let status = Command::new(cargo())
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .current_dir(project_root().join("firmware"))
-        .args([
-            "objcopy",
-            "--release",
-            "--no-default-features",
-            "--features",
-            "debug",
-            "--",
-            "-O",
-            "ihex",
-            "../BtPackageDebug/BtappDebug.hex",
-        ])
-        .status()
-        .expect("Running Cargo objcopy failed");
+    let mut cargo_cmd = Command::new(cargo());
+    let mut cmd = cargo_cmd.current_dir(project_root().join("firmware")).args([
+        "objcopy",
+        "--release",
+        "--no-default-features",
+        "--features",
+        "debug",
+        "--",
+        "-O",
+        "ihex",
+        "../BtPackageDebug/BtappDebug.hex",
+    ]);
+    if !verbose {
+        cmd = cmd.stdout(Stdio::null()).stderr(Stdio::null());
+    }
+    let status = cmd.status().expect("Running Cargo objcopy failed");
     if !status.success() {
         panic!("Firmware build failed");
     }
@@ -514,16 +518,16 @@ fn main() {
 
     match args.command {
         Commands::BuildFwImage => {
-            build_tools_check();
-            build_bt_bootloader();
-            build_bt_firmware();
+            build_tools_check(args.verbose);
+            build_bt_bootloader(args.verbose);
+            build_bt_firmware(args.verbose);
             sign_bt_firmware();
             build_bt_package();
         }
         Commands::BuildFwDebugImage => {
-            build_tools_check_debug();
-            build_bt_bootloader_debug();
-            build_bt_debug_firmware();
+            build_tools_check_debug(args.verbose);
+            build_bt_bootloader_debug(args.verbose);
+            build_bt_debug_firmware(args.verbose);
             build_bt_package_debug();
         }
     }

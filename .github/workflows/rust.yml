@@ -16,9 +16,21 @@ jobs:
 
     steps:
     - uses: actions/checkout@v3
+    - uses: webfactory/ssh-agent@v0.7.0
+      with:
+        ssh-private-key: |
+          ${{ secrets.SSH_KEY_DEPLOY_KEYOS }}
+    - name: Install Ubuntu dependencies
+      run: |
+        sudo apt update
+        sudo apt install -y llvm libclang-dev gcc-arm-none-eabi
     - name: Install ARM target
       run: rustup target add thumbv7em-none-eabi
-    - name: Build firmware
-      run: cargo build --release --bin firmware
+    - name: Install Cargo binutils
+      run: cargo install cargo-binutils
+    - name: Install LLVM tools
+      run: rustup component add llvm-tools
+    - name: Build Debug image (unsigned)
+      run: cargo xtask --verbose build-fw-debug-image
     - name: Build host-protocol
       run: cargo build --release --package host-protocol
