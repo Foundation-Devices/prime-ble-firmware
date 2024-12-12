@@ -16,13 +16,13 @@ s112 = ["nrf-softdevice/s112", "nrf-softdevice-s112"]
 s113 = ["nrf-softdevice/s113", "nrf-softdevice-s113"]
 
 [dependencies]
-cortex-m = "0.7.7"
-cortex-m-rt = "0.7.3"
+cortex-m = { workspace = true }
+cortex-m-rt = { workspace = true }
 cosign2 = { git = "https://github.com/Foundation-Devices/keyOS", default-features = false }
-crc = "3.2.1"
-critical-section = "1.1"
-defmt = "0.3.6"
-defmt-rtt = "0.4.0"
+crc = { workspace = true }
+critical-section = "1.1.2"
+defmt = { workspace = true }
+defmt-rtt = { workspace = true }
 embassy-executor = { version = "0.6.0", features = [
     "arch-cortex-m",
     "executor-thread",
@@ -37,12 +37,12 @@ embassy-nrf = { version = "0.2.0", features = [
     "time-driver-rtc1",
 ] }
 embassy-sync = { version = "0.6.0" }
-embassy-time = { version = "0.3.0", features = [
+embassy-time = { version = "0.3.2", features = [
     "defmt",
     "defmt-timestamp-uptime",
 ] }
 embedded-storage = "0.3.1"
-hmac = "0.12.1"
+hmac = { workspace = true }
 host-protocol = { path = "../host-protocol" }
 micro-ecc-sys = { git = "https://github.com/Foundation-Devices/micro-ecc-sys.git", default-features = false }
 nrf-softdevice = { git = "https://github.com/embassy-rs/nrf-softdevice.git", features = [
@@ -56,10 +56,10 @@ nrf-softdevice-mbr = { version = "0.2.0" }
 nrf-softdevice-s112 = { git = "https://github.com/embassy-rs/nrf-softdevice.git", optional = true }
 nrf-softdevice-s113 = { git = "https://github.com/embassy-rs/nrf-softdevice.git", optional = true }
 nrf52805-pac = "0.12.2"
-panic-probe = { version = "0.3.1", features = ["print-defmt"] }
-postcard = { version = "1.0.8", features = ["experimental-derive"] }
-serde = { version = "1.0.192", features = ["derive"], default-features = false }
-sha2 = { version = "0.10.8", default-features = false }
+panic-probe = { workspace = true }
+postcard = { workspace = true }
+serde = { workspace = true }
+sha2 = { workspace = true }
 
 [build-dependencies]
 # Need to keep it, because micro-ecc-sys depend on it

@@ -23,10 +23,10 @@ ble-phy2 = []
 
 [dependencies]
 consts = { path = "../consts" }
-cortex-m = "0.7.7"
-cortex-m-rt = "0.7.3"
-defmt = "0.3.5"
-defmt-rtt = "0.4.0"
+cortex-m = { workspace = true }
+cortex-m-rt = { workspace = true }
+defmt = { workspace = true }
+defmt-rtt = { workspace = true }
 embassy-executor = { version = "0.6.0", features = [
     "arch-cortex-m",
     "executor-thread",
@@ -41,14 +41,14 @@ embassy-nrf = { version = "0.2.0", features = [
     "time-driver-rtc1",
 ] }
 embassy-sync = { version = "0.6.0" }
-embassy-time = { version = "0.3.0", features = [
+embassy-time = { version = "0.3.2", features = [
     "defmt",
     "defmt-timestamp-uptime",
 ] }
 embedded-io-async = { version = "0.6.1", features = ["defmt-03"] }
-futures = { version = "0.3.29", default-features = false }
+futures = { version = "0.3.31", default-features = false }
 heapless = { version = "0.8.0", features = ["defmt-03"] }
-hmac = "0.12.1"
+hmac = { workspace = true }
 host-protocol = { path = "../host-protocol" }
 nrf-softdevice = { git = "https://github.com/embassy-rs/nrf-softdevice.git", features = [
     "ble-gatt-client",
@@ -63,7 +63,7 @@ nrf-softdevice = { git = "https://github.com/embassy-rs/nrf-softdevice.git", fea
 ] }
 nrf-softdevice-s112 = { git = "https://github.com/embassy-rs/nrf-softdevice.git", optional = true }
 nrf-softdevice-s113 = { git = "https://github.com/embassy-rs/nrf-softdevice.git", optional = true }
-panic-probe = { version = "0.3.1", features = ["print-defmt"] }
-postcard = { version = "1.0.8" }
-sha2 = { version = "0.10.8", default-features = false }
-static_cell = "2.0.0"
+panic-probe = { workspace = true }
+postcard = { workspace = true }
+sha2 = { workspace = true }
+static_cell = "2.1.0"
