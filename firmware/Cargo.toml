@@ -26,15 +26,15 @@ debug = [
     "nrf-softdevice/nrf52805",
 ]
 
-s112 = ["nrf-softdevice/s112", "nrf-softdevice-s112", "bluetooth-PHY2"]
+s112 = ["nrf-softdevice/s112", "nrf-softdevice-s112", "ble-phy2"]
 
 s113 = ["nrf-softdevice/s113", "nrf-softdevice-s113", "consts/dle"]
 
 # Print some statistics while running
 analytics = []
 
-# Ask for PHY2
-bluetooth-PHY2 = []
+# Ask central for PHY2
+ble-phy2 = []
 
 [dependencies]
 embassy-executor = { version = "0.6.0", features = [
