@@ -32,7 +32,6 @@ embassy-executor = { version = "0.6.0", features = [
 ] }
 embassy-nrf = { version = "0.2.0", features = [
     "defmt",
-    "gpiote",
     "nrf52805",
     "time-driver-rtc1",
 ] }

@@ -51,11 +51,9 @@ heapless = { version = "0.8.0", features = ["defmt-03"] }
 hmac = { workspace = true }
 host-protocol = { path = "../host-protocol" }
 nrf-softdevice = { git = "https://github.com/embassy-rs/nrf-softdevice.git", features = [
-    "ble-gatt-client",
     "ble-gatt-server",
     "ble-peripheral",
     "ble-rssi",
-    "ble-sec",
     "critical-section-impl",
     "defmt",
     "evt-max-size-512",
