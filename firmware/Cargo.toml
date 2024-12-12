@@ -22,8 +22,6 @@ analytics = []
 ble-phy2 = []
 
 [dependencies]
-atomic-pool = "1.0.1"
-cobs = { version = "0.2.3", default-features = false }
 consts = { path = "../consts" }
 cortex-m = "0.7.7"
 cortex-m-rt = "0.7.3"
@@ -48,12 +46,10 @@ embassy-time = { version = "0.3.0", features = [
     "defmt-timestamp-uptime",
 ] }
 embedded-io-async = { version = "0.6.1", features = ["defmt-03"] }
-embedded-storage = "0.3.1"
-embedded-storage-async = "0.4.1"
-fixed = "1.24.0"
 futures = { version = "0.3.29", default-features = false }
 heapless = { version = "0.8.0", features = ["defmt-03"] }
 hmac = "0.12.1"
+host-protocol = { path = "../host-protocol" }
 nrf-softdevice = { git = "https://github.com/embassy-rs/nrf-softdevice.git", features = [
     "ble-gatt-client",
     "ble-gatt-server",
@@ -69,9 +65,5 @@ nrf-softdevice-s112 = { git = "https://github.com/embassy-rs/nrf-softdevice.git"
 nrf-softdevice-s113 = { git = "https://github.com/embassy-rs/nrf-softdevice.git", optional = true }
 panic-probe = { version = "0.3.1", features = ["print-defmt"] }
 postcard = { version = "1.0.8" }
-serde = { version = "1.0.200", default-features = false }
 sha2 = { version = "0.10.8", default-features = false }
 static_cell = "2.0.0"
-
-[dependencies.host-protocol]
-path = "../host-protocol"
