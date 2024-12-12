@@ -11,7 +11,6 @@ publish = false
 [features]
 default = [
     "uart-pins-mpu",
-    "uart-cobs-mcu",
     "ble-gatt-server",
     "ble-gatt-client",
     "ble-sec",
@@ -20,7 +19,6 @@ default = [
 
 debug = [
     "uart-pins-console",
-    "uart-no-cobs-mcu",
     "ble-gatt-server",
     "ble-gatt-client",
     "ble-sec",
@@ -44,12 +42,6 @@ bluetooth-test = []
 # Ask for PHY2
 bluetooth-PHY2 = []
 
-# Cobs format for MCU
-uart-cobs-mcu = []
-
-# No cobs format for MCU
-uart-no-cobs-mcu = []
-
 # Target comm protocol to the UART console (used for developing)
 uart-pins-console = []
 
@@ -57,18 +49,37 @@ uart-pins-console = []
 uart-pins-mpu = []
 
 [dependencies]
-embassy-executor = { version = "0.6.0", features = ["arch-cortex-m", "executor-thread", "executor-interrupt", "defmt", "integrated-timers"]}
-embassy-time = { version = "0.3.0", features = ["defmt", "defmt-timestamp-uptime"]}
+embassy-executor = { version = "0.6.0", features = [
+    "arch-cortex-m",
+    "executor-thread",
+    "executor-interrupt",
+    "defmt",
+    "integrated-timers",
+] }
+embassy-time = { version = "0.3.0", features = [
+    "defmt",
+    "defmt-timestamp-uptime",
+] }
 embassy-sync = { version = "0.6.0" }
-embassy-nrf = { version = "0.2.0", features = ["defmt", "gpiote", "time-driver-rtc1" ]}
+embassy-nrf = { version = "0.2.0", features = [
+    "defmt",
+    "gpiote",
+    "time-driver-rtc1",
+] }
 embedded-io-async = { version = "0.6.1", features = ["defmt-03"] }
 cortex-m = "0.7.7"
 cortex-m-rt = "0.7.3"
 consts = { path = "../consts" }
 defmt = "0.3.5"
 defmt-rtt = "0.4.0"
-panic-probe = { version = "0.3.1", features= ["print-defmt"] }
-nrf-softdevice = { git = "https://github.com/embassy-rs/nrf-softdevice.git", features = ["defmt", "evt-max-size-512", "ble-rssi", "ble-peripheral", "critical-section-impl"] }
+panic-probe = { version = "0.3.1", features = ["print-defmt"] }
+nrf-softdevice = { git = "https://github.com/embassy-rs/nrf-softdevice.git", features = [
+    "defmt",
+    "evt-max-size-512",
+    "ble-rssi",
+    "ble-peripheral",
+    "critical-section-impl",
+] }
 embedded-storage = "0.3.1"
 embedded-storage-async = "0.4.1"
 futures = { version = "0.3.29", default-features = false }

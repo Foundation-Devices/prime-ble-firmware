@@ -18,9 +18,6 @@ use embassy_time::Timer;
 use panic_probe as _;
 
 use comms::comms_task;
-#[cfg(feature = "uart-cobs-mcu")]
-#[cfg(feature = "uart-no-cobs-mcu")]
-use comms::send_bt_uart_no_cobs;
 use consts::{ATT_MTU, BT_MAX_NUM_PKT};
 use defmt::{info, *};
 use embassy_executor::Spawner;
