@@ -25,6 +25,9 @@ build-debug-s113:
 flash-erase:
     probe-rs erase --chip nrf52805_xxAA --allow-erase-all
 
+flash: flash-erase
+    probe-rs download ./BtPackage/BTApp_Full_Image.hex --chip nrf52805_xxAA --binary-format hex
+
 # Flash SoftDevice
 softdevice: flash-erase
     cargo xtask patch-sd
