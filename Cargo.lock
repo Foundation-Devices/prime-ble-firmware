@@ -279,11 +279,7 @@ dependencies = [
  "embassy-nrf",
  "embassy-sync",
  "embassy-time",
- "embedded-io-async",
  "embedded-storage",
- "embedded-storage-async",
- "fixed",
- "futures",
  "hmac",
  "host-protocol",
  "micro-ecc-sys",
@@ -296,7 +292,6 @@ dependencies = [
  "postcard",
  "serde",
  "sha2",
- "static_cell",
 ]
 
 [[package]]
