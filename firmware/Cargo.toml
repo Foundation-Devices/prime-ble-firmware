@@ -10,25 +10,21 @@ publish = false
 
 [features]
 default = [
-    "ble-gatt-server",
-    "ble-gatt-client",
-    "ble-sec",
-    "nrf52805",
+    "nrf-softdevice/ble-gatt-server",
+    "nrf-softdevice/ble-gatt-client",
+    "nrf-softdevice/ble-sec",
+    "embassy-nrf/nrf52805",
+    "nrf-softdevice/nrf52805",
 ]
 
 debug = [
     "analytics",
-    "ble-gatt-server",
-    "ble-gatt-client",
-    "ble-sec",
-    "nrf52805",
+    "nrf-softdevice/ble-gatt-server",
+    "nrf-softdevice/ble-gatt-client",
+    "nrf-softdevice/ble-sec",
+    "embassy-nrf/nrf52805",
+    "nrf-softdevice/nrf52805",
 ]
-
-ble-gatt-server = ["nrf-softdevice/ble-gatt-server"]
-ble-gatt-client = ["nrf-softdevice/ble-gatt-client"]
-ble-sec = ["nrf-softdevice/ble-sec"]
-
-nrf52805 = ["embassy-nrf/nrf52805", "nrf-softdevice/nrf52805"]
 
 s112 = ["nrf-softdevice/s112", "nrf-softdevice-s112", "bluetooth-PHY2"]
 
