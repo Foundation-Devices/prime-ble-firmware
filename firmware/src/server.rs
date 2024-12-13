@@ -13,7 +13,7 @@ use futures::pin_mut;
 use nrf_softdevice::ble::advertisement_builder::{ExtendedAdvertisementBuilder, ExtendedAdvertisementPayload, Flag, ServiceList};
 use nrf_softdevice::ble::gatt_server::{notify_value, NotifyValueError};
 use nrf_softdevice::ble::peripheral;
-#[cfg(feature = "bluetooth-PHY2")]
+#[cfg(feature = "ble-phy2")]
 use nrf_softdevice::ble::PhySet;
 use nrf_softdevice::ble::{gatt_server, Connection};
 use nrf_softdevice::gatt_server;
@@ -110,7 +110,7 @@ async fn notify_data_tx<'a>(server: &'a Server, connection: &'a Connection) {
     }
 }
 
-#[cfg(feature = "bluetooth-PHY2")]
+#[cfg(feature = "ble-phy2")]
 pub async fn update_phy(mut conn: Connection) {
     // delay to avoid request during discovery services, many phones reject in this case
     Timer::after_secs(2).await;
@@ -213,7 +213,7 @@ pub async fn run_bluetooth(sd: &'static Softdevice, server: &Server) {
 
         // No need to ask for PHY2, even with PHY1 the BLE maximum app data throughput (measured to 860kbps)
         // is higher than the UART maximum throughput (estimated to 360kbps at 460800bps baudrate)
-        #[cfg(feature = "bluetooth-PHY2")]
+        #[cfg(feature = "ble-phy2")]
         let _phy_upd = update_phy(conn.clone()).await;
 
         // Pin mutable futures

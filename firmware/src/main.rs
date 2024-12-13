@@ -18,9 +18,6 @@ use embassy_time::Timer;
 use panic_probe as _;
 
 use comms::comms_task;
-#[cfg(feature = "uart-cobs-mcu")]
-#[cfg(feature = "uart-no-cobs-mcu")]
-use comms::send_bt_uart_no_cobs;
 use consts::{ATT_MTU, BT_MAX_NUM_PKT};
 use defmt::{info, *};
 use embassy_executor::Spawner;
@@ -38,12 +35,6 @@ use nrf_softdevice::ble::get_address;
 use nrf_softdevice::Softdevice;
 use server::{initialize_sd, run_bluetooth, stop_bluetooth, Server};
 use static_cell::StaticCell;
-
-#[cfg(all(feature = "uart-pins-console", feature = "uart-pins-mpu"))]
-compile_error!("Only one of the features `uart-pins-console` or `uart-pins-mpu` can be enabled.");
-
-#[cfg(not(any(feature = "uart-pins-console", feature = "uart-pins-mpu")))]
-compile_error!("One of the features `uart-pins-console` or `uart-pins-mpu` must be enabled.");
 
 bind_interrupts!(struct Irqs {
     UARTE0_UART0 => buffered_uarte::InterruptHandler<peripherals::UARTE0>;
@@ -78,14 +69,14 @@ async fn main(spawner: Spawner) {
 
     let p = embassy_nrf::init(conf);
 
-    #[cfg(feature = "uart-pins-console")]
+    #[cfg(feature = "debug")]
     let baud_rate = uarte::Baudrate::BAUD460800;
-    #[cfg(feature = "uart-pins-console")]
+    #[cfg(feature = "debug")]
     info!("Uart console pins - 460800 BAUD");
 
-    #[cfg(feature = "uart-pins-mpu")]
+    #[cfg(not(feature = "debug"))]
     let baud_rate = uarte::Baudrate::BAUD460800;
-    #[cfg(feature = "uart-pins-mpu")]
+    #[cfg(not(feature = "debug"))]
     info!("Uart MPU pins - 460800 BAUD");
 
     let mut config_uart = uarte::Config::default();
@@ -95,10 +86,10 @@ async fn main(spawner: Spawner) {
     static TX_BUFFER: StaticCell<[u8; COBS_MAX_MSG_SIZE]> = StaticCell::new();
     static RX_BUFFER: StaticCell<[u8; COBS_MAX_MSG_SIZE]> = StaticCell::new();
 
-    #[cfg(feature = "uart-pins-mpu")]
+    #[cfg(not(feature = "debug"))]
     let (rxd, txd) = (p.P0_14, p.P0_12);
 
-    #[cfg(feature = "uart-pins-console")]
+    #[cfg(feature = "debug")]
     let (rxd, txd) = (p.P0_16, p.P0_18);
 
     let uart = BufferedUarte::new(

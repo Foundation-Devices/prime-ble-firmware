@@ -9,80 +9,59 @@ version = "0.1.1"
 publish = false
 
 [features]
-default = [
-    "uart-pins-mpu",
-    "uart-cobs-mcu",
-    "ble-gatt-server",
-    "ble-gatt-client",
-    "ble-sec",
-    "nrf52805",
-]
+debug = ["analytics"]
 
-debug = [
-    "uart-pins-console",
-    "uart-no-cobs-mcu",
-    "ble-gatt-server",
-    "ble-gatt-client",
-    "ble-sec",
-    "nrf52805",
-]
-
-ble-gatt-server = ["nrf-softdevice/ble-gatt-server"]
-ble-gatt-client = ["nrf-softdevice/ble-gatt-client"]
-ble-sec = ["nrf-softdevice/ble-sec"]
-
-nrf52805 = ["embassy-nrf/nrf52805", "nrf-softdevice/nrf52805"]
-
-s112 = ["nrf-softdevice/s112", "nrf-softdevice-s112", "bluetooth-PHY2"]
-
+# Choose which SoftDevice to use
+s112 = ["nrf-softdevice/s112", "nrf-softdevice-s112", "ble-phy2"]
 s113 = ["nrf-softdevice/s113", "nrf-softdevice-s113", "consts/dle"]
 
-# Bluetooth test -use this to test bluetooth without the MPU
-# using memory_unsigned.x
-bluetooth-test = []
+# Print some statistics while running
+analytics = []
 
-# Ask for PHY2
-bluetooth-PHY2 = []
-
-# Cobs format for MCU
-uart-cobs-mcu = []
-
-# No cobs format for MCU
-uart-no-cobs-mcu = []
-
-# Target comm protocol to the UART console (used for developing)
-uart-pins-console = []
-
-# Target comm protocol to the MPU (used for production)
-uart-pins-mpu = []
+# Ask central for PHY2
+ble-phy2 = []
 
 [dependencies]
-embassy-executor = { version = "0.6.0", features = ["arch-cortex-m", "executor-thread", "executor-interrupt", "defmt", "integrated-timers"]}
-embassy-time = { version = "0.3.0", features = ["defmt", "defmt-timestamp-uptime"]}
-embassy-sync = { version = "0.6.0" }
-embassy-nrf = { version = "0.2.0", features = ["defmt", "gpiote", "time-driver-rtc1" ]}
-embedded-io-async = { version = "0.6.1", features = ["defmt-03"] }
-cortex-m = "0.7.7"
-cortex-m-rt = "0.7.3"
 consts = { path = "../consts" }
-defmt = "0.3.5"
-defmt-rtt = "0.4.0"
-panic-probe = { version = "0.3.1", features= ["print-defmt"] }
-nrf-softdevice = { git = "https://github.com/embassy-rs/nrf-softdevice.git", features = ["defmt", "evt-max-size-512", "ble-rssi", "ble-peripheral", "critical-section-impl"] }
-embedded-storage = "0.3.1"
-embedded-storage-async = "0.4.1"
-futures = { version = "0.3.29", default-features = false }
-fixed = "1.24.0"
+cortex-m = { workspace = true }
+cortex-m-rt = { workspace = true }
+defmt = { workspace = true }
+defmt-rtt = { workspace = true }
+embassy-executor = { version = "0.6.0", features = [
+    "arch-cortex-m",
+    "executor-thread",
+    "executor-interrupt",
+    "defmt",
+    "integrated-timers",
+] }
+embassy-nrf = { version = "0.2.0", features = [
+    "defmt",
+    "gpiote",
+    "nrf52805",
+    "time-driver-rtc1",
+] }
+embassy-sync = { version = "0.6.0" }
+embassy-time = { version = "0.3.2", features = [
+    "defmt",
+    "defmt-timestamp-uptime",
+] }
+embedded-io-async = { version = "0.6.1", features = ["defmt-03"] }
+futures = { version = "0.3.31", default-features = false }
 heapless = { version = "0.8.0", features = ["defmt-03"] }
-atomic-pool = "1.0.1"
-static_cell = "2.0.0"
+hmac = { workspace = true }
+host-protocol = { path = "../host-protocol" }
+nrf-softdevice = { git = "https://github.com/embassy-rs/nrf-softdevice.git", features = [
+    "ble-gatt-server",
+    "ble-peripheral",
+    "ble-rssi",
+    "critical-section-impl",
+    "defmt",
+    "evt-max-size-512",
+    "nrf52805",
+] }
 nrf-softdevice-s112 = { git = "https://github.com/embassy-rs/nrf-softdevice.git", optional = true }
 nrf-softdevice-s113 = { git = "https://github.com/embassy-rs/nrf-softdevice.git", optional = true }
-postcard = { version = "1.0.8" }
-serde = { version = "1.0.200", default-features = false }
-cobs = { version = "0.2.3", default-features = false }
-sha2 = { version = "0.10.8", default-features = false }
-hmac = "0.12.1"
-
-[dependencies.host-protocol]
-path = "../host-protocol"
+panic-probe = { workspace = true }
+postcard = { workspace = true }
+sha2 = { workspace = true }
+static_cell = "2.1.0"

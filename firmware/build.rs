@@ -21,23 +21,23 @@ fn main() {
     // on the linker search path.
     let out = &PathBuf::from(env::var_os("OUT_DIR").unwrap());
 
-    #[cfg(all(not(feature = "debug"), not(feature = "bluetooth-test"), feature = "s112"))]
+    #[cfg(all(not(feature = "analytics"), feature = "s112"))]
     File::create(out.join("./memory.x"))
         .unwrap()
         .write_all(include_bytes!("./memory_s112_signed.x"))
         .unwrap();
-    #[cfg(all(not(feature = "debug"), not(feature = "bluetooth-test"), feature = "s113"))]
+    #[cfg(all(not(feature = "analytics"), feature = "s113"))]
     File::create(out.join("./memory.x"))
         .unwrap()
         .write_all(include_bytes!("./memory_s113_signed.x"))
         .unwrap();
 
-    #[cfg(all(any(feature = "debug", feature = "bluetooth-test"), feature = "s112"))]
+    #[cfg(all(feature = "analytics", feature = "s112"))]
     File::create(out.join("./memory.x"))
         .unwrap()
         .write_all(include_bytes!("./memory_s112_unsigned.x"))
         .unwrap();
-    #[cfg(all(any(feature = "debug", feature = "bluetooth-test"), feature = "s113"))]
+    #[cfg(all(feature = "analytics", feature = "s113"))]
     File::create(out.join("./memory.x"))
         .unwrap()
         .write_all(include_bytes!("./memory_s113_unsigned.x"))
@@ -49,13 +49,13 @@ fn main() {
     // any file in the project changes. By specifying `memory.x`
     // here, we ensure the build script is only re-run when
     // `memory.x` is changed.
-    #[cfg(all(not(feature = "debug"), not(feature = "bluetooth-test"), feature = "s112"))]
+    #[cfg(all(not(feature = "analytics"), feature = "s112"))]
     println!("cargo:rerun-if-changed=./memory_s112_signed.x");
-    #[cfg(all(not(feature = "debug"), not(feature = "bluetooth-test"), feature = "s113"))]
+    #[cfg(all(not(feature = "analytics"), feature = "s113"))]
     println!("cargo:rerun-if-changed=./memory_s113_signed.x");
-    #[cfg(all(any(feature = "debug", feature = "bluetooth-test"), feature = "s112"))]
+    #[cfg(all(feature = "analytics", feature = "s112"))]
     println!("cargo:rerun-if-changed=./memory_s112_unsigned.x");
-    #[cfg(all(any(feature = "debug", feature = "bluetooth-test"), feature = "s113"))]
+    #[cfg(all(feature = "analytics", feature = "s113"))]
     println!("cargo:rerun-if-changed=./memory_s113_unsigned.x");
 
     println!("cargo:rustc-link-arg-bins=--nmagic");

@@ -145,10 +145,14 @@ pub fn ack_msg_send(message: HostProtocolMessage, tx: &mut UarteTx<UARTE0>) {
     assert_out_irq();
 }
 
-#[cfg(feature = "flash-protect")]
+#[cfg(not(feature = "debug"))]
 /// Configures flash memory protection for bootloader and MBR regions
 ///
 /// Uses Nordic's BPROT peripheral to prevent modification of critical code regions
+/// Activate APP Protection on nrf MCU
+/// https://infocenter.nordicsemi.com/topic/ps_nrf52805/uicr.html?cp=5_6_0_3_4_0_5#register.APPROTECT
+/// We should check for this part code to check version
+/// https://infocenter.nordicsemi.com/pdf/in_153_v1.0.pdf?cp=18_4
 fn flash_protect() {
     // Protect Nordic MBR area
     unsafe { &*nrf52805_pac::BPROT::ptr() }.config0.write(|w| w.region0().enabled());
@@ -182,7 +186,7 @@ fn flash_protect() {
 /// Main bootloader entry point
 #[embassy_executor::main]
 async fn main(_spawner: Spawner) {
-    #[cfg(feature = "flash-protect")]
+    #[cfg(not(feature = "debug"))]
     flash_protect();
 
     let p = embassy_nrf::init(Default::default());
@@ -191,10 +195,10 @@ async fn main(_spawner: Spawner) {
     let mut config_uart = uarte::Config::default();
     config_uart.parity = uarte::Parity::EXCLUDED;
 
-    #[cfg(feature = "uart-pins-mpu")]
+    #[cfg(not(feature = "debug"))]
     let (rxd, txd, baud_rate) = (p.P0_14, p.P0_12, uarte::Baudrate::BAUD460800);
 
-    #[cfg(feature = "uart-pins-console")]
+    #[cfg(feature = "debug")]
     let (rxd, txd, baud_rate) = (p.P0_16, p.P0_18, uarte::Baudrate::BAUD460800);
 
     config_uart.baudrate = baud_rate;
@@ -220,7 +224,7 @@ async fn main(_spawner: Spawner) {
     let seal = unsafe { &*nrf52805_pac::UICR::ptr() }.customer[SEAL_IDX].read().customer().bits();
 
     // Send startup message (console only)
-    #[cfg(feature = "uart-pins-console")]
+    #[cfg(feature = "debug")]
     {
         let mut buf = [0; 10];
         buf.copy_from_slice(b"Bootloader");

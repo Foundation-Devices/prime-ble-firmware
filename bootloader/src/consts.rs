@@ -7,20 +7,20 @@
 pub static BOOTLOADER_ADDR: u32 = 0x27000;
 
 /// 256B are needed for cosign2 signature
-#[cfg(feature = "boot-signed-fw")]
+#[cfg(not(feature = "debug"))]
 const SIGNATURE_HEADER_SIZE: u32 = 0x100;
 
 /// Base address of the interrupt vector table for signed firmware
 /// When booting signed firmware, the interrupt vector table is placed after SIGNATURE_HEADER_SIZE,
 /// which is after the SoftDevice but before the application code. This ensures proper
 /// interrupt handling while maintaining the security of the signed firmware.
-#[cfg(feature = "boot-signed-fw")]
+#[cfg(not(feature = "debug"))]
 pub const INT_VECTOR_TABLE_BASE: u32 = BASE_APP_ADDR + SIGNATURE_HEADER_SIZE;
 
 /// Base address of the interrupt vector table for unsigned firmware
 /// Points to the SoftDevice base address at 0x1000, which is where the interrupt vector table
 /// must be located for unsigned firmware to properly handle interrupts through the SoftDevice
-#[cfg(feature = "boot-unsigned-fw")]
+#[cfg(not(not(feature = "debug")))]
 pub const INT_VECTOR_TABLE_BASE: u32 = 0x1000;
 
 /// Base address for the application in flash memory
@@ -75,7 +75,7 @@ pub const UICR_SECRET_START: u32 = 0x10001080;
 /// the 8 UICR registers used (8 registers * 4 bytes per register = 32 bytes total).
 pub const UICR_SECRET_SIZE: u8 = 0x20;
 
-#[cfg(feature = "no-dbg-access")]
+#[cfg(not(feature = "debug"))]
 #[used]
 #[link_section = ".uicr_appprotection"]
 pub static APP_PROTECTION: u8 = 0x00;

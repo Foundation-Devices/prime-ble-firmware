@@ -8,84 +8,58 @@ name = "bootloader"
 version = "0.1.1"
 publish = false
 
-
 [features]
-default = [
-    "nrf52805",
-    "boot-signed-fw",
-    "flash-protect",
-    "no-dbg-access",
-    "uart-pins-mpu"
-]
+debug = []
 
-debug =[
-    "nrf52805",
-    "boot-unsigned-fw",
-    "uart-pins-console"
-]
-
-nrf52805 = [
-    "embassy-nrf/nrf52805",
-    "nrf-softdevice/nrf52805",
-    "nrf-softdevice/critical-section-impl"
-]
-
+# Choose which SoftDevice to use
 s112 = ["nrf-softdevice/s112", "nrf-softdevice-s112"]
-
 s113 = ["nrf-softdevice/s113", "nrf-softdevice-s113"]
 
-# Activate APP Protection on nrf MCU
-# https://infocenter.nordicsemi.com/topic/ps_nrf52805/uicr.html?cp=5_6_0_3_4_0_5#register.APPROTECT
-# We should check for this part code to check version
-# https://infocenter.nordicsemi.com/pdf/in_153_v1.0.pdf?cp=18_4
-no-dbg-access = []
-flash-protect = []
-
-# Bootloader jumps to application with cosign2 header
-boot-signed-fw = []
-
-# Bootloader jumps to application without cosign2 header
-boot-unsigned-fw = []
-
-# Target comm protocol to the UART console (used for developing)
-uart-pins-console = []
-
-# Target comm protocol to the MPU (used for production)
-uart-pins-mpu = []
-
 [dependencies]
-embassy-executor = { version = "0.6.0", features = ["arch-cortex-m", "executor-thread", "executor-interrupt", "defmt", "integrated-timers"]}
-embassy-time = { version = "0.3.0", features = ["defmt", "defmt-timestamp-uptime"]}
-embassy-sync = { version = "0.6.0" }
-embassy-nrf = { version = "0.2.0", features = ["defmt", "gpiote", "time-driver-rtc1" ]}
-embedded-io-async = { version = "0.6.1", features = ["defmt-03"] }
-cortex-m = "0.7.7"
-cortex-m-rt = "0.7.3"
-defmt = "0.3.6"
-defmt-rtt = "0.4.0"
-panic-probe = { version = "0.3.1", features= ["print-defmt"] }
-embedded-storage = "0.3.1"
-embedded-storage-async = "0.4.1"
-futures = { version = "0.3.29", default-features = false }
-fixed = "1.24.0"
-static_cell = "2.0.0"
-nrf-softdevice-mbr = { version = "0.2.0"}
-postcard = { version = "1.0.8", features = ["experimental-derive"] }
-serde = { version = "1.0.192", features = ["derive"], default-features = false }
-crc = "3.2.1"
-micro-ecc-sys = { git = "https://github.com/Foundation-Devices/micro-ecc-sys.git", default-features = false }
-sha2 = { version = "0.10.8", default-features = false }
-hmac = "0.12.1"
+cortex-m = { workspace = true }
+cortex-m-rt = { workspace = true }
 cosign2 = { git = "https://github.com/Foundation-Devices/keyOS", default-features = false }
-critical-section = "1.1"
+crc = { workspace = true }
+critical-section = "1.1.2"
+defmt = { workspace = true }
+defmt-rtt = { workspace = true }
+embassy-executor = { version = "0.6.0", features = [
+    "arch-cortex-m",
+    "executor-thread",
+    "executor-interrupt",
+    "defmt",
+    "integrated-timers",
+] }
+embassy-nrf = { version = "0.2.0", features = [
+    "defmt",
+    "nrf52805",
+    "time-driver-rtc1",
+] }
+embassy-sync = { version = "0.6.0" }
+embassy-time = { version = "0.3.2", features = [
+    "defmt",
+    "defmt-timestamp-uptime",
+] }
+embedded-storage = "0.3.1"
+hmac = { workspace = true }
+host-protocol = { path = "../host-protocol" }
+micro-ecc-sys = { git = "https://github.com/Foundation-Devices/micro-ecc-sys.git", default-features = false }
+nrf-softdevice = { git = "https://github.com/embassy-rs/nrf-softdevice.git", features = [
+    "ble-peripheral",
+    "critical-section-impl",
+    "defmt",
+    "evt-max-size-256",
+    "nrf52805",
+] }
+nrf-softdevice-mbr = { version = "0.2.0" }
 nrf-softdevice-s112 = { git = "https://github.com/embassy-rs/nrf-softdevice.git", optional = true }
 nrf-softdevice-s113 = { git = "https://github.com/embassy-rs/nrf-softdevice.git", optional = true }
-nrf-softdevice = { git = "https://github.com/embassy-rs/nrf-softdevice.git", features = ["defmt", "evt-max-size-256", "ble-peripheral"] }
 nrf52805-pac = "0.12.2"
-
+panic-probe = { workspace = true }
+postcard = { workspace = true }
+serde = { workspace = true }
+sha2 = { workspace = true }
 
 [build-dependencies]
+# Need to keep it, because micro-ecc-sys depend on it
 bindgen = "0.69.4"
-
-[dependencies.host-protocol]
-path = "../host-protocol"
