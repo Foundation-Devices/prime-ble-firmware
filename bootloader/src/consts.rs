@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2024 Foundation Devices, Inc. <hello@foundation.xyz>
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 #[used]
 /// Start address of the bootloader in flash memory, stored in UICR
 /// This address (0x26000) is stored in a dedicated UICR register to allow the device

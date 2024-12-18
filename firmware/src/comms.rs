@@ -1,4 +1,6 @@
-// Standard imports for BLE communication and cryptographic operations
+// SPDX-FileCopyrightText: 2024 Foundation Devices, Inc. <hello@foundation.xyz>
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 use crate::{BT_ADDRESS, BT_DATA_TX, IRQ_OUT_PIN};
 use crate::{BT_DATA_RX, BT_STATE, RSSI_VALUE};
 use consts::{APP_MTU, BT_MAX_NUM_PKT, UICR_SECRET_SIZE, UICR_SECRET_START};

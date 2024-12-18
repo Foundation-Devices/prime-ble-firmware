@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2024 Foundation Devices, Inc. <hello@foundation.xyz>
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 use btleplug::api::bleuuid::BleUuid;
 use btleplug::api::{Central, CentralEvent, Manager as _, Peripheral, ScanFilter, WriteType};
 use btleplug::platform::Manager;

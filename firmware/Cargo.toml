@@ -1,8 +1,8 @@
-# SPDX-FileCopyrightText: 2024 Foundation Devices, Inc. <hello@foundationdevices.com>
+# SPDX-FileCopyrightText: 2024 Foundation Devices, Inc. <hello@foundation.xyz>
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 [package]
-authors = ["Foundation Devices, Inc. <hello@foundationdevices.com>"]
+authors = ["Foundation Devices, Inc. <hello@foundation.xyz>"]
 edition = "2021"
 name = "firmware"
 version = "0.1.1"

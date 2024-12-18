@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2024 Foundation Devices, Inc. <hello@foundation.xyz>
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 use cargo_metadata::semver::Version;
 use clap::{Parser, Subcommand};
 use std::io::{Read, Write};

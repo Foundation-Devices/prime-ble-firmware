@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2024 Foundation Devices, Inc. <hello@foundation.xyz>
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 use clap::{Parser, ValueEnum};
 use crc::{Crc, CRC_32_ISCSI};
 use host_protocol::{Bluetooth, Bootloader, HostProtocolMessage};
