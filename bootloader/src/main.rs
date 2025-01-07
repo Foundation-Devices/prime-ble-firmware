@@ -154,9 +154,12 @@ pub fn ack_msg_send(message: HostProtocolMessage, tx: &mut UarteTx<UARTE0>) {
 /// https://infocenter.nordicsemi.com/topic/ps_nrf52805/uicr.html?cp=5_6_0_3_4_0_5#register.APPROTECT
 /// We should check for this part code to check version
 /// https://infocenter.nordicsemi.com/pdf/in_153_v1.0.pdf?cp=18_4
-fn flash_protect() {
+fn flash_protect_mbr_bootloader() {
     // Protect Nordic MBR area
-    unsafe { &*nrf52805_pac::BPROT::ptr() }.config0.write(|w| w.region0().enabled());
+    unsafe { &*nrf52805_pac::BPROT::ptr() }.config0.write(|w| {
+        w.region0().enabled(); //0x00000-0x01000
+        w
+    });
     let bits_0 = unsafe { &*nrf52805_pac::BPROT::ptr() }.config0.read().bits();
     debug!("CONFIG0_BITS : {}", bits_0);
 
@@ -184,11 +187,73 @@ fn flash_protect() {
     debug!("DISABLE : {}", disabledebug);
 }
 
+#[cfg(not(feature = "debug"))]
+/// Configures flash memory protection for SoftDevice and Applciation regions
+///
+/// Uses Nordic's BPROT peripheral to prevent modification of critical code regions
+/// Activate APP Protection on nrf MCU
+/// https://infocenter.nordicsemi.com/topic/ps_nrf52805/uicr.html?cp=5_6_0_3_4_0_5#register.APPROTECT
+/// We should check for this part code to check version
+/// https://infocenter.nordicsemi.com/pdf/in_153_v1.0.pdf?cp=18_4
+fn flash_protect_sd_application() {
+    // Protect Nordic SD area and application area
+    unsafe { &*nrf52805_pac::BPROT::ptr() }.config0.write(|w| {
+        w.region1().enabled(); //0x01000-0x02000
+        w.region2().enabled(); //0x02000-0x03000
+        w.region3().enabled(); //0x03000-0x04000
+        w.region4().enabled(); //0x04000-0x05000
+        w.region5().enabled(); //0x05000-0x06000
+        w.region6().enabled(); //0x06000-0x07000
+        w.region7().enabled(); //0x07000-0x08000
+        w.region8().enabled(); //0x08000-0x09000
+        w.region9().enabled(); //0x09000-0x0A000
+        w.region10().enabled(); //0x0A000-0x0B000
+        w.region11().enabled(); //0x0B000-0x0C000
+        w.region12().enabled(); //0x0C000-0x0D000
+        w.region13().enabled(); //0x0D000-0x0E000
+        w.region14().enabled(); //0x0E000-0x0F000
+        w.region15().enabled(); //0x0F000-0x10000
+        w.region16().enabled(); //0x10000-0x11000
+        w.region17().enabled(); //0x11000-0x12000
+        w.region18().enabled(); //0x12000-0x13000
+        w.region19().enabled(); //0x13000-0x14000
+        w.region20().enabled(); //0x14000-0x15000
+        w.region21().enabled(); //0x15000-0x16000
+        w.region22().enabled(); //0x16000-0x17000
+        w.region23().enabled(); //0x17000-0x18000
+        w.region24().enabled(); //0x18000-0x19000
+        w.region25().enabled(); //0x19000-0x1A000
+        w.region26().enabled(); //0x1A000-0x1B000
+        w.region27().enabled(); //0x1B000-0x1C000
+        w.region28().enabled(); //0x1C000-0x1D000
+        w.region29().enabled(); //0x1D000-0x1E000
+        w.region30().enabled(); //0x1E000-0x1F000
+        w.region31().enabled(); //0x1F000-0x20000
+        w
+    });
+    let bits_0 = unsafe { &*nrf52805_pac::BPROT::ptr() }.config0.read().bits();
+    debug!("CONFIG0_BITS : {}", bits_0);
+
+    // Protect Nordic SD area and application area
+    unsafe { &*nrf52805_pac::BPROT::ptr() }.config1.write(|w| {
+        w.region32().enabled(); //0x20000-0x21000
+        w.region33().enabled(); //0x21000-0x22000
+        w.region34().enabled(); //0x22000-0x23000
+        w.region35().enabled(); //0x23000-0x24000
+        w.region36().enabled(); //0x24000-0x25000
+        w.region37().enabled(); //0x25000-0x26000
+        w.region38().enabled(); //0x26000-0x27000
+        w
+    });
+    let bits_1 = unsafe { &*nrf52805_pac::BPROT::ptr() }.config1.read().bits();
+    debug!("CONFIG1_BITS : {}", bits_1);
+}
+
 /// Main bootloader entry point
 #[embassy_executor::main]
 async fn main(_spawner: Spawner) {
     #[cfg(not(feature = "debug"))]
-    flash_protect();
+    flash_protect_mbr_bootloader();
 
     let p = embassy_nrf::init(Default::default());
 
@@ -372,6 +437,7 @@ async fn main(_spawner: Spawner) {
                                     ack_msg_send(msg, &mut tx);
 
                                     if let VerificationResult::Valid = verif_res {
+                                        flash_protect_sd_application();
                                         // Clean up UART resources before jumping
                                         drop(tx);
                                         drop(rx);
