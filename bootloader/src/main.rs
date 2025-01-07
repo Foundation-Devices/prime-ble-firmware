@@ -398,20 +398,6 @@ async fn main(_spawner: Spawner) {
                                         &mut tx,
                                     )
                                 }
-                                // Verify firmware signature
-                                Bootloader::VerifyFirmware => {
-                                    let image_slice = get_fw_image_slice(BASE_APP_ADDR, APP_SIZE);
-                                    match check_fw(image_slice) {
-                                        (msg, VerificationResult::Valid) => {
-                                            ack_msg_send(msg, &mut tx);
-                                            info!("fw is valid");
-                                        }
-                                        (msg, VerificationResult::Invalid) => {
-                                            ack_msg_send(msg, &mut tx);
-                                            info!("fw is invalid");
-                                        }
-                                    }
-                                }
                                 // Set challenge secret
                                 Bootloader::ChallengeSet { secret } => {
                                     let result = if seal == SEALED_SECRET {

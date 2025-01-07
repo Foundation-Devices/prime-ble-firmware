@@ -65,8 +65,6 @@ pub enum Bootloader<'a> {
     NackEraseFirmware,
     /// Negative acknowledgment of firmware erase, error during Write back unaligned chunk
     NackEraseFirmwareWrite,
-    /// Request firmware verification
-    VerifyFirmware,
     /// Result of firmware verification with hash
     AckVerifyFirmware { result: bool, hash: [u8; 32] },
     /// Negative acknowledgment of block with index
@@ -244,10 +242,6 @@ fn calculate_bootloader_message_sizes() {
         (
             "EraseFirmware",
             get_cobs_size(HostProtocolMessage::Bootloader(Bootloader::EraseFirmware)),
-        ),
-        (
-            "VerifyFirmware",
-            get_cobs_size(HostProtocolMessage::Bootloader(Bootloader::VerifyFirmware)),
         ),
         // Test WriteFirmwareBlock with different sizes
         (
