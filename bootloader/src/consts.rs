@@ -3,11 +3,16 @@
 
 #[used]
 /// Start address of the bootloader in flash memory, stored in UICR
-/// This address (0x26000) is stored in a dedicated UICR register to allow the device
+/// The bootloader address is stored in a dedicated UICR register to allow the device
 /// to locate and execute the bootloader during startup. The UICR (User Information
 /// Configuration Registers) provide non-volatile storage for critical system parameters.
 #[link_section = ".uicr_bootloader_start_address"]
 pub static BOOTLOADER_ADDR: u32 = 0x27000;
+
+#[cfg(not(feature = "debug"))]
+#[used]
+#[link_section = ".uicr_appprotection"]
+pub static APP_PROTECTION: u8 = 0x00;
 
 /// 256B are needed for cosign2 signature
 #[cfg(not(feature = "debug"))]
@@ -64,21 +69,3 @@ pub const SEAL_IDX: usize = 8;
 /// that the secret has been properly sealed and cannot be overwritten. The value
 /// 0x5A5A5A5A is chosen as a recognizable pattern that is unlikely to occur randomly.
 pub const SEALED_SECRET: u32 = 0x5A5A5A5A;
-
-/// Start address of secret storage in UICR region
-/// This constant defines the base address in UICR memory where the challenge-response
-/// authentication secret is stored. The UICR (User Information Configuration Registers)
-/// region starts at 0x10001000, and this secret storage begins at offset 0x80 (register 32).
-/// The secret uses 8 consecutive 32-bit UICR registers starting from this address.
-pub const UICR_SECRET_START: u32 = 0x10001080;
-
-/// Size of the secret storage area in UICR (32 bytes)
-/// This constant defines the size of the storage area in UICR memory reserved for storing
-/// the challenge-response authentication secret. The size is 32 bytes (0x20) which matches
-/// the 8 UICR registers used (8 registers * 4 bytes per register = 32 bytes total).
-pub const UICR_SECRET_SIZE: u8 = 0x20;
-
-#[cfg(not(feature = "debug"))]
-#[used]
-#[link_section = ".uicr_appprotection"]
-pub static APP_PROTECTION: u8 = 0x00;

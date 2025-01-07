@@ -21,7 +21,8 @@ use embassy_nrf::{self as _};
 use host_protocol::State;
 use panic_probe as _;
 
-use consts::*;
+use consts::{APP_SIZE, BASE_APP_ADDR, BASE_BOOTLOADER_ADDR, FLASH_PAGE, SEALED_SECRET, SEAL_IDX};
+use consts_global::{UICR_SECRET_SIZE, UICR_SECRET_START};
 use core::cell::RefCell;
 use cosign2::{Header, VerificationResult};
 use crc::{Crc, CRC_32_ISCSI};
