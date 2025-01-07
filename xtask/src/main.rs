@@ -365,6 +365,8 @@ fn sign_bt_firmware() {
 
     tracing::info!("Signing binary Bt application with Cosign2...");
 
+    // TODO: SFT-4663 sign again with second key
+
     if !Command::new("cosign2")
         .stdout(Stdio::null())
         .current_dir(project_root())
