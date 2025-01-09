@@ -17,7 +17,7 @@ use sha2::{Digest, Sha256 as Sha};
 
 // Known public keys used for firmware signature verification
 // These are the authorized keys that can sign valid firmware updates
-// TODO: SFT-4663 put well-known public keys here
+// TODO: SFT-3595 put well-known public keys here
 const KNOWN_SIGNERS: [[u8; 33]; 0] = [
     // [0; 33],
 ];
