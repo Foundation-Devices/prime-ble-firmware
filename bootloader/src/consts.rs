@@ -11,8 +11,8 @@ pub static BOOTLOADER_ADDR: u32 = 0x27000;
 
 #[cfg(not(feature = "debug"))]
 #[used]
-#[link_section = ".uicr_appprotection"]
-pub static APP_PROTECTION: u8 = 0x00;
+#[link_section = ".uicr_approtect"]
+pub static APPROTECT: u32 = 0x00;
 
 /// 256B are needed for cosign2 signature
 #[cfg(not(feature = "debug"))]

@@ -9,14 +9,14 @@ MEMORY
   FLASH (rx) : ORIGIN = 0x00000000 + 0x27000, LENGTH = 192K - 0x27000
   RAM : ORIGIN = 0x20000008, LENGTH = 24K - 8
   uicr_bootloader_start_address (r) : ORIGIN = 0x10001014, LENGTH = 0x4
-  uicr_appprotection (r) : ORIGIN = 0x10001208, LENGTH = 0x4
+  uicr_approtect (r) : ORIGIN = 0x10001208, LENGTH = 0x4
 }
 
 SECTIONS {
-    .uicr_appprotection :  {
-       KEEP(*(.uicr_appprotection))
+    .uicr_approtect :  {
+       KEEP(*(.uicr_approtect))
        . = ALIGN(4);
-    } > uicr_appprotection
+    } > uicr_approtect
 
     .uicr_bootloader_start_address :  {
        KEEP(*(.uicr_bootloader_start_address))
