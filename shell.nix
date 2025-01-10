@@ -30,7 +30,9 @@ in
       export PATH=$PATH:''${RUSTUP_HOME:-~/.rustup}/toolchains/$RUSTC_VERSION-x86_64-unknown-linux-gnu/bin/
       export CC="arm-none-eabi-gcc"
       export CARGO_NET_GIT_FETCH_WITH_CLI=true
-      export PROBE_RS_PROBE=0483:3748
+      export PROBE_RS_PROBE=1366:0105
+      export PROBE_RS_PROTOCOL=swd
+      export PROBE_RS_CHIP=nrf52805_xxAA
       '';
     # Add precompiled library to rustc search path
     RUSTFLAGS = (builtins.map (a: ''-L ${a}/lib'') [
