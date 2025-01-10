@@ -12,8 +12,8 @@ publish = false
 debug = []
 
 # Choose which SoftDevice to use
-s112 = ["nrf-softdevice/s112", "nrf-softdevice-s112"]
-s113 = ["nrf-softdevice/s113", "nrf-softdevice-s113"]
+s112 = ["nrf-softdevice/s112", "nrf-softdevice-s112", "consts_global/s112"]
+s113 = ["nrf-softdevice/s113", "nrf-softdevice-s113", "consts_global/s113"]
 
 [dependencies]
 consts_global = { path = "../consts", package = "consts" }
@@ -64,3 +64,4 @@ sha2 = { workspace = true }
 [build-dependencies]
 # Need to keep it, because micro-ecc-sys depend on it
 bindgen = "0.69.4"
+consts_global = { path = "../consts", package = "consts" }

@@ -3,6 +3,7 @@
 
 use cargo_metadata::semver::Version;
 use clap::{Parser, Subcommand};
+use consts::{BASE_APP_ADDR_S112, BASE_APP_ADDR_S113, BASE_BOOTLOADER_ADDR, SIGNATURE_HEADER_SIZE};
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 use std::process::{exit, Command, Stdio};
@@ -270,6 +271,7 @@ fn build_bt_firmware(verbose: bool, s113: bool) {
     // We will always get the full slice of flash where app is flashed ( BASE_APP_ADDR up to BASE_BOOTLOADER_ADDR )
     tracing::info!("Creating BT application bin file");
     let mut cargo_cmd = Command::new(cargo());
+    let base_bootloader_addr = BASE_BOOTLOADER_ADDR.to_string();
     let mut cmd = cargo_cmd.current_dir(project_root().join("firmware")).args([
         "objcopy",
         "--release",
@@ -277,7 +279,7 @@ fn build_bt_firmware(verbose: bool, s113: bool) {
         if s113 { "s113" } else { "s112" },
         "--",
         "--pad-to",
-        "0x27000",
+        base_bootloader_addr.as_str(),
         "-O",
         "binary",
         "../BtPackage/BT_application.bin",
@@ -350,6 +352,7 @@ fn sign_bt_firmware() {
 
     let version = Version::parse(FIRMWARE_VERSION).expect("Wrong version format").to_string();
 
+    let header_size = SIGNATURE_HEADER_SIZE.to_string();
     let mut args = vec![
         "sign",
         "-i",
@@ -357,7 +360,7 @@ fn sign_bt_firmware() {
         "-c",
         "cosign2.toml",
         "--header-size",
-        "256",
+        header_size.as_str(),
         "-o",
         "./BtPackage/BT_application_signed.bin",
     ];
@@ -518,7 +521,7 @@ fn build_bt_package(s113: bool) {
             })),
             MergeableFile::Binary(
                 project_root().join("BtPackage/BT_application_signed.bin"),
-                if s113 { 0x1B400 } else { 0x19000 },
+                if s113 { BASE_APP_ADDR_S113 } else { BASE_APP_ADDR_S112 },
             ),
             MergeableFile::IHex(project_root().join("BtPackage/bootloader.hex")),
         ],

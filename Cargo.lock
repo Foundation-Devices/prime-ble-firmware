@@ -2863,6 +2863,7 @@ version = "0.1.0"
 dependencies = [
  "cargo_metadata",
  "clap",
+ "consts",
  "ihex",
  "tracing",
  "tracing-subscriber",

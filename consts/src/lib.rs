@@ -49,3 +49,22 @@ pub const UICR_SECRET_START: u32 = 0x10001080;
 /// 0x20 = 32 bytes = 256 bits
 /// This size matches the output length of HMAC-SHA256 used for authentication.
 pub const UICR_SECRET_SIZE: u32 = 0x20;
+
+/// Start address of the bootloader application code in flash memory
+/// This address marks where the bootloader code begins in flash.
+pub const BASE_BOOTLOADER_ADDR: u32 = 0x27000;
+
+/// Base address for the application in flash memory
+/// This is where the actual application firmware code begins in flash memory at 0x19000|0x1B400,
+/// after the SoftDevice and before the bootloader region
+#[cfg(feature = "s112")]
+pub const BASE_APP_ADDR: u32 = 0x19000;
+#[cfg(feature = "s113")]
+pub const BASE_APP_ADDR: u32 = 0x1B400;
+
+// TODO: only needed by xtask, remove them when S113 will be definitive
+pub const BASE_APP_ADDR_S112: u32 = 0x19000;
+pub const BASE_APP_ADDR_S113: u32 = 0x1B400;
+
+/// 256B are needed for cosign2 signature
+pub const SIGNATURE_HEADER_SIZE: u32 = 0x100;

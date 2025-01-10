@@ -1,22 +1,22 @@
 // SPDX-FileCopyrightText: 2024 Foundation Devices, Inc. <hello@foundation.xyz>
 // SPDX-License-Identifier: GPL-3.0-or-later
 
+use crate::{BASE_APP_ADDR, BASE_BOOTLOADER_ADDR};
+#[cfg(not(feature = "debug"))]
+use consts_global::SIGNATURE_HEADER_SIZE;
+
 #[used]
 /// Start address of the bootloader in flash memory, stored in UICR
 /// The bootloader address is stored in a dedicated UICR register to allow the device
 /// to locate and execute the bootloader during startup. The UICR (User Information
 /// Configuration Registers) provide non-volatile storage for critical system parameters.
 #[link_section = ".mbr_uicr_bootloader_addr"]
-pub static MBR_UICR_BOOTLOADER_ADDR: u32 = 0x27000;
+pub static MBR_UICR_BOOTLOADER_ADDR: u32 = BASE_BOOTLOADER_ADDR;
 
 #[cfg(not(feature = "debug"))]
 #[used]
 #[link_section = ".uicr_approtect"]
 pub static APPROTECT: u32 = 0x0000_0000;
-
-/// 256B are needed for cosign2 signature
-#[cfg(not(feature = "debug"))]
-const SIGNATURE_HEADER_SIZE: u32 = 0x100;
 
 /// Base address of the interrupt vector table for signed firmware
 /// When booting signed firmware, the interrupt vector table is placed after SIGNATURE_HEADER_SIZE,
@@ -31,26 +31,12 @@ pub const INT_VECTOR_TABLE_BASE: u32 = BASE_APP_ADDR + SIGNATURE_HEADER_SIZE;
 #[cfg(not(not(feature = "debug")))]
 pub const INT_VECTOR_TABLE_BASE: u32 = 0x1000;
 
-/// Base address for the application in flash memory
-/// This is where the actual application firmware code begins in flash memory at 0x19000|0x1B400,
-/// after the SoftDevice and before the bootloader region
-#[cfg(feature = "s112")]
-pub const BASE_APP_ADDR: u32 = 0x19000;
-#[cfg(feature = "s113")]
-pub const BASE_APP_ADDR: u32 = 0x1B400;
-
 /// Size of the application area in flash memory (56.75KB for S112, 44.75KB for S113)
 /// This constant defines the maximum size available for the application firmware.
 /// Starting from BASE_APP_ADDR up to BASE_BOOTLOADER_ADDR
 /// consider that a header is needed for cosign2 signature so real fw app goes from
 /// BASE_APP_ADDR + SIGNATURE_HEADER_SIZE to BASE_BOOTLOADER_ADDR
 pub const APP_SIZE: u32 = BASE_BOOTLOADER_ADDR - BASE_APP_ADDR;
-
-/// Start address of the bootloader application code in flash memory
-/// This address marks where the bootloader code begins in flash.
-/// It must match the address specified in MBR_UICR_BOOTLOADER_ADDR above to ensure
-/// proper execution of the bootloader during device startup.
-pub const BASE_BOOTLOADER_ADDR: u32 = 0x27000;
 
 /// Size of a flash memory page in bytes (4KB)
 /// This constant defines the size of a single flash memory page on the nRF52 microcontroller.

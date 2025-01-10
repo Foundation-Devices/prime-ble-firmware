@@ -10,6 +10,7 @@ edition = "2021"
 [dependencies]
 cargo_metadata = "0.18.1"
 clap = { workspace = true }
+consts = { path = "../consts" }
 ihex = "3.0.0"
 tracing = "0.1.40"
 tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }

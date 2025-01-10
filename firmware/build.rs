@@ -11,6 +11,9 @@
 //! updating `memory.x` ensures a rebuild of the application with the
 //! new memory settings.
 
+#[cfg(not(feature = "debug"))]
+use consts::SIGNATURE_HEADER_SIZE;
+use consts::{BASE_APP_ADDR, BASE_BOOTLOADER_ADDR};
 use std::env;
 use std::fs::File;
 use std::io::Write;
@@ -21,26 +24,83 @@ fn main() {
     // on the linker search path.
     let out = &PathBuf::from(env::var_os("OUT_DIR").unwrap());
 
-    #[cfg(all(not(feature = "analytics"), feature = "s112"))]
-    File::create(out.join("./memory.x"))
-        .unwrap()
-        .write_all(include_bytes!("./memory_s112_signed.x"))
-        .unwrap();
-    #[cfg(all(not(feature = "analytics"), feature = "s113"))]
-    File::create(out.join("./memory.x"))
-        .unwrap()
-        .write_all(include_bytes!("./memory_s113_signed.x"))
-        .unwrap();
+    #[cfg(all(not(feature = "debug"), feature = "s112"))]
+    let memory_x_content = format!(
+        r##"
+        BASE_BOOTLOADER_ADDR = {:#X};
+        BASE_APP_ADDR = {:#X};
+        SIGNATURE_HEADER_SIZE = {:#X};
 
-    #[cfg(all(feature = "analytics", feature = "s112"))]
+        MEMORY
+        {{
+            /* NOTE 1 K = 1 KiBi = 1024 bytes */
+            /* The SoftDevices S112 7.2.0 minimal RAM requirement is 3.7K (0xEB8) */
+            /* and use a maximum of 1.75K (0x700) for call stack. */
+            /* We choose to reserve 9968 bytes (0x26F0) at the begining of RAM */
+            FLASH (rx) : ORIGIN = 0x00000000 + BASE_APP_ADDR + SIGNATURE_HEADER_SIZE, LENGTH = BASE_BOOTLOADER_ADDR - BASE_APP_ADDR - SIGNATURE_HEADER_SIZE
+            RAM : ORIGIN = 0x20000000 + 9968, LENGTH = 24K - 9968
+        }}
+        "##,
+        BASE_BOOTLOADER_ADDR, BASE_APP_ADDR, SIGNATURE_HEADER_SIZE
+    );
+    #[cfg(all(not(feature = "debug"), feature = "s113"))]
+    let memory_x_content = format!(
+        r##"
+        BASE_BOOTLOADER_ADDR = {:#X};
+        BASE_APP_ADDR = {:#X};
+        SIGNATURE_HEADER_SIZE = {:#X};
+
+        MEMORY
+        {{
+            /* NOTE 1 K = 1 KiBi = 1024 bytes */
+            /* The SoftDevices S113 7.3.0 minimal RAM requirement is 4.4K (0x1198) */
+            /* and use a maximum of 1.75K (0x700) for call stack. */
+            /* We choose to reserve 10648 bytes (0x2998) at the begining of RAM */
+            FLASH (rx) : ORIGIN = 0x00000000 + BASE_APP_ADDR + SIGNATURE_HEADER_SIZE, LENGTH = BASE_BOOTLOADER_ADDR - BASE_APP_ADDR - SIGNATURE_HEADER_SIZE
+            RAM : ORIGIN = 0x20000000 + 10648, LENGTH = 24K - 10648
+        }}
+        "##,
+        BASE_BOOTLOADER_ADDR, BASE_APP_ADDR, SIGNATURE_HEADER_SIZE
+    );
+    #[cfg(all(feature = "debug", feature = "s112"))]
+    let memory_x_content = format!(
+        r##"
+        BASE_BOOTLOADER_ADDR = {:#X};
+        BASE_APP_ADDR = {:#X};
+
+        MEMORY
+        {{
+            /* NOTE 1 K = 1 KiBi = 1024 bytes */
+            /* The SoftDevices S112 7.2.0 minimal RAM requirement is 3.7K (0xEB8) */
+            /* and use a maximum of 1.75K (0x700) for call stack. */
+            /* We choose to reserve 9968 bytes (0x26F0) at the begining of RAM */
+            FLASH (rx) : ORIGIN = 0x00000000 + BASE_APP_ADDR, LENGTH = BASE_BOOTLOADER_ADDR - BASE_APP_ADDR
+            RAM : ORIGIN = 0x20000000 + 9968, LENGTH = 24K - 9968
+        }}
+        "##,
+        BASE_BOOTLOADER_ADDR, BASE_APP_ADDR
+    );
+    #[cfg(all(feature = "debug", feature = "s113"))]
+    let memory_x_content = format!(
+        r##"
+        BASE_BOOTLOADER_ADDR = {:#X};
+        BASE_APP_ADDR = {:#X};
+
+        MEMORY
+        {{
+            /* NOTE 1 K = 1 KiBi = 1024 bytes */
+            /* The SoftDevices S113 7.3.0 minimal RAM requirement is 4.4K (0x1198) */
+            /* and use a maximum of 1.75K (0x700) for call stack. */
+            /* We choose to reserve 10648 bytes (0x2998) at the begining of RAM */
+            FLASH (rx) : ORIGIN = 0x00000000 + BASE_APP_ADDR, LENGTH = BASE_BOOTLOADER_ADDR - BASE_APP_ADDR
+            RAM : ORIGIN = 0x20000000 + 10648, LENGTH = 24K - 10648
+        }}
+        "##,
+        BASE_BOOTLOADER_ADDR, BASE_APP_ADDR
+    );
     File::create(out.join("./memory.x"))
         .unwrap()
-        .write_all(include_bytes!("./memory_s112_unsigned.x"))
-        .unwrap();
-    #[cfg(all(feature = "analytics", feature = "s113"))]
-    File::create(out.join("./memory.x"))
-        .unwrap()
-        .write_all(include_bytes!("./memory_s113_unsigned.x"))
+        .write_all(memory_x_content.as_bytes())
         .unwrap();
 
     println!("cargo:rustc-link-search={}", out.display());
@@ -49,13 +109,13 @@ fn main() {
     // any file in the project changes. By specifying `memory.x`
     // here, we ensure the build script is only re-run when
     // `memory.x` is changed.
-    #[cfg(all(not(feature = "analytics"), feature = "s112"))]
+    #[cfg(all(not(feature = "debug"), feature = "s112"))]
     println!("cargo:rerun-if-changed=./memory_s112_signed.x");
-    #[cfg(all(not(feature = "analytics"), feature = "s113"))]
+    #[cfg(all(not(feature = "debug"), feature = "s113"))]
     println!("cargo:rerun-if-changed=./memory_s113_signed.x");
-    #[cfg(all(feature = "analytics", feature = "s112"))]
+    #[cfg(all(feature = "debug", feature = "s112"))]
     println!("cargo:rerun-if-changed=./memory_s112_unsigned.x");
-    #[cfg(all(feature = "analytics", feature = "s113"))]
+    #[cfg(all(feature = "debug", feature = "s113"))]
     println!("cargo:rerun-if-changed=./memory_s113_unsigned.x");
 
     println!("cargo:rustc-link-arg-bins=--nmagic");
