@@ -6,8 +6,8 @@
 /// The bootloader address is stored in a dedicated UICR register to allow the device
 /// to locate and execute the bootloader during startup. The UICR (User Information
 /// Configuration Registers) provide non-volatile storage for critical system parameters.
-#[link_section = ".uicr_bootloader_start_address"]
-pub static BOOTLOADER_ADDR: u32 = 0x27000;
+#[link_section = ".mbr_uicr_bootloader_addr"]
+pub static MBR_UICR_BOOTLOADER_ADDR: u32 = 0x27000;
 
 #[cfg(not(feature = "debug"))]
 #[used]
@@ -47,8 +47,8 @@ pub const BASE_APP_ADDR: u32 = 0x1B400;
 pub const APP_SIZE: u32 = BASE_BOOTLOADER_ADDR - BASE_APP_ADDR;
 
 /// Start address of the bootloader application code in flash memory
-/// This address (0x26000) marks where the bootloader code begins in flash.
-/// It must match the address specified in BOOTLOADER_ADDR above to ensure
+/// This address marks where the bootloader code begins in flash.
+/// It must match the address specified in MBR_UICR_BOOTLOADER_ADDR above to ensure
 /// proper execution of the bootloader during device startup.
 pub const BASE_BOOTLOADER_ADDR: u32 = 0x27000;
 

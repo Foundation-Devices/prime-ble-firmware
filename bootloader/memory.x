@@ -8,7 +8,7 @@ MEMORY
   /* No need to reserve RAM for SoftDevice as it is not executed at all in bootloader */
   FLASH (rx) : ORIGIN = 0x00000000 + 0x27000, LENGTH = 192K - 0x27000
   RAM : ORIGIN = 0x20000008, LENGTH = 24K - 8
-  uicr_bootloader_start_address (r) : ORIGIN = 0x10001014, LENGTH = 0x4
+  mbr_uicr_bootloader_addr (r) : ORIGIN = 0x10001014, LENGTH = 0x4
   uicr_approtect (r) : ORIGIN = 0x10001208, LENGTH = 0x4
 }
 
@@ -18,10 +18,10 @@ SECTIONS {
        . = ALIGN(4);
     } > uicr_approtect
 
-    .uicr_bootloader_start_address :  {
-       KEEP(*(.uicr_bootloader_start_address))
+    .mbr_uicr_bootloader_addr :  {
+       KEEP(*(.mbr_uicr_bootloader_addr))
        . = ALIGN(4);
-     } > uicr_bootloader_start_address
+     } > mbr_uicr_bootloader_addr
 };
 
 
