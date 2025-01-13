@@ -24,79 +24,35 @@ fn main() {
     // on the linker search path.
     let out = &PathBuf::from(env::var_os("OUT_DIR").unwrap());
 
-    #[cfg(all(not(feature = "debug"), feature = "s112"))]
+    #[cfg(feature = "debug")]
+    let signature_header_size = 0;
+    #[cfg(not(feature = "debug"))]
+    let signature_header_size = SIGNATURE_HEADER_SIZE;
+    #[cfg(feature = "s112")]
+    /* The SoftDevices S112 7.2.0 minimal RAM requirement is 3.7K (0xEB8) */
+    /* and use a maximum of 1.75K (0x700) for call stack. */
+    /* We choose to reserve 9968 bytes (0x26F0) at the begining of RAM */
+    let soft_device_ram_reserved = 9968;
+    #[cfg(feature = "s113")]
+    /* The SoftDevices S113 7.3.0 minimal RAM requirement is 4.4K (0x1198) */
+    /* and use a maximum of 1.75K (0x700) for call stack. */
+    /* We choose to reserve 10648 bytes (0x2998) at the begining of RAM */
+    let soft_device_ram_reserved = 10648;
+
     let memory_x_content = format!(
         r##"
         BASE_BOOTLOADER_ADDR = {:#X};
         BASE_APP_ADDR = {:#X};
-        SIGNATURE_HEADER_SIZE = {:#X};
+        SIGNATURE_HEADER_SIZE = {};
 
         MEMORY
         {{
             /* NOTE 1 K = 1 KiBi = 1024 bytes */
-            /* The SoftDevices S112 7.2.0 minimal RAM requirement is 3.7K (0xEB8) */
-            /* and use a maximum of 1.75K (0x700) for call stack. */
-            /* We choose to reserve 9968 bytes (0x26F0) at the begining of RAM */
             FLASH (rx) : ORIGIN = 0x00000000 + BASE_APP_ADDR + SIGNATURE_HEADER_SIZE, LENGTH = BASE_BOOTLOADER_ADDR - BASE_APP_ADDR - SIGNATURE_HEADER_SIZE
-            RAM : ORIGIN = 0x20000000 + 9968, LENGTH = 24K - 9968
+            RAM : ORIGIN = 0x20000000 + {}, LENGTH = 24K - {}
         }}
         "##,
-        BASE_BOOTLOADER_ADDR, BASE_APP_ADDR, SIGNATURE_HEADER_SIZE
-    );
-    #[cfg(all(not(feature = "debug"), feature = "s113"))]
-    let memory_x_content = format!(
-        r##"
-        BASE_BOOTLOADER_ADDR = {:#X};
-        BASE_APP_ADDR = {:#X};
-        SIGNATURE_HEADER_SIZE = {:#X};
-
-        MEMORY
-        {{
-            /* NOTE 1 K = 1 KiBi = 1024 bytes */
-            /* The SoftDevices S113 7.3.0 minimal RAM requirement is 4.4K (0x1198) */
-            /* and use a maximum of 1.75K (0x700) for call stack. */
-            /* We choose to reserve 10648 bytes (0x2998) at the begining of RAM */
-            FLASH (rx) : ORIGIN = 0x00000000 + BASE_APP_ADDR + SIGNATURE_HEADER_SIZE, LENGTH = BASE_BOOTLOADER_ADDR - BASE_APP_ADDR - SIGNATURE_HEADER_SIZE
-            RAM : ORIGIN = 0x20000000 + 10648, LENGTH = 24K - 10648
-        }}
-        "##,
-        BASE_BOOTLOADER_ADDR, BASE_APP_ADDR, SIGNATURE_HEADER_SIZE
-    );
-    #[cfg(all(feature = "debug", feature = "s112"))]
-    let memory_x_content = format!(
-        r##"
-        BASE_BOOTLOADER_ADDR = {:#X};
-        BASE_APP_ADDR = {:#X};
-
-        MEMORY
-        {{
-            /* NOTE 1 K = 1 KiBi = 1024 bytes */
-            /* The SoftDevices S112 7.2.0 minimal RAM requirement is 3.7K (0xEB8) */
-            /* and use a maximum of 1.75K (0x700) for call stack. */
-            /* We choose to reserve 9968 bytes (0x26F0) at the begining of RAM */
-            FLASH (rx) : ORIGIN = 0x00000000 + BASE_APP_ADDR, LENGTH = BASE_BOOTLOADER_ADDR - BASE_APP_ADDR
-            RAM : ORIGIN = 0x20000000 + 9968, LENGTH = 24K - 9968
-        }}
-        "##,
-        BASE_BOOTLOADER_ADDR, BASE_APP_ADDR
-    );
-    #[cfg(all(feature = "debug", feature = "s113"))]
-    let memory_x_content = format!(
-        r##"
-        BASE_BOOTLOADER_ADDR = {:#X};
-        BASE_APP_ADDR = {:#X};
-
-        MEMORY
-        {{
-            /* NOTE 1 K = 1 KiBi = 1024 bytes */
-            /* The SoftDevices S113 7.3.0 minimal RAM requirement is 4.4K (0x1198) */
-            /* and use a maximum of 1.75K (0x700) for call stack. */
-            /* We choose to reserve 10648 bytes (0x2998) at the begining of RAM */
-            FLASH (rx) : ORIGIN = 0x00000000 + BASE_APP_ADDR, LENGTH = BASE_BOOTLOADER_ADDR - BASE_APP_ADDR
-            RAM : ORIGIN = 0x20000000 + 10648, LENGTH = 24K - 10648
-        }}
-        "##,
-        BASE_BOOTLOADER_ADDR, BASE_APP_ADDR
+        BASE_BOOTLOADER_ADDR, BASE_APP_ADDR, signature_header_size, soft_device_ram_reserved, soft_device_ram_reserved
     );
     File::create(out.join("./memory.x"))
         .unwrap()
