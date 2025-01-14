@@ -40,10 +40,10 @@ softdevice-s113:
 
 # Flash and run Bluetooth test app with UART MPU
 bluetooth-app: softdevice
-    cd firmware && cargo run --release --features bluetooth-test,s112
+    cd firmware && cargo run --release --features analytics,s112
 
 bluetooth-app-s113: softdevice-s113
-    cd firmware && cargo run --release --features bluetooth-test,s113
+    cd firmware && cargo run --release --features analytics,s113
 
 # Flash and run debug version of main application without Cobs encoding and console UART
 bluetooth-app-debug: softdevice
