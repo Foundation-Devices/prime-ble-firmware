@@ -5,8 +5,9 @@
 use crate::RNG_HW;
 use crate::SEALED_SECRET;
 use crate::SEAL_IDX;
+use crate::SIGNATURE_HEADER_SIZE;
 use cortex_m::prelude::_embedded_hal_blocking_delay_DelayMs;
-use cosign2::{Header, VerificationResult};
+use cosign2::{Header, Trust, VerificationResult};
 use defmt::info;
 use embassy_time::Delay;
 use host_protocol::{Bootloader, HostProtocolMessage};
@@ -134,6 +135,7 @@ fn verify_image(image: &[u8]) -> (VerificationResult, Sha256) {
     const CF4: u32 = 11;
     const CF5: u32 = 13;
     const CF6: u32 = 17;
+    const CF7: u32 = 19;
     let ecc = EccVerifier::new();
     let sha = Sha256 { sha: [0; 32] };
 
@@ -141,25 +143,28 @@ fn verify_image(image: &[u8]) -> (VerificationResult, Sha256) {
     random_delay();
 
     // Parse and verify firmware signatures with multiple integrity checks
-    let res = Header::parse(image, &KNOWN_SIGNERS, &sha, &ecc);
+    let res = Header::parse(image, &KNOWN_SIGNERS, &sha, &ecc, SIGNATURE_HEADER_SIZE as usize);
     if res.is_ok() {
         control_flow_integrity_counter += CF1;
         if let Ok(Some(header)) = res {
             control_flow_integrity_counter += CF2;
             if *header.firmware_hash() != [0; 32] {
                 control_flow_integrity_counter += CF3;
-                if image.len() > Header::SIZE {
+                if [Trust::FullyTrusted, Trust::ThirdParty, Trust::Disabled].contains(&header.trust()) {
                     control_flow_integrity_counter += CF4;
-                    let firmware_bytes = &image[Header::SIZE..];
-                    #[allow(clippy::collapsible_if)]
-                    if firmware_bytes.len() as u32 == header.firmware_size() {
+                    if image.len() > SIGNATURE_HEADER_SIZE as usize {
                         control_flow_integrity_counter += CF5;
-                        if core::hint::black_box(firmware_bytes.len() as u32 == header.firmware_size()) {
+                        let firmware_bytes = &image[SIGNATURE_HEADER_SIZE as usize..];
+                        #[allow(clippy::collapsible_if)]
+                        if firmware_bytes.len() as u32 == header.firmware_size() {
                             control_flow_integrity_counter += CF6;
-                            let cfi_counter_ptr = &control_flow_integrity_counter as *const u32;
-                            if unsafe { cfi_counter_ptr.read_volatile() } == CF1 + CF2 + CF3 + CF4 + CF5 + CF6 {
-                                let sha256 = header.firmware_hash();
-                                return (VerificationResult::Valid, Sha256 { sha: *sha256 });
+                            if core::hint::black_box(firmware_bytes.len() as u32 == header.firmware_size()) {
+                                control_flow_integrity_counter += CF7;
+                                let cfi_counter_ptr = &control_flow_integrity_counter as *const u32;
+                                if unsafe { cfi_counter_ptr.read_volatile() } == CF1 + CF2 + CF3 + CF4 + CF5 + CF6 + CF7 {
+                                    let sha256 = header.firmware_hash();
+                                    return (VerificationResult::Valid, Sha256 { sha: *sha256 });
+                                }
                             }
                         }
                     }
@@ -172,7 +177,7 @@ fn verify_image(image: &[u8]) -> (VerificationResult, Sha256) {
 
 /// Extracts version and build date information from the firmware header
 fn read_version_and_build_date(image: &[u8]) -> Option<([u8; 20], [u8; 14])> {
-    if let Ok(Some(header)) = Header::parse_unverified(image) {
+    if let Ok(Some(header)) = Header::parse_unverified(image, SIGNATURE_HEADER_SIZE as usize, true) {
         let mut version_bytes = [0u8; 20];
         let str_bytes = header.version().as_bytes();
         if str_bytes.len() > version_bytes.len() {

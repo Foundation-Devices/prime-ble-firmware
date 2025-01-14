@@ -22,7 +22,7 @@ use host_protocol::State;
 use panic_probe as _;
 
 use consts::{APP_SIZE, FLASH_PAGE, SEALED_SECRET, SEAL_IDX};
-use consts_global::{BASE_APP_ADDR, BASE_BOOTLOADER_ADDR, UICR_SECRET_SIZE, UICR_SECRET_START};
+use consts_global::{BASE_APP_ADDR, BASE_BOOTLOADER_ADDR, SIGNATURE_HEADER_SIZE, UICR_SECRET_SIZE, UICR_SECRET_START};
 use core::cell::RefCell;
 use cosign2::{Header, VerificationResult};
 use crc::{Crc, CRC_32_ISCSI};
@@ -383,7 +383,7 @@ async fn main(_spawner: Spawner) {
                                 // Get firmware version from header
                                 Bootloader::FirmwareVersion => {
                                     let header_slice = get_fw_image_slice(BASE_APP_ADDR, APP_SIZE);
-                                    if let Ok(Some(header)) = Header::parse_unverified(header_slice) {
+                                    if let Ok(Some(header)) = Header::parse_unverified(header_slice, SIGNATURE_HEADER_SIZE as usize, true) {
                                         let version = header.version();
                                         ack_msg_send(HostProtocolMessage::Bootloader(Bootloader::AckFirmwareVersion { version }), &mut tx)
                                     } else {

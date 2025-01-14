@@ -19,7 +19,7 @@ s113 = ["nrf-softdevice/s113", "nrf-softdevice-s113", "consts_global/s113"]
 consts_global = { path = "../consts", package = "consts" }
 cortex-m = { workspace = true }
 cortex-m-rt = { workspace = true }
-cosign2 = { git = "https://github.com/Foundation-Devices/keyOS", default-features = false }
+cosign2 = { version = "0.4.0", git = "https://github.com/Foundation-Devices/keyOS", default-features = false }
 crc = { workspace = true }
 critical-section = "1.1.2"
 defmt = { workspace = true }

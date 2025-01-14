@@ -370,9 +370,9 @@ checksum = "baf1de4339761588bc0619e3cbc0120ee582ebb74b53b4efbf79117bd2da40fd"
 
 [[package]]
 name = "chrono"
-version = "0.4.38"
+version = "0.4.39"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a21f936df1771bf62b77f047b726c4625ff2e8aa607c01ec06e5a05bd8463401"
+checksum = "7e36cc9d416881d2e24f9a963be5fb1cd90966419ac844274161d10488b3e825"
 dependencies = [
  "num-traits",
 ]
@@ -524,8 +524,8 @@ dependencies = [
 
 [[package]]
 name = "cosign2"
-version = "0.2.0"
-source = "git+https://github.com/Foundation-Devices/keyOS#bb5d1f21243bcdf9228de97b19ab6b706c20e346"
+version = "0.4.0"
+source = "git+https://github.com/Foundation-Devices/keyOS#3dec8c6f56271d3acf4b9defb4e5e11b0a975305"
 dependencies = [
  "chrono",
 ]
