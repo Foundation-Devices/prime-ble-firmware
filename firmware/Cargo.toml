@@ -20,6 +20,9 @@ s113 = [
     "consts/dle",
 ]
 
+# Hardware is on rev C
+hw-rev-c = []
+
 # Print some statistics while running
 analytics = []
 
@@ -50,9 +53,11 @@ embassy-time = { version = "0.3.2", features = [
     "defmt",
     "defmt-timestamp-uptime",
 ] }
-embedded-io-async = { version = "0.6.1", features = ["defmt-03"] }
+embedded-io-async = { version = "0.6.1", features = [
+    "defmt-03",
+] } # only for revA
 futures = { version = "0.3.31", default-features = false }
-heapless = { version = "0.8.0", features = ["defmt-03"] }
+heapless = { workspace = true }
 hmac = { workspace = true }
 host-protocol = { path = "../host-protocol" }
 nrf-softdevice = { git = "https://github.com/embassy-rs/nrf-softdevice.git", features = [
@@ -69,7 +74,7 @@ nrf-softdevice-s113 = { git = "https://github.com/embassy-rs/nrf-softdevice.git"
 panic-probe = { workspace = true }
 postcard = { workspace = true }
 sha2 = { workspace = true }
-static_cell = "2.1.0"
+static_cell = "2.1.0" # only for revA
 
 [build-dependencies]
 consts = { path = "../consts" }

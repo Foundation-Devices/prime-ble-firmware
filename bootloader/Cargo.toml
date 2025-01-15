@@ -15,6 +15,9 @@ debug = []
 s112 = ["nrf-softdevice/s112", "nrf-softdevice-s112", "consts_global/s112"]
 s113 = ["nrf-softdevice/s113", "nrf-softdevice-s113", "consts_global/s113"]
 
+# Hardware is on rev C
+hw-rev-c = []
+
 [dependencies]
 consts_global = { path = "../consts", package = "consts" }
 cortex-m = { workspace = true }
@@ -42,6 +45,7 @@ embassy-time = { version = "0.3.2", features = [
     "defmt-timestamp-uptime",
 ] }
 embedded-storage = "0.3.1"
+heapless = { workspace = true }
 hmac = { workspace = true }
 host-protocol = { path = "../host-protocol" }
 micro-ecc-sys = { git = "https://github.com/Foundation-Devices/micro-ecc-sys.git", default-features = false }

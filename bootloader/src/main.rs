@@ -21,9 +21,9 @@ use embassy_nrf::{self as _};
 use host_protocol::State;
 use panic_probe as _;
 
-use consts::{APP_SIZE, FLASH_PAGE, SEALED_SECRET, SEAL_IDX};
+use consts::{FLASH_PAGE, SEALED_SECRET, SEAL_IDX};
 use consts_global::{BASE_APP_ADDR, BASE_BOOTLOADER_ADDR, SIGNATURE_HEADER_SIZE, UICR_SECRET_SIZE, UICR_SECRET_START};
-use core::cell::RefCell;
+use core::{cell::RefCell, str::FromStr};
 use cosign2::{Header, VerificationResult};
 use crc::{Crc, CRC_32_ISCSI};
 use defmt::{debug, error, info, trace};
@@ -32,8 +32,17 @@ use embassy_nrf::{
     bind_interrupts,
     gpio::{Level, Output, OutputDrive},
     nvmc::Nvmc,
-    peripherals::{self, RNG, UARTE0},
+    peripherals::RNG,
     rng::{self, Rng},
+};
+#[cfg(feature = "hw-rev-c")]
+use embassy_nrf::{
+    peripherals::SPI0,
+    spis::{self, Spis},
+};
+#[cfg(not(feature = "hw-rev-c"))]
+use embassy_nrf::{
+    peripherals::UARTE0,
     uarte::{self, UarteTx},
 };
 use embassy_sync::blocking_mutex::CriticalSectionMutex;
@@ -50,7 +59,7 @@ use postcard::accumulator::{CobsAccumulator, FeedResult};
 use postcard::to_slice_cobs;
 use serde::{Deserialize, Serialize};
 use sha2::Sha256 as ShaChallenge;
-use verify::{check_fw, get_fw_image_slice, write_secret};
+use verify::{get_fw_image_slice, verify_fw_image, write_secret};
 
 // Global mutex for hardware RNG access
 static RNG_HW: CriticalSectionMutex<RefCell<Option<Rng<'_, RNG>>>> = Mutex::new(RefCell::new(None));
@@ -59,9 +68,15 @@ static RNG_HW: CriticalSectionMutex<RefCell<Option<Rng<'_, RNG>>>> = Mutex::new(
 static mut IRQ_PIN: Option<Output<'static>> = None;
 
 // Bind hardware interrupts to their handlers
+#[cfg(not(feature = "hw-rev-c"))]
 bind_interrupts!(struct Irqs {
-    UARTE0_UART0 => uarte::InterruptHandler<peripherals::UARTE0>;
-    RNG => rng::InterruptHandler<peripherals::RNG>;
+    UARTE0_UART0 => uarte::InterruptHandler<UARTE0>;
+    RNG => rng::InterruptHandler<RNG>;
+});
+#[cfg(feature = "hw-rev-c")]
+bind_interrupts!(struct Irqs {
+    SPIM0_SPIS0_SPI0 => spis::InterruptHandler<SPI0>;
+    RNG => rng::InterruptHandler<RNG>;
 });
 
 /// Tracks the state of firmware updates
@@ -90,60 +105,24 @@ fn assert_out_irq() {
     }
 }
 
-/// Updates a chunk of flash memory with new firmware data
-///
-/// Validates that the write is within bounds and sends acknowledgement messages
-/// back over UART with CRC verification
-fn update_chunk<'a>(boot_status: &'a mut BootState, idx: usize, data: &'a [u8], flash: &'a mut Nvmc, tx: &mut UarteTx<UARTE0>) {
-    // Calculate target flash address
-    let cursor = BASE_APP_ADDR + boot_status.offset;
-
-    // Validate write is within application area
-    match cursor {
-        (BASE_APP_ADDR..=BASE_BOOTLOADER_ADDR) => {}
-        _ => {
-            ack_msg_send(
-                HostProtocolMessage::Bootloader(Bootloader::FirmwareOutOfBounds { block_idx: idx }),
-                tx,
-            );
-            return;
-        }
-    }
-
-    match flash.write(cursor, data) {
-        Ok(()) => {
-            boot_status.offset += data.len() as u32;
-            // Update status and sector tracking
-            boot_status.actual_sector = BASE_APP_ADDR + (boot_status.offset / FLASH_PAGE) * FLASH_PAGE;
-            debug!("Updating flash page starting at addr: {:02X}", boot_status.actual_sector);
-            debug!("offset : {:02X}", boot_status.actual_sector + boot_status.offset % FLASH_PAGE);
-
-            // Calculate CRC of written data
-            let crc = Crc::<u32>::new(&CRC_32_ISCSI);
-            let crc_pkt = crc.checksum(data);
-
-            boot_status.actual_pkt_idx = idx as u32;
-
-            // Send success acknowledgement with CRC
-            ack_msg_send(
-                HostProtocolMessage::Bootloader(Bootloader::AckWithIdxCrc {
-                    block_idx: idx,
-                    crc: crc_pkt,
-                }),
-                tx,
-            );
-        }
-        Err(_) => ack_msg_send(HostProtocolMessage::Bootloader(Bootloader::NackWithIdx { block_idx: idx }), tx),
-    };
-}
-
 /// Sends a message over UART using COBS encoding
 #[inline(never)]
-pub fn ack_msg_send(message: HostProtocolMessage, tx: &mut UarteTx<UARTE0>) {
+#[cfg(not(feature = "hw-rev-c"))]
+fn ack_msg_send(message: HostProtocolMessage, tx: &mut UarteTx<UARTE0>) {
     let mut buf_cobs = [0_u8; COBS_MAX_MSG_SIZE];
     let cobs_ack = to_slice_cobs(&message, &mut buf_cobs).unwrap();
     let _ = tx.blocking_write(cobs_ack);
     assert_out_irq();
+}
+
+/// Sends a message over SPI using COBS encoding
+#[inline(never)]
+#[cfg(feature = "hw-rev-c")]
+fn ack_msg_send(message: HostProtocolMessage, spi: &mut Spis<SPI0>) {
+    let mut buf_cobs = [0_u8; COBS_MAX_MSG_SIZE];
+    let cobs_ack = to_slice_cobs(&message, &mut buf_cobs).unwrap();
+    assert_out_irq(); // with SPI, we assert the IRQ line before sending
+    let _ = spi.blocking_write(cobs_ack);
 }
 
 #[cfg(not(feature = "debug"))]
@@ -257,20 +236,30 @@ async fn main(_spawner: Spawner) {
 
     let p = embassy_nrf::init(Default::default());
 
-    // Configure UART
-    let mut config_uart = uarte::Config::default();
-    config_uart.parity = uarte::Parity::EXCLUDED;
+    #[cfg(not(feature = "hw-rev-c"))]
+    let (mut tx, mut rx) = {
+        // Configure UART
+        let mut config_uart = uarte::Config::default();
+        config_uart.parity = uarte::Parity::EXCLUDED;
 
-    #[cfg(not(feature = "debug"))]
-    let (rxd, txd, baud_rate) = (p.P0_14, p.P0_12, uarte::Baudrate::BAUD460800);
+        #[cfg(not(feature = "debug"))]
+        let (rxd, txd, baud_rate) = (p.P0_14, p.P0_12, uarte::Baudrate::BAUD460800);
 
-    #[cfg(feature = "debug")]
-    let (rxd, txd, baud_rate) = (p.P0_16, p.P0_18, uarte::Baudrate::BAUD460800);
+        #[cfg(feature = "debug")]
+        let (rxd, txd, baud_rate) = (p.P0_16, p.P0_18, uarte::Baudrate::BAUD460800);
 
-    config_uart.baudrate = baud_rate;
+        config_uart.baudrate = baud_rate;
 
-    let uart = uarte::Uarte::new(p.UARTE0, Irqs, rxd, txd, config_uart);
-    let (mut tx, mut rx) = uart.split_with_idle(p.TIMER0, p.PPI_CH0, p.PPI_CH1);
+        let uart = uarte::Uarte::new(p.UARTE0, Irqs, rxd, txd, config_uart);
+        uart.split_with_idle(p.TIMER0, p.PPI_CH0, p.PPI_CH1)
+    };
+
+    #[cfg(feature = "hw-rev-c")]
+    let mut spi = {
+        // Configure SPI
+        let config_spi = spis::Config::default();
+        Spis::new(p.SPI0, Irqs, p.P0_18, p.P0_16, p.P0_14, p.P0_12, config_spi)
+    };
 
     // Initialize hardware RNG
     let rng = Rng::new(p.RNG, Irqs);
@@ -289,185 +278,252 @@ async fn main(_spawner: Spawner) {
     // Check if secrets are sealed
     let seal = unsafe { &*nrf52805_pac::UICR::ptr() }.customer[SEAL_IDX].read().customer().bits();
 
-    // Send startup message (console only)
-    #[cfg(feature = "debug")]
-    {
-        let mut buf = [0; 10];
-        buf.copy_from_slice(b"Bootloader");
-        let _ = tx.write(&buf).await;
-    }
+    // Send startup message (UART console only)
+    // Removed to save Flash Space
+    // #[cfg(all(feature = "debug", not(feature = "hw-rev-c")))]
+    // {
+    //     let mut buf = [0; 10];
+    //     buf.copy_from_slice(b"Bootloader");
+    //     let _ = tx.write(&buf).await;
+    // }
     let mut boot_status: BootState = Default::default();
+
+    let mut raw_buf = [0u8; 512];
+    let mut cobs_buf: CobsAccumulator<COBS_MAX_MSG_SIZE> = CobsAccumulator::new();
+    let mut firmware_version: heapless::String<20>;
 
     // Main command processing loop
     loop {
-        let mut raw_buf = [0u8; 512];
-        let mut cobs_buf: CobsAccumulator<COBS_MAX_MSG_SIZE> = CobsAccumulator::new();
+        #[cfg(not(feature = "hw-rev-c"))]
+        let n = rx.read_until_idle(&mut raw_buf).await;
+        #[cfg(feature = "hw-rev-c")]
+        let n = spi.read(&mut raw_buf).await;
 
-        // Read and process UART data
-        while let Ok(n) = rx.read_until_idle(&mut raw_buf).await {
+        if let Ok(n) = n {
             if n == 0 {
-                break;
+                continue;
             }
 
             let buf = &raw_buf[..n];
             let mut window: &[u8] = buf;
+            let mut resp;
 
             'cobs: while !window.is_empty() {
-                window = match cobs_buf.feed_ref::<HostProtocolMessage>(window) {
+                (window, resp) = match cobs_buf.feed_ref::<HostProtocolMessage>(window) {
                     FeedResult::Consumed => {
                         trace!("consumed");
                         break 'cobs;
                     }
                     FeedResult::OverFull(new_wind) => {
                         trace!("overfull");
-                        let msg = HostProtocolMessage::PostcardError(PostcardError::OverFull);
-                        ack_msg_send(msg, &mut tx);
-                        new_wind
+                        (new_wind, Some(HostProtocolMessage::PostcardError(PostcardError::OverFull)))
                     }
                     FeedResult::DeserError(new_wind) => {
                         trace!("DeserError");
-                        let msg = HostProtocolMessage::PostcardError(PostcardError::Deser);
-                        ack_msg_send(msg, &mut tx);
-                        new_wind
+                        (new_wind, Some(HostProtocolMessage::PostcardError(PostcardError::Deser)))
                     }
                     FeedResult::Success { data, remaining } => {
                         trace!("Success");
                         debug!("Remaining {} bytes", remaining.len());
-
-                        match data {
-                            HostProtocolMessage::Bootloader(boot_msg) => match boot_msg {
-                                // Handle firmware erase command
-                                Bootloader::EraseFirmware => {
-                                    trace!("Erase firmware");
-                                    let start = BASE_APP_ADDR / FLASH_PAGE * FLASH_PAGE;
-                                    debug!("start: 0x{:08X}", start);
-                                    if start == BASE_APP_ADDR {
-                                        if flash.erase(BASE_APP_ADDR, BASE_BOOTLOADER_ADDR).is_ok() {
-                                            ack_msg_send(HostProtocolMessage::Bootloader(Bootloader::AckEraseFirmware), &mut tx);
-                                            boot_status = Default::default();
-                                        } else {
-                                            ack_msg_send(HostProtocolMessage::Bootloader(Bootloader::NackEraseFirmware), &mut tx);
-                                            error!("erase error");
-                                        }
-                                    } else {
-                                        let mut saved = [0; (BASE_APP_ADDR % FLASH_PAGE) as usize];
-                                        if flash.read(start, &mut saved).is_err() {
-                                            ack_msg_send(HostProtocolMessage::Bootloader(Bootloader::NackEraseFirmwareRead), &mut tx);
-                                            error!("read error");
-                                        } else {
-                                            if flash.erase(start, BASE_BOOTLOADER_ADDR).is_ok() {
+                        (
+                            remaining,
+                            match data {
+                                HostProtocolMessage::Bootloader(boot_msg) => match boot_msg {
+                                    // Handle firmware erase command
+                                    Bootloader::EraseFirmware => {
+                                        trace!("Erase firmware");
+                                        let start = BASE_APP_ADDR / FLASH_PAGE * FLASH_PAGE;
+                                        debug!("start: 0x{:08X}", start);
+                                        if start == BASE_APP_ADDR {
+                                            if flash.erase(BASE_APP_ADDR, BASE_BOOTLOADER_ADDR).is_ok() {
                                                 boot_status = Default::default();
-                                                if flash.write(start, &saved).is_err() {
-                                                    ack_msg_send(
-                                                        HostProtocolMessage::Bootloader(Bootloader::NackEraseFirmwareWrite),
-                                                        &mut tx,
-                                                    );
-                                                    error!("write error");
+                                                Some(HostProtocolMessage::Bootloader(Bootloader::AckEraseFirmware))
+                                            } else {
+                                                error!("erase error");
+                                                Some(HostProtocolMessage::Bootloader(Bootloader::NackEraseFirmware))
+                                            }
+                                        } else {
+                                            let mut saved = [0; (BASE_APP_ADDR % FLASH_PAGE) as usize];
+                                            if flash.read(start, &mut saved).is_err() {
+                                                error!("read error");
+                                                Some(HostProtocolMessage::Bootloader(Bootloader::NackEraseFirmwareRead))
+                                            } else {
+                                                if flash.erase(start, BASE_BOOTLOADER_ADDR).is_ok() {
+                                                    boot_status = Default::default();
+                                                    if flash.write(start, &saved).is_err() {
+                                                        error!("write error");
+                                                        Some(HostProtocolMessage::Bootloader(Bootloader::NackEraseFirmwareWrite))
+                                                    } else {
+                                                        Some(HostProtocolMessage::Bootloader(Bootloader::AckEraseFirmware))
+                                                    }
                                                 } else {
-                                                    ack_msg_send(HostProtocolMessage::Bootloader(Bootloader::AckEraseFirmware), &mut tx);
+                                                    error!("erase error");
+                                                    Some(HostProtocolMessage::Bootloader(Bootloader::NackEraseFirmware))
+                                                }
+                                            }
+                                        }
+                                    }
+                                    // Handle firmware block write
+                                    Bootloader::WriteFirmwareBlock {
+                                        block_idx: idx,
+                                        block_data: data,
+                                    } => {
+                                        // Calculate target flash address
+                                        let cursor = BASE_APP_ADDR + boot_status.offset;
+                                        Some(
+                                            // Validate write is within application area
+                                            HostProtocolMessage::Bootloader(if (BASE_APP_ADDR..=BASE_BOOTLOADER_ADDR).contains(&cursor) {
+                                                match flash.write(cursor, data) {
+                                                    Ok(()) => {
+                                                        boot_status.offset += data.len() as u32;
+                                                        // Update status and sector tracking
+                                                        boot_status.actual_sector =
+                                                            BASE_APP_ADDR + (boot_status.offset / FLASH_PAGE) * FLASH_PAGE;
+                                                        debug!("Updating flash page starting at addr: {:02X}", boot_status.actual_sector);
+                                                        debug!(
+                                                            "offset : {:02X}",
+                                                            boot_status.actual_sector + boot_status.offset % FLASH_PAGE
+                                                        );
+
+                                                        // Calculate CRC of written data
+                                                        let crc = Crc::<u32>::new(&CRC_32_ISCSI);
+                                                        let crc_pkt = crc.checksum(data);
+
+                                                        boot_status.actual_pkt_idx = idx as u32;
+
+                                                        // Send success acknowledgement with CRC
+                                                        Bootloader::AckWithIdxCrc {
+                                                            block_idx: idx,
+                                                            crc: crc_pkt,
+                                                        }
+                                                    }
+                                                    Err(_) => Bootloader::NackWithIdx { block_idx: idx },
                                                 }
                                             } else {
-                                                ack_msg_send(HostProtocolMessage::Bootloader(Bootloader::NackEraseFirmware), &mut tx);
-                                                error!("erase error");
+                                                Bootloader::FirmwareOutOfBounds { block_idx: idx }
+                                            }),
+                                        )
+                                    }
+                                    // Get firmware version from header
+                                    Bootloader::FirmwareVersion => {
+                                        if let Ok(Some(header)) = Header::parse_unverified(
+                                            get_fw_image_slice(BASE_APP_ADDR, SIGNATURE_HEADER_SIZE),
+                                            SIGNATURE_HEADER_SIZE as usize,
+                                            true,
+                                        ) {
+                                            firmware_version = heapless::String::from_str(header.version()).unwrap();
+                                            Some(HostProtocolMessage::Bootloader(Bootloader::AckFirmwareVersion {
+                                                version: &firmware_version,
+                                            }))
+                                        } else {
+                                            Some(HostProtocolMessage::Bootloader(Bootloader::NoCosignHeader))
+                                        }
+                                    }
+                                    // Get bootloader version
+                                    Bootloader::BootloaderVersion => {
+                                        let version = env!("CARGO_PKG_VERSION");
+                                        Some(HostProtocolMessage::Bootloader(Bootloader::AckBootloaderVersion { version }))
+                                    }
+                                    // Set challenge secret
+                                    Bootloader::ChallengeSet { secret } => {
+                                        let result = if seal == SEALED_SECRET {
+                                            SecretSaveResponse::NotAllowed
+                                        } else {
+                                            unsafe {
+                                                match write_secret(secret) {
+                                                    true => {
+                                                        info!("Challenge secret is saved");
+                                                        SecretSaveResponse::Sealed
+                                                    }
+                                                    false => SecretSaveResponse::Error,
+                                                }
                                             }
                                         };
+                                        Some(HostProtocolMessage::Bootloader(Bootloader::AckChallengeSet { result }))
                                     }
-                                }
-                                // Handle firmware block write
-                                Bootloader::WriteFirmwareBlock {
-                                    block_idx: idx,
-                                    block_data: data,
-                                } => {
-                                    update_chunk(&mut boot_status, idx, data, &mut flash, &mut tx);
-                                }
-                                // Get firmware version from header
-                                Bootloader::FirmwareVersion => {
-                                    let header_slice = get_fw_image_slice(BASE_APP_ADDR, APP_SIZE);
-                                    if let Ok(Some(header)) = Header::parse_unverified(header_slice, SIGNATURE_HEADER_SIZE as usize, true) {
-                                        let version = header.version();
-                                        ack_msg_send(HostProtocolMessage::Bootloader(Bootloader::AckFirmwareVersion { version }), &mut tx)
-                                    } else {
-                                        ack_msg_send(HostProtocolMessage::Bootloader(Bootloader::NoCosignHeader), &mut tx);
-                                    }
-                                }
-                                // Get bootloader version
-                                Bootloader::BootloaderVersion => {
-                                    let version = env!("CARGO_PKG_VERSION");
-                                    ack_msg_send(
-                                        HostProtocolMessage::Bootloader(Bootloader::AckBootloaderVersion { version }),
-                                        &mut tx,
-                                    )
-                                }
-                                // Set challenge secret
-                                Bootloader::ChallengeSet { secret } => {
-                                    let result = if seal == SEALED_SECRET {
-                                        SecretSaveResponse::NotAllowed
-                                    } else {
-                                        unsafe {
-                                            match write_secret(secret) {
-                                                true => {
-                                                    info!("Challenge secret is saved");
-                                                    SecretSaveResponse::Sealed
+                                    // Handle request to boot into firmware
+                                    Bootloader::BootFirmware => {
+                                        // Double check firmware validity before jumping
+                                        match verify_fw_image() {
+                                            Some((VerificationResult::Valid, hash)) => {
+                                                info!("fw is valid");
+                                                let msg = HostProtocolMessage::Bootloader(Bootloader::AckVerifyFirmware {
+                                                    result: true,
+                                                    hash: hash.sha,
+                                                });
+                                                #[cfg(not(feature = "debug"))]
+                                                flash_protect_sd_application();
+                                                #[cfg(not(feature = "hw-rev-c"))]
+                                                {
+                                                    // immedate send response before jumping
+                                                    ack_msg_send(msg, &mut tx);
+                                                    // Clean up UART resources before jumping
+                                                    drop(tx);
+                                                    drop(rx);
                                                 }
-                                                false => SecretSaveResponse::Error,
+                                                #[cfg(feature = "hw-rev-c")]
+                                                {
+                                                    // immedate send response before jumping
+                                                    ack_msg_send(msg, &mut spi);
+                                                    // Clean up SPI resources before jumping
+                                                    drop(spi);
+                                                }
+                                                // Jump to application code if firmware is valid
+                                                unsafe {
+                                                    jump_to_app();
+                                                }
                                             }
+                                            Some((VerificationResult::Invalid, hash)) => {
+                                                info!("fw is invalid");
+                                                Some(HostProtocolMessage::Bootloader(Bootloader::AckVerifyFirmware {
+                                                    result: false,
+                                                    hash: hash.sha,
+                                                }))
+                                            }
+                                            None => Some(HostProtocolMessage::Bootloader(Bootloader::NoCosignHeader)),
                                         }
-                                    };
-                                    ack_msg_send(HostProtocolMessage::Bootloader(Bootloader::AckChallengeSet { result }), &mut tx);
-                                }
-                                // Handle request to boot into firmware
-                                Bootloader::BootFirmware => {
-                                    // Double check firmware validity before jumping
-                                    let image_slice = get_fw_image_slice(BASE_APP_ADDR, APP_SIZE);
-                                    let (msg, verif_res) = check_fw(image_slice);
-                                    ack_msg_send(msg, &mut tx);
-
-                                    if let VerificationResult::Valid = verif_res {
-                                        #[cfg(not(feature = "debug"))]
-                                        flash_protect_sd_application();
-                                        // Clean up UART resources before jumping
+                                    }
+                                    _ => None,
+                                },
+                                // Handle reset command
+                                HostProtocolMessage::Reset => {
+                                    #[cfg(not(feature = "hw-rev-c"))]
+                                    {
                                         drop(tx);
                                         drop(rx);
-                                        // Jump to application code if firmware is valid
-                                        unsafe {
-                                            jump_to_app();
-                                        }
                                     }
+                                    #[cfg(feature = "hw-rev-c")]
+                                    drop(spi);
+                                    cortex_m::peripheral::SCB::sys_reset();
                                 }
-                                _ => (),
+                                // Handle challenge-response authentication
+                                HostProtocolMessage::ChallengeRequest { nonce } => {
+                                    type HmacSha256 = Hmac<ShaChallenge>;
+                                    let secret_as_slice =
+                                        unsafe { core::slice::from_raw_parts(UICR_SECRET_START as *const u8, UICR_SECRET_SIZE as usize) };
+                                    // debug!("slice {:02X}", secret_as_slice);
+                                    Some(if let Ok(mut mac) = HmacSha256::new_from_slice(secret_as_slice) {
+                                        mac.update(&nonce.to_be_bytes());
+                                        let result = mac.finalize().into_bytes();
+                                        // debug!("{=[u8;32]:#X}", result.into());
+                                        HostProtocolMessage::ChallengeResult { result: result.into() }
+                                    } else {
+                                        HostProtocolMessage::ChallengeResult { result: [0xFF; 32] }
+                                    })
+                                }
+                                // Report bootloader state
+                                HostProtocolMessage::GetState => Some(HostProtocolMessage::AckState(State::FirmwareUpgrade)),
+                                _ => Some(HostProtocolMessage::InappropriateMessage(State::FirmwareUpgrade)),
                             },
-                            // Handle reset command
-                            HostProtocolMessage::Reset => {
-                                drop(tx);
-                                drop(rx);
-                                cortex_m::peripheral::SCB::sys_reset();
-                            }
-                            // Handle challenge-response authentication
-                            HostProtocolMessage::ChallengeRequest { nonce } => {
-                                type HmacSha256 = Hmac<ShaChallenge>;
-                                let secret_as_slice =
-                                    unsafe { core::slice::from_raw_parts(UICR_SECRET_START as *const u8, UICR_SECRET_SIZE as usize) };
-                                debug!("slice {:02X}", secret_as_slice);
-
-                                let result = if let Ok(mut mac) = HmacSha256::new_from_slice(secret_as_slice) {
-                                    mac.update(&nonce.to_be_bytes());
-                                    let result = mac.finalize().into_bytes();
-                                    debug!("{=[u8;32]:#X}", result.into());
-                                    HostProtocolMessage::ChallengeResult { result: result.into() }
-                                } else {
-                                    HostProtocolMessage::ChallengeResult { result: [0xFF; 32] }
-                                };
-                                ack_msg_send(result, &mut tx);
-                            }
-                            // Report bootloader state
-                            HostProtocolMessage::GetState => {
-                                ack_msg_send(HostProtocolMessage::AckState(State::FirmwareUpgrade), &mut tx);
-                            }
-                            _ => ack_msg_send(HostProtocolMessage::InappropriateMessage(State::FirmwareUpgrade), &mut tx),
-                        };
-                        remaining
+                        )
                     }
                 };
+                if let Some(resp) = resp {
+                    #[cfg(not(feature = "hw-rev-c"))]
+                    ack_msg_send(resp, &mut tx);
+                    #[cfg(feature = "hw-rev-c")]
+                    ack_msg_send(resp, &mut spi);
+                }
             }
             embassy_time::Timer::after_millis(1).await;
         }

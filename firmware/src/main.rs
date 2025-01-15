@@ -21,23 +21,40 @@ use comms::comms_task;
 use consts::{ATT_MTU, BT_MAX_NUM_PKT};
 use defmt::{info, *};
 use embassy_executor::Spawner;
-use embassy_nrf::buffered_uarte::{self, BufferedUarte};
+use embassy_nrf::bind_interrupts;
 use embassy_nrf::gpio::{Level, Output, OutputDrive};
 use embassy_nrf::interrupt::{self, InterruptExt};
-use embassy_nrf::{bind_interrupts, peripherals, uarte};
+#[cfg(not(feature = "hw-rev-c"))]
+use embassy_nrf::{
+    buffered_uarte::{self, BufferedUarte},
+    peripherals::UARTE0,
+    uarte,
+};
+#[cfg(feature = "hw-rev-c")]
+use embassy_nrf::{
+    peripherals::SPI0,
+    spis::{self, Spis},
+};
 use embassy_sync::blocking_mutex::raw::ThreadModeRawMutex;
 use embassy_sync::channel::Channel;
 use embassy_sync::mutex::Mutex;
 use futures::pin_mut;
 use heapless::Vec;
+#[cfg(not(feature = "hw-rev-c"))]
 use host_protocol::COBS_MAX_MSG_SIZE;
 use nrf_softdevice::ble::get_address;
 use nrf_softdevice::Softdevice;
 use server::{initialize_sd, run_bluetooth, stop_bluetooth, Server};
+#[cfg(not(feature = "hw-rev-c"))]
 use static_cell::StaticCell;
 
+#[cfg(not(feature = "hw-rev-c"))]
 bind_interrupts!(struct Irqs {
-    UARTE0_UART0 => buffered_uarte::InterruptHandler<peripherals::UARTE0>;
+    UARTE0_UART0 => buffered_uarte::InterruptHandler<UARTE0>;
+});
+#[cfg(feature = "hw-rev-c")]
+bind_interrupts!(struct Irqs {
+    SPIM0_SPIS0_SPI0 => spis::InterruptHandler<SPI0>;
 });
 
 // Signal for BT state
@@ -69,42 +86,52 @@ async fn main(spawner: Spawner) {
 
     let p = embassy_nrf::init(conf);
 
-    #[cfg(feature = "debug")]
-    let baud_rate = uarte::Baudrate::BAUD460800;
-    #[cfg(feature = "debug")]
-    info!("Uart console pins - 460800 BAUD");
+    #[cfg(not(feature = "hw-rev-c"))]
+    let uart = {
+        #[cfg(feature = "debug")]
+        let baud_rate = uarte::Baudrate::BAUD460800;
+        #[cfg(feature = "debug")]
+        info!("Uart console pins - 460800 BAUD");
 
-    #[cfg(not(feature = "debug"))]
-    let baud_rate = uarte::Baudrate::BAUD460800;
-    #[cfg(not(feature = "debug"))]
-    info!("Uart MPU pins - 460800 BAUD");
+        #[cfg(not(feature = "debug"))]
+        let baud_rate = uarte::Baudrate::BAUD460800;
+        #[cfg(not(feature = "debug"))]
+        info!("Uart MPU pins - 460800 BAUD");
 
-    let mut config_uart = uarte::Config::default();
-    config_uart.parity = uarte::Parity::EXCLUDED;
-    config_uart.baudrate = baud_rate;
+        let mut config_uart = uarte::Config::default();
+        config_uart.parity = uarte::Parity::EXCLUDED;
+        config_uart.baudrate = baud_rate;
 
-    static TX_BUFFER: StaticCell<[u8; COBS_MAX_MSG_SIZE]> = StaticCell::new();
-    static RX_BUFFER: StaticCell<[u8; COBS_MAX_MSG_SIZE]> = StaticCell::new();
+        static TX_BUFFER: StaticCell<[u8; COBS_MAX_MSG_SIZE]> = StaticCell::new();
+        static RX_BUFFER: StaticCell<[u8; COBS_MAX_MSG_SIZE]> = StaticCell::new();
 
-    #[cfg(not(feature = "debug"))]
-    let (rxd, txd) = (p.P0_14, p.P0_12);
+        #[cfg(not(feature = "debug"))]
+        let (rxd, txd) = (p.P0_14, p.P0_12);
 
-    #[cfg(feature = "debug")]
-    let (rxd, txd) = (p.P0_16, p.P0_18);
+        #[cfg(feature = "debug")]
+        let (rxd, txd) = (p.P0_16, p.P0_18);
 
-    let uart = BufferedUarte::new(
-        p.UARTE0,
-        p.TIMER1,
-        p.PPI_CH0,
-        p.PPI_CH1,
-        p.PPI_GROUP0,
-        Irqs,
-        rxd,
-        txd,
-        config_uart,
-        &mut TX_BUFFER.init([0; COBS_MAX_MSG_SIZE])[..],
-        &mut RX_BUFFER.init([0; COBS_MAX_MSG_SIZE])[..],
-    );
+        BufferedUarte::new(
+            p.UARTE0,
+            p.TIMER1,
+            p.PPI_CH0,
+            p.PPI_CH1,
+            p.PPI_GROUP0,
+            Irqs,
+            rxd,
+            txd,
+            config_uart,
+            &mut TX_BUFFER.init([0; COBS_MAX_MSG_SIZE])[..],
+            &mut RX_BUFFER.init([0; COBS_MAX_MSG_SIZE])[..],
+        )
+    };
+
+    #[cfg(feature = "hw-rev-c")]
+    let spi = {
+        // Configure SPI
+        let config_spi = spis::Config::default();
+        Spis::new(p.SPI0, Irqs, p.P0_18, p.P0_16, p.P0_14, p.P0_12, config_spi)
+    };
 
     // Configure the OUT IRQ pin
     {
@@ -116,14 +143,20 @@ async fn main(spawner: Spawner) {
     }
 
     // set priority to avoid collisions with softdevice
+    #[cfg(not(feature = "hw-rev-c"))]
     interrupt::UARTE0_UART0.set_priority(interrupt::Priority::P3);
+    #[cfg(feature = "hw-rev-c")]
+    interrupt::SPIM0_SPIS0_SPI0.set_priority(interrupt::Priority::P3);
 
     let sd = initialize_sd();
 
     let server = unwrap!(Server::new(sd));
     unwrap!(spawner.spawn(softdevice_task(sd)));
     // Uart task
+    #[cfg(not(feature = "hw-rev-c"))]
     unwrap!(spawner.spawn(comms_task(uart)));
+    #[cfg(feature = "hw-rev-c")]
+    unwrap!(spawner.spawn(comms_task(spi)));
 
     info!("Init tasks");
 
