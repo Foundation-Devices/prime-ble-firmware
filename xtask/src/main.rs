@@ -250,14 +250,19 @@ fn build_bt_bootloader_debug(verbose: bool, rev_c: bool, s113: bool) {
     }
 }
 
-fn build_bt_firmware(verbose: bool, s113: bool) {
+fn build_bt_firmware(verbose: bool, rev_c: bool, s113: bool) {
     tracing::info!("Building application...");
     let mut cargo_cmd = Command::new(cargo());
     let mut cmd = cargo_cmd.current_dir(project_root().join("firmware")).args([
         "build",
         "--release",
         "--features",
-        if s113 { "s113" } else { "s112" },
+        match (rev_c, s113) {
+            (true, true) => "hw-rev-c,s113",
+            (false, true) => "s113",
+            (true, false) => "hw-rev-c,s112",
+            (false, false) => "s112",
+        },
     ]);
     if !verbose {
         cmd = cmd.stdout(Stdio::null()).stderr(Stdio::null()).arg("--quiet");
@@ -274,7 +279,12 @@ fn build_bt_firmware(verbose: bool, s113: bool) {
         "objcopy",
         "--release",
         "--features",
-        if s113 { "s113" } else { "s112" },
+        match (rev_c, s113) {
+            (true, true) => "hw-rev-c,s113",
+            (false, true) => "s113",
+            (true, false) => "hw-rev-c,s112",
+            (false, false) => "s112",
+        },
         "--",
         "-O",
         "ihex",
@@ -298,7 +308,12 @@ fn build_bt_firmware(verbose: bool, s113: bool) {
         "objcopy",
         "--release",
         "--features",
-        if s113 { "s113" } else { "s112" },
+        match (rev_c, s113) {
+            (true, true) => "hw-rev-c,s113",
+            (false, true) => "s113",
+            (true, false) => "hw-rev-c,s112",
+            (false, false) => "s112",
+        },
         "--",
         "--pad-to",
         base_bootloader_addr.as_str(),
@@ -316,14 +331,19 @@ fn build_bt_firmware(verbose: bool, s113: bool) {
     }
 }
 
-fn build_bt_debug_firmware(verbose: bool, s113: bool) {
+fn build_bt_debug_firmware(verbose: bool, rev_c: bool, s113: bool) {
     tracing::info!("Building debug application...");
     let mut cargo_cmd = Command::new(cargo());
     let mut cmd = cargo_cmd.current_dir(project_root().join("firmware")).args([
         "build",
         "--release",
         "--features",
-        if s113 { "debug,s113" } else { "debug,s112" },
+        match (rev_c, s113) {
+            (true, true) => "debug,hw-rev-c,s113",
+            (false, true) => "debug,s113",
+            (true, false) => "debug,hw-rev-c,s112",
+            (false, false) => "debug,s112",
+        },
     ]);
     if !verbose {
         cmd = cmd.stdout(Stdio::null()).stderr(Stdio::null()).arg("--quiet");
@@ -339,7 +359,12 @@ fn build_bt_debug_firmware(verbose: bool, s113: bool) {
         "objcopy",
         "--release",
         "--features",
-        if s113 { "debug,s113" } else { "debug,s112" },
+        match (rev_c, s113) {
+            (true, true) => "debug,hw-rev-c,s113",
+            (false, true) => "debug,s113",
+            (true, false) => "debug,hw-rev-c,s112",
+            (false, false) => "debug,s112",
+        },
         "--",
         "-O",
         "ihex",
@@ -639,14 +664,14 @@ fn main() {
         Commands::BuildFwImage => {
             build_tools_check(args.verbose);
             build_bt_bootloader(args.verbose, args.rev_c, args.s113);
-            build_bt_firmware(args.verbose, args.s113);
+            build_bt_firmware(args.verbose, args.rev_c, args.s113);
             sign_bt_firmware();
             build_bt_package(args.s113);
         }
         Commands::BuildFwDebugImage => {
             build_tools_check_debug(args.verbose);
             build_bt_bootloader_debug(args.verbose, args.rev_c, args.s113);
-            build_bt_debug_firmware(args.verbose, args.s113);
+            build_bt_debug_firmware(args.verbose, args.rev_c, args.s113);
             build_bt_package_debug(args.s113);
         }
         Commands::PatchSd => {
