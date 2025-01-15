@@ -279,12 +279,13 @@ async fn main(_spawner: Spawner) {
     let seal = unsafe { &*nrf52805_pac::UICR::ptr() }.customer[SEAL_IDX].read().customer().bits();
 
     // Send startup message (UART console only)
-    #[cfg(all(feature = "debug", not(feature = "hw-rev-c")))]
-    {
-        let mut buf = [0; 10];
-        buf.copy_from_slice(b"Bootloader");
-        let _ = tx.write(&buf).await;
-    }
+    // Removed to save Flash Space
+    // #[cfg(all(feature = "debug", not(feature = "hw-rev-c")))]
+    // {
+    //     let mut buf = [0; 10];
+    //     buf.copy_from_slice(b"Bootloader");
+    //     let _ = tx.write(&buf).await;
+    // }
     let mut boot_status: BootState = Default::default();
 
     let mut raw_buf = [0u8; 512];
