@@ -10,7 +10,6 @@ use cortex_m::prelude::_embedded_hal_blocking_delay_DelayMs;
 use cosign2::{Header, Trust, VerificationResult};
 use defmt::info;
 use embassy_time::Delay;
-use host_protocol::{Bootloader, HostProtocolMessage};
 use micro_ecc_sys::{uECC_decompress, uECC_secp256k1, uECC_valid_public_key, uECC_verify};
 use nrf52805_pac::NVMC;
 use nrf52805_pac::UICR;
@@ -96,7 +95,8 @@ impl cosign2::Sha256 for Sha256 {
 }
 
 /// Verifies an OS image by checking its version, build date and signature
-pub(crate) fn verify_os_image(image: &[u8]) -> Option<(VerificationResult, Sha256)> {
+pub fn verify_fw_image() -> Option<(VerificationResult, Sha256)> {
+    let image = get_fw_image_slice(crate::BASE_APP_ADDR, crate::consts::APP_SIZE);
     if let Some((version, build_date)) = read_version_and_build_date(image) {
         info!(
             "Version : {} - build date : {}",
@@ -205,33 +205,6 @@ pub fn get_fw_image_slice<'a>(base_address: u32, len: u32) -> &'a [u8] {
     }
     let slice = unsafe { core::slice::from_raw_parts(base_address as *const u8, len as usize) };
     slice
-}
-
-/// Verifies firmware and sends result over UART
-pub fn check_fw(image_slice: &[u8]) -> (HostProtocolMessage<'_>, VerificationResult) {
-    if let Some((result, hash)) = verify_os_image(image_slice) {
-        return if result == VerificationResult::Valid {
-            (
-                HostProtocolMessage::Bootloader(Bootloader::AckVerifyFirmware {
-                    result: true,
-                    hash: hash.sha,
-                }),
-                VerificationResult::Valid,
-            )
-        } else {
-            (
-                HostProtocolMessage::Bootloader(Bootloader::AckVerifyFirmware {
-                    result: false,
-                    hash: hash.sha,
-                }),
-                VerificationResult::Invalid,
-            )
-        };
-    }
-    (
-        HostProtocolMessage::Bootloader(Bootloader::NoCosignHeader),
-        VerificationResult::Invalid,
-    )
 }
 
 /// Writes a secret to UICR memory and verifies it was written correctly

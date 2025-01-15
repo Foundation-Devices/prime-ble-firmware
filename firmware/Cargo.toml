@@ -52,7 +52,7 @@ embassy-time = { version = "0.3.2", features = [
 ] }
 embedded-io-async = { version = "0.6.1", features = ["defmt-03"] }
 futures = { version = "0.3.31", default-features = false }
-heapless = { version = "0.8.0", features = ["defmt-03"] }
+heapless = { workspace = true }
 hmac = { workspace = true }
 host-protocol = { path = "../host-protocol" }
 nrf-softdevice = { git = "https://github.com/embassy-rs/nrf-softdevice.git", features = [

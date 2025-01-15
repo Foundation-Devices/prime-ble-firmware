@@ -20,6 +20,7 @@ defmt = "0.3.8"
 defmt-rtt = "0.4.0"
 clap = { version = "4.5.21", features = ["derive"] }
 crc = "3.2.1"
+heapless = { version = "0.8.0", features = ["defmt-03"] }
 hmac = "0.12.1"
 panic-probe = { version = "0.3.2", features = ["print-defmt"] }
 postcard = { version = "1.0.8", features = ["experimental-derive"] }
