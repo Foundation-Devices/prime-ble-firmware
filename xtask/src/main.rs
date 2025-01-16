@@ -406,6 +406,7 @@ fn sign_bt_firmware() {
         "./BtPackage/BT_application.bin",
         "-c",
         "cosign2.toml",
+        "--developer",
         "--header-size",
         header_size.as_str(),
         "-o",

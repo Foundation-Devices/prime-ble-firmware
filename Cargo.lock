@@ -525,8 +525,8 @@ dependencies = [
 
 [[package]]
 name = "cosign2"
-version = "0.4.0"
-source = "git+https://github.com/Foundation-Devices/keyOS#3dec8c6f56271d3acf4b9defb4e5e11b0a975305"
+version = "0.4.1"
+source = "git+https://github.com/Foundation-Devices/keyOS#ce836b3c26303e84dcfb2ea3dd3ef90ba1e02dc2"
 dependencies = [
  "chrono",
 ]
