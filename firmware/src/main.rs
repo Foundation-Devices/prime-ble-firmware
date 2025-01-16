@@ -24,13 +24,13 @@ use embassy_executor::Spawner;
 use embassy_nrf::bind_interrupts;
 use embassy_nrf::gpio::{Level, Output, OutputDrive};
 use embassy_nrf::interrupt::{self, InterruptExt};
-#[cfg(not(feature = "hw-rev-c"))]
+#[cfg(not(feature = "hw-rev-d"))]
 use embassy_nrf::{
     buffered_uarte::{self, BufferedUarte},
     peripherals::UARTE0,
     uarte,
 };
-#[cfg(feature = "hw-rev-c")]
+#[cfg(feature = "hw-rev-d")]
 use embassy_nrf::{
     peripherals::SPI0,
     spis::{self, Spis},
@@ -40,19 +40,19 @@ use embassy_sync::channel::Channel;
 use embassy_sync::mutex::Mutex;
 use futures::pin_mut;
 use heapless::Vec;
-#[cfg(not(feature = "hw-rev-c"))]
+#[cfg(not(feature = "hw-rev-d"))]
 use host_protocol::COBS_MAX_MSG_SIZE;
 use nrf_softdevice::ble::get_address;
 use nrf_softdevice::Softdevice;
 use server::{initialize_sd, run_bluetooth, stop_bluetooth, Server};
-#[cfg(not(feature = "hw-rev-c"))]
+#[cfg(not(feature = "hw-rev-d"))]
 use static_cell::StaticCell;
 
-#[cfg(not(feature = "hw-rev-c"))]
+#[cfg(not(feature = "hw-rev-d"))]
 bind_interrupts!(struct Irqs {
     UARTE0_UART0 => buffered_uarte::InterruptHandler<UARTE0>;
 });
-#[cfg(feature = "hw-rev-c")]
+#[cfg(feature = "hw-rev-d")]
 bind_interrupts!(struct Irqs {
     SPIM0_SPIS0_SPI0 => spis::InterruptHandler<SPI0>;
 });
@@ -86,7 +86,7 @@ async fn main(spawner: Spawner) {
 
     let p = embassy_nrf::init(conf);
 
-    #[cfg(not(feature = "hw-rev-c"))]
+    #[cfg(not(feature = "hw-rev-d"))]
     let uart = {
         #[cfg(feature = "debug")]
         let baud_rate = uarte::Baudrate::BAUD460800;
@@ -126,7 +126,7 @@ async fn main(spawner: Spawner) {
         )
     };
 
-    #[cfg(feature = "hw-rev-c")]
+    #[cfg(feature = "hw-rev-d")]
     let spi = {
         // Configure SPI
         let config_spi = spis::Config::default();
@@ -143,9 +143,9 @@ async fn main(spawner: Spawner) {
     }
 
     // set priority to avoid collisions with softdevice
-    #[cfg(not(feature = "hw-rev-c"))]
+    #[cfg(not(feature = "hw-rev-d"))]
     interrupt::UARTE0_UART0.set_priority(interrupt::Priority::P3);
-    #[cfg(feature = "hw-rev-c")]
+    #[cfg(feature = "hw-rev-d")]
     interrupt::SPIM0_SPIS0_SPI0.set_priority(interrupt::Priority::P3);
 
     let sd = initialize_sd();
@@ -153,9 +153,9 @@ async fn main(spawner: Spawner) {
     let server = unwrap!(Server::new(sd));
     unwrap!(spawner.spawn(softdevice_task(sd)));
     // Uart task
-    #[cfg(not(feature = "hw-rev-c"))]
+    #[cfg(not(feature = "hw-rev-d"))]
     unwrap!(spawner.spawn(comms_task(uart)));
-    #[cfg(feature = "hw-rev-c")]
+    #[cfg(feature = "hw-rev-d")]
     unwrap!(spawner.spawn(comms_task(spi)));
 
     info!("Init tasks");

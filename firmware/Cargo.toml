@@ -20,8 +20,8 @@ s113 = [
     "consts/dle",
 ]
 
-# Hardware is on rev C
-hw-rev-c = []
+# Hardware is on rev D
+hw-rev-d = []
 
 # Print some statistics while running
 analytics = []

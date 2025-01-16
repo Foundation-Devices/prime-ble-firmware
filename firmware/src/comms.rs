@@ -5,17 +5,17 @@ use crate::{BT_ADDRESS, BT_DATA_TX, IRQ_OUT_PIN};
 use crate::{BT_DATA_RX, BT_STATE, RSSI_VALUE};
 use consts::{APP_MTU, BT_MAX_NUM_PKT, UICR_SECRET_SIZE, UICR_SECRET_START};
 use defmt::{debug, trace};
-#[cfg(not(feature = "hw-rev-c"))]
+#[cfg(not(feature = "hw-rev-d"))]
 use embassy_nrf::{
     buffered_uarte::{BufferedUarte, BufferedUarteTx},
     peripherals::{TIMER1, UARTE0},
 };
-#[cfg(feature = "hw-rev-c")]
+#[cfg(feature = "hw-rev-d")]
 use embassy_nrf::{peripherals::SPI0, spis::Spis};
 #[cfg(feature = "analytics")]
 use embassy_time::Instant;
 use embassy_time::{with_timeout, Duration};
-#[cfg(not(feature = "hw-rev-c"))]
+#[cfg(not(feature = "hw-rev-d"))]
 use embedded_io_async::Write;
 use heapless::Vec;
 use hmac::{Hmac, Mac};
@@ -83,7 +83,7 @@ fn log_infra_packet(
 
 /// Main communication task that handles incoming UART messages from the MPU
 /// Decodes COBS-encoded messages and routes them to appropriate handlers
-#[cfg(not(feature = "hw-rev-c"))]
+#[cfg(not(feature = "hw-rev-d"))]
 #[embassy_executor::task]
 pub async fn comms_task(uart: BufferedUarte<'static, UARTE0, TIMER1>) {
     // Rough performance metrics
@@ -158,7 +158,7 @@ pub async fn comms_task(uart: BufferedUarte<'static, UARTE0, TIMER1>) {
 
 /// Main communication task that handles incoming SPI messages from the MPU
 /// Decodes COBS-encoded messages and routes them to appropriate handlers
-#[cfg(feature = "hw-rev-c")]
+#[cfg(feature = "hw-rev-d")]
 #[embassy_executor::task]
 pub async fn comms_task(mut spi: Spis<'static, SPI0>) {
     // Rough performance metrics
@@ -313,7 +313,7 @@ fn hmac_challenge_response(nonce: u64) -> HostProtocolMessage<'static> {
     }
 }
 
-#[cfg(not(feature = "hw-rev-c"))]
+#[cfg(not(feature = "hw-rev-d"))]
 async fn send_cobs(tx: &mut BufferedUarteTx<'_, UARTE0>, msg: HostProtocolMessage<'_>) {
     let mut send_buf = [0u8; COBS_MAX_MSG_SIZE];
 
@@ -323,7 +323,7 @@ async fn send_cobs(tx: &mut BufferedUarteTx<'_, UARTE0>, msg: HostProtocolMessag
         assert_out_irq().await;
     }
 }
-#[cfg(feature = "hw-rev-c")]
+#[cfg(feature = "hw-rev-d")]
 async fn send_cobs(spi: &mut Spis<'_, SPI0>, msg: HostProtocolMessage<'_>) {
     let mut send_buf = [0u8; COBS_MAX_MSG_SIZE];
 

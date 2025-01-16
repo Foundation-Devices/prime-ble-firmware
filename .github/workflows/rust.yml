@@ -38,8 +38,8 @@ jobs:
     - name: Build Debug image with S113 (unsigned)
       run: cargo xtask --verbose --s113 build-fw-debug-image
     - name: Build Debug image for revC with S112 (unsigned)
-      run: cargo xtask --verbose --rev-c build-fw-debug-image
+      run: cargo xtask --verbose --rev-d build-fw-debug-image
     - name: Build Debug image for revC with S113 (unsigned)
-      run: cargo xtask --verbose --rev-c --s113 build-fw-debug-image
+      run: cargo xtask --verbose --rev-d --s113 build-fw-debug-image
     - name: Build host-protocol
       run: cargo build --release --package host-protocol

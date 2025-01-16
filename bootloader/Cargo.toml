@@ -15,8 +15,8 @@ debug = []
 s112 = ["nrf-softdevice/s112", "nrf-softdevice-s112", "consts_global/s112"]
 s113 = ["nrf-softdevice/s113", "nrf-softdevice-s113", "consts_global/s113"]
 
-# Hardware is on rev C
-hw-rev-c = []
+# Hardware is on rev D
+hw-rev-d = []
 
 [dependencies]
 consts_global = { path = "../consts", package = "consts" }

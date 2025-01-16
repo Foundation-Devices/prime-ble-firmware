@@ -35,12 +35,12 @@ use embassy_nrf::{
     peripherals::RNG,
     rng::{self, Rng},
 };
-#[cfg(feature = "hw-rev-c")]
+#[cfg(feature = "hw-rev-d")]
 use embassy_nrf::{
     peripherals::SPI0,
     spis::{self, Spis},
 };
-#[cfg(not(feature = "hw-rev-c"))]
+#[cfg(not(feature = "hw-rev-d"))]
 use embassy_nrf::{
     peripherals::UARTE0,
     uarte::{self, UarteTx},
@@ -68,12 +68,12 @@ static RNG_HW: CriticalSectionMutex<RefCell<Option<Rng<'_, RNG>>>> = Mutex::new(
 static mut IRQ_PIN: Option<Output<'static>> = None;
 
 // Bind hardware interrupts to their handlers
-#[cfg(not(feature = "hw-rev-c"))]
+#[cfg(not(feature = "hw-rev-d"))]
 bind_interrupts!(struct Irqs {
     UARTE0_UART0 => uarte::InterruptHandler<UARTE0>;
     RNG => rng::InterruptHandler<RNG>;
 });
-#[cfg(feature = "hw-rev-c")]
+#[cfg(feature = "hw-rev-d")]
 bind_interrupts!(struct Irqs {
     SPIM0_SPIS0_SPI0 => spis::InterruptHandler<SPI0>;
     RNG => rng::InterruptHandler<RNG>;
@@ -107,7 +107,7 @@ fn assert_out_irq() {
 
 /// Sends a message over UART using COBS encoding
 #[inline(never)]
-#[cfg(not(feature = "hw-rev-c"))]
+#[cfg(not(feature = "hw-rev-d"))]
 fn ack_msg_send(message: HostProtocolMessage, tx: &mut UarteTx<UARTE0>) {
     let mut buf_cobs = [0_u8; COBS_MAX_MSG_SIZE];
     let cobs_ack = to_slice_cobs(&message, &mut buf_cobs).unwrap();
@@ -117,7 +117,7 @@ fn ack_msg_send(message: HostProtocolMessage, tx: &mut UarteTx<UARTE0>) {
 
 /// Sends a message over SPI using COBS encoding
 #[inline(never)]
-#[cfg(feature = "hw-rev-c")]
+#[cfg(feature = "hw-rev-d")]
 fn ack_msg_send(message: HostProtocolMessage, spi: &mut Spis<SPI0>) {
     let mut buf_cobs = [0_u8; COBS_MAX_MSG_SIZE];
     let cobs_ack = to_slice_cobs(&message, &mut buf_cobs).unwrap();
@@ -236,7 +236,7 @@ async fn main(_spawner: Spawner) {
 
     let p = embassy_nrf::init(Default::default());
 
-    #[cfg(not(feature = "hw-rev-c"))]
+    #[cfg(not(feature = "hw-rev-d"))]
     let (mut tx, mut rx) = {
         // Configure UART
         let mut config_uart = uarte::Config::default();
@@ -254,7 +254,7 @@ async fn main(_spawner: Spawner) {
         uart.split_with_idle(p.TIMER0, p.PPI_CH0, p.PPI_CH1)
     };
 
-    #[cfg(feature = "hw-rev-c")]
+    #[cfg(feature = "hw-rev-d")]
     let mut spi = {
         // Configure SPI
         let config_spi = spis::Config::default();
@@ -280,7 +280,7 @@ async fn main(_spawner: Spawner) {
 
     // Send startup message (UART console only)
     // Removed to save Flash Space
-    // #[cfg(all(feature = "debug", not(feature = "hw-rev-c")))]
+    // #[cfg(all(feature = "debug", not(feature = "hw-rev-d")))]
     // {
     //     let mut buf = [0; 10];
     //     buf.copy_from_slice(b"Bootloader");
@@ -294,9 +294,9 @@ async fn main(_spawner: Spawner) {
 
     // Main command processing loop
     loop {
-        #[cfg(not(feature = "hw-rev-c"))]
+        #[cfg(not(feature = "hw-rev-d"))]
         let n = rx.read_until_idle(&mut raw_buf).await;
-        #[cfg(feature = "hw-rev-c")]
+        #[cfg(feature = "hw-rev-d")]
         let n = spi.read(&mut raw_buf).await;
 
         if let Ok(n) = n {
@@ -453,7 +453,7 @@ async fn main(_spawner: Spawner) {
                                                 });
                                                 #[cfg(not(feature = "debug"))]
                                                 flash_protect_sd_application();
-                                                #[cfg(not(feature = "hw-rev-c"))]
+                                                #[cfg(not(feature = "hw-rev-d"))]
                                                 {
                                                     // immedate send response before jumping
                                                     ack_msg_send(msg, &mut tx);
@@ -461,7 +461,7 @@ async fn main(_spawner: Spawner) {
                                                     drop(tx);
                                                     drop(rx);
                                                 }
-                                                #[cfg(feature = "hw-rev-c")]
+                                                #[cfg(feature = "hw-rev-d")]
                                                 {
                                                     // immedate send response before jumping
                                                     ack_msg_send(msg, &mut spi);
@@ -487,12 +487,12 @@ async fn main(_spawner: Spawner) {
                                 },
                                 // Handle reset command
                                 HostProtocolMessage::Reset => {
-                                    #[cfg(not(feature = "hw-rev-c"))]
+                                    #[cfg(not(feature = "hw-rev-d"))]
                                     {
                                         drop(tx);
                                         drop(rx);
                                     }
-                                    #[cfg(feature = "hw-rev-c")]
+                                    #[cfg(feature = "hw-rev-d")]
                                     drop(spi);
                                     cortex_m::peripheral::SCB::sys_reset();
                                 }
@@ -519,9 +519,9 @@ async fn main(_spawner: Spawner) {
                     }
                 };
                 if let Some(resp) = resp {
-                    #[cfg(not(feature = "hw-rev-c"))]
+                    #[cfg(not(feature = "hw-rev-d"))]
                     ack_msg_send(resp, &mut tx);
-                    #[cfg(feature = "hw-rev-c")]
+                    #[cfg(feature = "hw-rev-d")]
                     ack_msg_send(resp, &mut spi);
                 }
             }

@@ -19,7 +19,7 @@ struct XtaskArgs {
     #[command(subcommand)]
     command: Commands,
     #[arg(short, long)]
-    rev_c: bool,
+    rev_d: bool,
     #[arg(short, long)]
     s113: bool,
     #[arg(short, long)]
@@ -150,17 +150,17 @@ fn build_tools_check_debug(verbose: bool) {
     }
 }
 
-fn build_bt_bootloader(verbose: bool, rev_c: bool, s113: bool) {
+fn build_bt_bootloader(verbose: bool, rev_d: bool, s113: bool) {
     tracing::info!("Building bootloader....");
     let mut cargo_cmd = Command::new(cargo());
     let mut cmd = cargo_cmd.current_dir(project_root().join("bootloader")).args([
         "build",
         "--release",
         "--features",
-        match (rev_c, s113) {
-            (true, true) => "hw-rev-c,s113",
+        match (rev_d, s113) {
+            (true, true) => "hw-rev-d,s113",
             (false, true) => "s113",
-            (true, false) => "hw-rev-c,s112",
+            (true, false) => "hw-rev-d,s112",
             (false, false) => "s112",
         },
     ]);
@@ -179,10 +179,10 @@ fn build_bt_bootloader(verbose: bool, rev_c: bool, s113: bool) {
         "objcopy",
         "--release",
         "--features",
-        match (rev_c, s113) {
-            (true, true) => "hw-rev-c,s113",
+        match (rev_d, s113) {
+            (true, true) => "hw-rev-d,s113",
             (false, true) => "s113",
-            (true, false) => "hw-rev-c,s112",
+            (true, false) => "hw-rev-d,s112",
             (false, false) => "s112",
         },
         "--",
@@ -200,17 +200,17 @@ fn build_bt_bootloader(verbose: bool, rev_c: bool, s113: bool) {
     }
 }
 
-fn build_bt_bootloader_debug(verbose: bool, rev_c: bool, s113: bool) {
+fn build_bt_bootloader_debug(verbose: bool, rev_d: bool, s113: bool) {
     tracing::info!("Building debug bootloader....");
     let mut cargo_cmd = Command::new(cargo());
     let mut cmd = cargo_cmd.current_dir(project_root().join("bootloader")).args([
         "build",
         "--release",
         "--features",
-        match (rev_c, s113) {
-            (true, true) => "debug,hw-rev-c,s113",
+        match (rev_d, s113) {
+            (true, true) => "debug,hw-rev-d,s113",
             (false, true) => "debug,s113",
-            (true, false) => "debug,hw-rev-c,s112",
+            (true, false) => "debug,hw-rev-d,s112",
             (false, false) => "debug,s112",
         },
     ]);
@@ -229,10 +229,10 @@ fn build_bt_bootloader_debug(verbose: bool, rev_c: bool, s113: bool) {
         "objcopy",
         "--release",
         "--features",
-        match (rev_c, s113) {
-            (true, true) => "debug,hw-rev-c,s113",
+        match (rev_d, s113) {
+            (true, true) => "debug,hw-rev-d,s113",
             (false, true) => "debug,s113",
-            (true, false) => "debug,hw-rev-c,s112",
+            (true, false) => "debug,hw-rev-d,s112",
             (false, false) => "debug,s112",
         },
         "--",
@@ -250,17 +250,17 @@ fn build_bt_bootloader_debug(verbose: bool, rev_c: bool, s113: bool) {
     }
 }
 
-fn build_bt_firmware(verbose: bool, rev_c: bool, s113: bool) {
+fn build_bt_firmware(verbose: bool, rev_d: bool, s113: bool) {
     tracing::info!("Building application...");
     let mut cargo_cmd = Command::new(cargo());
     let mut cmd = cargo_cmd.current_dir(project_root().join("firmware")).args([
         "build",
         "--release",
         "--features",
-        match (rev_c, s113) {
-            (true, true) => "hw-rev-c,s113",
+        match (rev_d, s113) {
+            (true, true) => "hw-rev-d,s113",
             (false, true) => "s113",
-            (true, false) => "hw-rev-c,s112",
+            (true, false) => "hw-rev-d,s112",
             (false, false) => "s112",
         },
     ]);
@@ -279,10 +279,10 @@ fn build_bt_firmware(verbose: bool, rev_c: bool, s113: bool) {
         "objcopy",
         "--release",
         "--features",
-        match (rev_c, s113) {
-            (true, true) => "hw-rev-c,s113",
+        match (rev_d, s113) {
+            (true, true) => "hw-rev-d,s113",
             (false, true) => "s113",
-            (true, false) => "hw-rev-c,s112",
+            (true, false) => "hw-rev-d,s112",
             (false, false) => "s112",
         },
         "--",
@@ -308,10 +308,10 @@ fn build_bt_firmware(verbose: bool, rev_c: bool, s113: bool) {
         "objcopy",
         "--release",
         "--features",
-        match (rev_c, s113) {
-            (true, true) => "hw-rev-c,s113",
+        match (rev_d, s113) {
+            (true, true) => "hw-rev-d,s113",
             (false, true) => "s113",
-            (true, false) => "hw-rev-c,s112",
+            (true, false) => "hw-rev-d,s112",
             (false, false) => "s112",
         },
         "--",
@@ -331,17 +331,17 @@ fn build_bt_firmware(verbose: bool, rev_c: bool, s113: bool) {
     }
 }
 
-fn build_bt_debug_firmware(verbose: bool, rev_c: bool, s113: bool) {
+fn build_bt_debug_firmware(verbose: bool, rev_d: bool, s113: bool) {
     tracing::info!("Building debug application...");
     let mut cargo_cmd = Command::new(cargo());
     let mut cmd = cargo_cmd.current_dir(project_root().join("firmware")).args([
         "build",
         "--release",
         "--features",
-        match (rev_c, s113) {
-            (true, true) => "debug,hw-rev-c,s113",
+        match (rev_d, s113) {
+            (true, true) => "debug,hw-rev-d,s113",
             (false, true) => "debug,s113",
-            (true, false) => "debug,hw-rev-c,s112",
+            (true, false) => "debug,hw-rev-d,s112",
             (false, false) => "debug,s112",
         },
     ]);
@@ -359,10 +359,10 @@ fn build_bt_debug_firmware(verbose: bool, rev_c: bool, s113: bool) {
         "objcopy",
         "--release",
         "--features",
-        match (rev_c, s113) {
-            (true, true) => "debug,hw-rev-c,s113",
+        match (rev_d, s113) {
+            (true, true) => "debug,hw-rev-d,s113",
             (false, true) => "debug,s113",
-            (true, false) => "debug,hw-rev-c,s112",
+            (true, false) => "debug,hw-rev-d,s112",
             (false, false) => "debug,s112",
         },
         "--",
@@ -663,15 +663,15 @@ fn main() {
     match args.command {
         Commands::BuildFwImage => {
             build_tools_check(args.verbose);
-            build_bt_bootloader(args.verbose, args.rev_c, args.s113);
-            build_bt_firmware(args.verbose, args.rev_c, args.s113);
+            build_bt_bootloader(args.verbose, args.rev_d, args.s113);
+            build_bt_firmware(args.verbose, args.rev_d, args.s113);
             sign_bt_firmware();
             build_bt_package(args.s113);
         }
         Commands::BuildFwDebugImage => {
             build_tools_check_debug(args.verbose);
-            build_bt_bootloader_debug(args.verbose, args.rev_c, args.s113);
-            build_bt_debug_firmware(args.verbose, args.rev_c, args.s113);
+            build_bt_bootloader_debug(args.verbose, args.rev_d, args.s113);
+            build_bt_debug_firmware(args.verbose, args.rev_d, args.s113);
             build_bt_package_debug(args.s113);
         }
         Commands::PatchSd => {
