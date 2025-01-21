@@ -52,7 +52,10 @@ pub unsafe fn jump_to_app() -> ! {
     info!("ret forward irq mbr result {}", ret);
 
     // Disable active interrupts
+    #[cfg(not(feature = "hw-rev-d"))]
     NVIC::mask(Interrupt::UARTE0_UART0);
+    #[cfg(feature = "hw-rev-d")]
+    NVIC::mask(Interrupt::SPIM0_SPIS0_SPI0);
     NVIC::mask(Interrupt::RNG);
 
     // Probably this critical section is redundant, but keepin it for softdevice.
