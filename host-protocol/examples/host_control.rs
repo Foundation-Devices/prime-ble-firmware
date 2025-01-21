@@ -4,7 +4,7 @@
 use clap::{Parser, ValueEnum};
 use crc::{Crc, CRC_32_ISCSI};
 use host_protocol::{Bluetooth, Bootloader, HostProtocolMessage};
-use std::error::Error;
+use std::{env, error::Error};
 use tokio::io::AsyncWriteExt;
 use tokio_serial::SerialPortBuilderExt;
 
@@ -43,7 +43,7 @@ impl From<Command> for HostProtocolMessage<'_> {
 struct Args {
     #[arg(short, long)]
     list_ports: bool,
-    #[arg(short, long, default_value_t = String::from("/dev/ttyUSB0"))]
+    #[arg(short, long, default_value_t = env::var("BT_UART").unwrap_or_else(|_| "/dev/ttyUSB0".to_string()))]
     port: String,
     #[arg(short, long, default_value_t = 460800)]
     baudrate: u32,
