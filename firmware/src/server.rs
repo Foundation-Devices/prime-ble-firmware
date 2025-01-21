@@ -120,7 +120,7 @@ pub async fn update_phy(mut conn: Connection) {
     }
 }
 
-// Set parameter for data event extension on SD112
+// Set parameter for data event extension on SD113
 pub fn set_data_event_ext() -> u32 {
     let ret = unsafe {
         raw::sd_ble_opt_set(
@@ -162,20 +162,9 @@ pub async fn run_bluetooth(sd: &'static Softdevice, server: &Server) {
         };
 
         // Start advertising
-        #[cfg(feature = "s112")]
-        let conn = unwrap!(peripheral::advertise_connectable(sd, adv, &config).await);
-        #[cfg(feature = "s113")]
         let mut conn = unwrap!(peripheral::advertise_connectable(sd, adv, &config).await);
         info!("advertising done!");
 
-        #[cfg(feature = "s112")]
-        let gap_conn_param = ble_gap_conn_params_t {
-            conn_sup_timeout: 500,         // 5s
-            max_conn_interval: ci_ms!(10), // 15ms - having frequent connection allows to optimize BLE throughput without DLE
-            min_conn_interval: ci_ms!(10), // 10ms
-            slave_latency: 0,
-        };
-        #[cfg(feature = "s113")]
         let gap_conn_param = ble_gap_conn_params_t {
             conn_sup_timeout: 500,         // 5s
             max_conn_interval: ci_ms!(50), // 50ms
@@ -187,21 +176,18 @@ pub async fn run_bluetooth(sd: &'static Softdevice, server: &Server) {
             error!("set_conn_params error - {:?}", e)
         }
 
-        #[cfg(feature = "s113")]
+        // Enable to biggest LL payload size to optimize BLE throughput
+        if conn
+            .data_length_update(Some(&raw::ble_gap_data_length_params_t {
+                max_tx_octets: 251,
+                max_rx_octets: 251,
+                max_tx_time_us: 2120,
+                max_rx_time_us: 2120,
+            }))
+            .is_err()
         {
-            // Enable to biggest LL payload size to optimize BLE throughput
-            if conn
-                .data_length_update(Some(&raw::ble_gap_data_length_params_t {
-                    max_tx_octets: 251,
-                    max_rx_octets: 251,
-                    max_tx_time_us: 2120,
-                    max_rx_time_us: 2120,
-                }))
-                .is_err()
-            {
-                error!("data_length_update error");
-            };
-        }
+            error!("data_length_update error");
+        };
 
         // Start rssi capture
         conn.start_rssi();

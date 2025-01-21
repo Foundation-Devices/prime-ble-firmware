@@ -31,7 +31,7 @@ pub const INT_VECTOR_TABLE_BASE: u32 = BASE_APP_ADDR + SIGNATURE_HEADER_SIZE;
 #[cfg(not(not(feature = "debug")))]
 pub const INT_VECTOR_TABLE_BASE: u32 = 0x1000;
 
-/// Size of the application area in flash memory (56.75KB for S112, 44.75KB for S113)
+/// Size of the application area in flash memory
 /// This constant defines the maximum size available for the application firmware.
 /// Starting from BASE_APP_ADDR up to BASE_BOOTLOADER_ADDR
 /// consider that a header is needed for cosign2 signature so real fw app goes from

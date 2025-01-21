@@ -11,15 +11,6 @@ publish = false
 [features]
 debug = ["analytics"]
 
-# Choose which SoftDevice to use
-s112 = ["nrf-softdevice/s112", "nrf-softdevice-s112", "consts/s112", "ble-phy2"]
-s113 = [
-    "nrf-softdevice/s113",
-    "nrf-softdevice-s113",
-    "consts/s113",
-    "consts/dle",
-]
-
 # Hardware is on rev D
 hw-rev-d = []
 
@@ -30,7 +21,7 @@ analytics = []
 ble-phy2 = []
 
 [dependencies]
-consts = { path = "../consts" }
+consts = { path = "../consts", features = ["dle"] }
 cortex-m = { workspace = true }
 cortex-m-rt = { workspace = true }
 defmt = { workspace = true }
@@ -68,9 +59,9 @@ nrf-softdevice = { git = "https://github.com/embassy-rs/nrf-softdevice.git", fea
     "defmt",
     "evt-max-size-512",
     "nrf52805",
+    "s113",
 ] }
-nrf-softdevice-s112 = { git = "https://github.com/embassy-rs/nrf-softdevice.git", optional = true }
-nrf-softdevice-s113 = { git = "https://github.com/embassy-rs/nrf-softdevice.git", optional = true }
+nrf-softdevice-s113 = { git = "https://github.com/embassy-rs/nrf-softdevice.git" }
 panic-probe = { workspace = true }
 postcard = { workspace = true }
 sha2 = { workspace = true }

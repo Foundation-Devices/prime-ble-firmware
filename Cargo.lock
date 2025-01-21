@@ -254,7 +254,6 @@ dependencies = [
  "micro-ecc-sys",
  "nrf-softdevice",
  "nrf-softdevice-mbr",
- "nrf-softdevice-s112",
  "nrf-softdevice-s113",
  "nrf52805-pac",
  "panic-probe",
@@ -1040,7 +1039,6 @@ dependencies = [
  "hmac",
  "host-protocol",
  "nrf-softdevice",
- "nrf-softdevice-s112",
  "nrf-softdevice-s113",
  "panic-probe",
  "postcard",
@@ -1617,7 +1615,6 @@ dependencies = [
  "futures",
  "heapless 0.8.0",
  "nrf-softdevice-macro",
- "nrf-softdevice-s112",
  "nrf-softdevice-s113",
  "nrf52805-pac",
  "num_enum",
@@ -1641,11 +1638,6 @@ name = "nrf-softdevice-mbr"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f47431e7b1c13851c48a77211fac2b7b648b43a9a622f9c40debc76320b93217"
-
-[[package]]
-name = "nrf-softdevice-s112"
-version = "0.1.2"
-source = "git+https://github.com/embassy-rs/nrf-softdevice.git#991d28e3c61687908acc53e748191eb59d00e27a"
 
 [[package]]
 name = "nrf-softdevice-s113"

@@ -11,10 +11,6 @@ publish = false
 [features]
 debug = []
 
-# Choose which SoftDevice to use
-s112 = ["nrf-softdevice/s112", "nrf-softdevice-s112", "consts_global/s112"]
-s113 = ["nrf-softdevice/s113", "nrf-softdevice-s113", "consts_global/s113"]
-
 # Hardware is on rev D
 hw-rev-d = []
 
@@ -55,10 +51,10 @@ nrf-softdevice = { git = "https://github.com/embassy-rs/nrf-softdevice.git", fea
     "defmt",
     "evt-max-size-256",
     "nrf52805",
+    "s113",
 ] }
 nrf-softdevice-mbr = { version = "0.2.0" }
-nrf-softdevice-s112 = { git = "https://github.com/embassy-rs/nrf-softdevice.git", optional = true }
-nrf-softdevice-s113 = { git = "https://github.com/embassy-rs/nrf-softdevice.git", optional = true }
+nrf-softdevice-s113 = { git = "https://github.com/embassy-rs/nrf-softdevice.git" }
 nrf52805-pac = "0.12.2"
 panic-probe = { workspace = true }
 postcard = { workspace = true }

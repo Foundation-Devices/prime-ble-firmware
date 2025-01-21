@@ -28,12 +28,6 @@ fn main() {
     let signature_header_size = 0;
     #[cfg(not(feature = "debug"))]
     let signature_header_size = SIGNATURE_HEADER_SIZE;
-    #[cfg(feature = "s112")]
-    /* The SoftDevices S112 7.2.0 minimal RAM requirement is 3.7K (0xEB8) */
-    /* and use a maximum of 1.75K (0x700) for call stack. */
-    /* We choose to reserve 9968 bytes (0x26F0) at the begining of RAM */
-    let soft_device_ram_reserved = 9968;
-    #[cfg(feature = "s113")]
     /* The SoftDevices S113 7.3.0 minimal RAM requirement is 4.4K (0x1198) */
     /* and use a maximum of 1.75K (0x700) for call stack. */
     /* We choose to reserve 10648 bytes (0x2998) at the begining of RAM */
@@ -60,19 +54,6 @@ fn main() {
         .unwrap();
 
     println!("cargo:rustc-link-search={}", out.display());
-
-    // By default, Cargo will re-run a build script whenever
-    // any file in the project changes. By specifying `memory.x`
-    // here, we ensure the build script is only re-run when
-    // `memory.x` is changed.
-    #[cfg(all(not(feature = "debug"), feature = "s112"))]
-    println!("cargo:rerun-if-changed=./memory_s112_signed.x");
-    #[cfg(all(not(feature = "debug"), feature = "s113"))]
-    println!("cargo:rerun-if-changed=./memory_s113_signed.x");
-    #[cfg(all(feature = "debug", feature = "s112"))]
-    println!("cargo:rerun-if-changed=./memory_s112_unsigned.x");
-    #[cfg(all(feature = "debug", feature = "s113"))]
-    println!("cargo:rerun-if-changed=./memory_s113_unsigned.x");
 
     println!("cargo:rustc-link-arg-bins=--nmagic");
     println!("cargo:rustc-link-arg-bins=-Tlink.x");

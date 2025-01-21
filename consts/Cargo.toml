@@ -8,6 +8,3 @@ edition = "2021"
 
 [features]
 dle = []
-# Choose which SoftDevice to use
-s112 = []
-s113 = []

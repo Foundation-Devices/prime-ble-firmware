@@ -55,16 +55,9 @@ pub const UICR_SECRET_SIZE: u32 = 0x20;
 pub const BASE_BOOTLOADER_ADDR: u32 = 0x27000;
 
 /// Base address for the application in flash memory
-/// This is where the actual application firmware code begins in flash memory at 0x19000|0x1B400,
+/// This is where the actual application firmware code begins in flash memory at 0x1B400,
 /// after the SoftDevice and before the bootloader region
-#[cfg(feature = "s112")]
-pub const BASE_APP_ADDR: u32 = 0x19000;
-#[cfg(feature = "s113")]
 pub const BASE_APP_ADDR: u32 = 0x1B400;
-
-// TODO: only needed by xtask, remove them when S113 will be definitive
-pub const BASE_APP_ADDR_S112: u32 = 0x19000;
-pub const BASE_APP_ADDR_S113: u32 = 0x1B400;
 
 /// 256B are needed for cosign2 signature
 pub const SIGNATURE_HEADER_SIZE: u32 = 0x100;
