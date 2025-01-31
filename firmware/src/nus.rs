@@ -26,7 +26,7 @@ impl Nus {
                 info!("Enable NUS: {}", notifications);
             }
             NusEvent::RxWrite(data) => {
-                debug!("Received: {} bytes 0x{:02x}", data.len(), data[0]);
+                debug!("Received: {} bytes 0x{:x}", data.len(), data);
                 if BT_DATA_RX.try_send(data).is_err() {
                     error!("Error BT_DATA_RX");
                 }
