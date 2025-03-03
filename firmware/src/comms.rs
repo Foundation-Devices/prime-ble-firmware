@@ -245,9 +245,14 @@ async fn host_protocol_handler<'a>(recv_msg: HostProtocolMessage<'a>, cobs_buf: 
                     BT_STATE.store(false, core::sync::atomic::Ordering::Relaxed);
                     Some(HostProtocolMessage::Bluetooth(Bluetooth::AckDisable))
                 }
-                Bluetooth::GetSignalStrength => Some(HostProtocolMessage::Bluetooth(Bluetooth::SignalStrength(
-                    RSSI_VALUE.load(core::sync::atomic::Ordering::Relaxed),
-                ))),
+                Bluetooth::GetSignalStrength => {
+                    let rssi = RSSI_VALUE.load(core::sync::atomic::Ordering::Relaxed);
+                    Some(HostProtocolMessage::Bluetooth(Bluetooth::SignalStrength(if rssi == i8::MIN {
+                        None
+                    } else {
+                        Some(rssi)
+                    })))
+                }
                 Bluetooth::GetFirmwareVersion => {
                     let version = env!("CARGO_PKG_VERSION");
                     Some(HostProtocolMessage::Bluetooth(Bluetooth::AckFirmwareVersion { version }))

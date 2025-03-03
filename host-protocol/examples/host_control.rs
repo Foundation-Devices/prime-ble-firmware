@@ -93,7 +93,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
                 println!("Firmware version: {version}");
             }
             HostProtocolMessage::Bluetooth(Bluetooth::SignalStrength(rssi)) => {
-                println!("RSSI: {rssi}");
+                println!("RSSI: {:?}", rssi);
             }
             HostProtocolMessage::Bluetooth(Bluetooth::AckBtAddress { bt_address }) => {
                 println!("BT address: {:02x?}", bt_address);

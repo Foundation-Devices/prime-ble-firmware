@@ -26,8 +26,8 @@ pub enum Bluetooth<'a> {
 
     /// Request current signal strength
     GetSignalStrength,
-    /// Response with signal strength value (0-255)
-    SignalStrength(u8),
+    /// Response with signal strength value
+    SignalStrength(Option<i8>),
 
     /// Send raw data over BLE connection
     SendData(&'a [u8]),
@@ -281,7 +281,7 @@ fn calculate_bootloader_message_sizes() {
         ),
         (
             "SignalStrength",
-            get_cobs_size(HostProtocolMessage::Bluetooth(Bluetooth::SignalStrength(255))),
+            get_cobs_size(HostProtocolMessage::Bluetooth(Bluetooth::SignalStrength(Some(i8::MAX)))),
         ),
         (
             "SendData(256)",

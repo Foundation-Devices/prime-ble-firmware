@@ -95,13 +95,10 @@ async fn notify_data_tx<'a>(server: &'a Server, connection: &'a Connection) {
                     }
                     Err(e) => error!("Error on nus send {:?}", e),
                 }
-            }
-
-            // Getting RSSI if connected
-            if connection.rssi().is_some() && buffer.is_empty() {
-                // Get as u8 rssi - receiver side will take care of cast to i8
-                let rssi_as_u8 = connection.rssi().unwrap() as u8;
-                RSSI_VALUE.store(rssi_as_u8, core::sync::atomic::Ordering::Relaxed);
+            } else {
+                // Getting RSSI
+                let rssi = if let Some(rssi) = connection.rssi() { rssi } else { i8::MIN };
+                RSSI_VALUE.store(rssi, core::sync::atomic::Ordering::Relaxed);
             }
         }
 
@@ -226,7 +223,7 @@ pub async fn run_bluetooth(sd: &'static Softdevice, server: &Server) {
         // Force false
         BT_STATE.store(true, core::sync::atomic::Ordering::Relaxed);
         // Clear RSSI value
-        RSSI_VALUE.store(0, core::sync::atomic::Ordering::Relaxed);
+        RSSI_VALUE.store(i8::MIN, core::sync::atomic::Ordering::Relaxed);
     }
 }
 

@@ -9,7 +9,7 @@ mod nus;
 mod server;
 
 use core::cell::RefCell;
-use core::sync::atomic::{AtomicBool, AtomicU8};
+use core::sync::atomic::{AtomicBool, AtomicI8};
 use defmt_rtt as _;
 // global logger
 use embassy_nrf as _;
@@ -60,7 +60,7 @@ bind_interrupts!(struct Irqs {
 // Signal for BT state
 static BT_STATE: AtomicBool = AtomicBool::new(false);
 static BT_DATA_TX: Mutex<ThreadModeRawMutex, Vec<Vec<u8, ATT_MTU>, BT_MAX_NUM_PKT>> = Mutex::new(Vec::new());
-static RSSI_VALUE: AtomicU8 = AtomicU8::new(0);
+static RSSI_VALUE: AtomicI8 = AtomicI8::new(i8::MIN); // by convention equivalent to None
 static BT_DATA_RX: Channel<ThreadModeRawMutex, Vec<u8, ATT_MTU>, BT_MAX_NUM_PKT> = Channel::new();
 static BT_ADDRESS: Mutex<ThreadModeRawMutex, [u8; 6]> = Mutex::new([0xFF; 6]);
 
