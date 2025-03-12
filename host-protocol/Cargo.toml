@@ -10,6 +10,7 @@ version = "0.1.0"
 publish = false
 
 [dependencies]
+bitflags = { workspace = true, features = ["serde"] }
 postcard = { workspace = true }
 serde = { workspace = true }
 
@@ -22,5 +23,6 @@ tokio = { version = "1.40.1", features = [
     "macros",
     "rt",
     "rt-multi-thread",
+    "time",
 ] }
 tokio-serial = { version = "5.4.4" }

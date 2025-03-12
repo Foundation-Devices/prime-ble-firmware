@@ -181,6 +181,9 @@ name = "bitflags"
 version = "2.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b048fb63fd8b5923fc5aa7b340d8e156aec7ec02f0c78fa8a6ddc2613f6f71de"
+dependencies = [
+ "serde",
+]
 
 [[package]]
 name = "block-buffer"
@@ -1267,6 +1270,7 @@ dependencies = [
 name = "host-protocol"
 version = "0.1.0"
 dependencies = [
+ "bitflags 2.6.0",
  "clap",
  "crc",
  "postcard",
@@ -1581,7 +1585,7 @@ dependencies = [
 [[package]]
 name = "nrf-softdevice"
 version = "0.1.0"
-source = "git+https://github.com/embassy-rs/nrf-softdevice.git#991d28e3c61687908acc53e748191eb59d00e27a"
+source = "git+https://github.com/Foundation-Devices/nrf-softdevice.git?rev=566c1c2d7b269fa8f9addbc4473811b6b2b0f693#566c1c2d7b269fa8f9addbc4473811b6b2b0f693"
 dependencies = [
  "cortex-m",
  "cortex-m-rt",
@@ -1603,7 +1607,7 @@ dependencies = [
 [[package]]
 name = "nrf-softdevice-macro"
 version = "0.1.0"
-source = "git+https://github.com/embassy-rs/nrf-softdevice.git#991d28e3c61687908acc53e748191eb59d00e27a"
+source = "git+https://github.com/Foundation-Devices/nrf-softdevice.git?rev=566c1c2d7b269fa8f9addbc4473811b6b2b0f693#566c1c2d7b269fa8f9addbc4473811b6b2b0f693"
 dependencies = [
  "Inflector",
  "darling 0.13.4",
@@ -1616,13 +1620,12 @@ dependencies = [
 [[package]]
 name = "nrf-softdevice-mbr"
 version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f47431e7b1c13851c48a77211fac2b7b648b43a9a622f9c40debc76320b93217"
+source = "git+https://github.com/Foundation-Devices/nrf-softdevice.git?rev=566c1c2d7b269fa8f9addbc4473811b6b2b0f693#566c1c2d7b269fa8f9addbc4473811b6b2b0f693"
 
 [[package]]
 name = "nrf-softdevice-s113"
 version = "0.1.2"
-source = "git+https://github.com/embassy-rs/nrf-softdevice.git#991d28e3c61687908acc53e748191eb59d00e27a"
+source = "git+https://github.com/Foundation-Devices/nrf-softdevice.git?rev=566c1c2d7b269fa8f9addbc4473811b6b2b0f693#566c1c2d7b269fa8f9addbc4473811b6b2b0f693"
 
 [[package]]
 name = "nrf51-pac"

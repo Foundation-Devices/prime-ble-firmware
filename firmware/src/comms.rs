@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 use crate::{BT_ADDRESS, BT_DATA_TX, IRQ_OUT_PIN};
-use crate::{BT_DATA_RX, BT_STATE, RSSI_VALUE};
+use crate::{BT_ADV_CHAN, BT_DATA_RX, BT_STATE, RSSI_VALUE};
 use consts::{APP_MTU, BT_MAX_NUM_PKT, UICR_SECRET_SIZE, UICR_SECRET_START};
 use defmt::{debug, trace};
 #[cfg(not(feature = "hw-rev-d"))]
@@ -235,6 +235,11 @@ async fn host_protocol_handler<'a>(recv_msg: HostProtocolMessage<'a>, cobs_buf: 
             trace!("Received HostProtocolMessage::Bluetooth");
             // bluetooth_handler(&mut send_buf, &mut tx, bluetooth_msg).await
             match bluetooth_msg {
+                Bluetooth::DisableChannels(chan) => {
+                    trace!("Bluetooth set channnels {}", chan);
+                    BT_ADV_CHAN.store(chan.bits(), core::sync::atomic::Ordering::Relaxed);
+                    Some(HostProtocolMessage::Bluetooth(Bluetooth::AckDisableChannels))
+                }
                 Bluetooth::Enable => {
                     trace!("Bluetooth enabled");
                     BT_STATE.store(true, core::sync::atomic::Ordering::Relaxed);

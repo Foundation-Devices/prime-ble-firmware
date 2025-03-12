@@ -6,15 +6,29 @@
 //! Defines message types and structures for communication between the two processors.
 
 #![no_std]
+use bitflags::bitflags;
 use serde::{Deserialize, Serialize};
 
 /// Maximum supported message size to be serialized or deserialized by `postcard`.
 /// Messages larger than this will be rejected.
 pub const COBS_MAX_MSG_SIZE: usize = 512;
 
+bitflags! {
+    #[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq)]
+    pub struct AdvChan: u8 {
+        const C39 = 1 << 7;
+        const C38 = 1 << 6;
+        const C37 = 1 << 5;
+    }
+}
+
 /// Bluetooth-specific messages for controlling the BLE radio and data transfer.
 #[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq)]
 pub enum Bluetooth<'a> {
+    /// Disable some Adv Channels
+    DisableChannels(AdvChan),
+    /// Adv Channels disabled
+    AckDisableChannels,
     /// Turn on the BLE radio
     Enable,
     /// BLE radio enabled
@@ -168,174 +182,185 @@ pub enum HostProtocolMessage<'a> {
 #[cfg(test)]
 extern crate std;
 #[test]
-fn calculate_bootloader_message_sizes() {
+fn calculate_bootloader_message_data() {
     use postcard::to_slice_cobs;
-    use std::println;
+    use std::{println, vec::Vec};
 
-    // Helper function to calculate COBS size
-    fn get_cobs_size(msg: HostProtocolMessage) -> usize {
-        let mut buf = [0; 512]; // Buffer large enough for all messages
+    fn get_cobs_data(msg: HostProtocolMessage) -> Vec<u8> {
+        let mut buf = [0u8; 512]; // Buffer large enough for all messages
         let serialized = to_slice_cobs(&msg, &mut buf).unwrap();
-        serialized.len()
+        serialized.to_vec()
     }
 
     // Test each variant
-    let sizes_bootloader_cobs_sent = [
+    let data_bootloader_cobs_sent = [
         (
             "AckEraseFirmware",
-            get_cobs_size(HostProtocolMessage::Bootloader(Bootloader::AckEraseFirmware)),
+            get_cobs_data(HostProtocolMessage::Bootloader(Bootloader::AckEraseFirmware)),
         ),
         (
             "AckVerifyFirmware",
-            get_cobs_size(HostProtocolMessage::Bootloader(Bootloader::AckVerifyFirmware {
+            get_cobs_data(HostProtocolMessage::Bootloader(Bootloader::AckVerifyFirmware {
                 result: true,
                 hash: [0; 32],
             })),
         ),
         (
             "NackWithIdx",
-            get_cobs_size(HostProtocolMessage::Bootloader(Bootloader::NackWithIdx { block_idx: 0xFFFFFFFF })),
+            get_cobs_data(HostProtocolMessage::Bootloader(Bootloader::NackWithIdx { block_idx: 0xFFFFFFFF })),
         ),
         (
             "AckWithIdx",
-            get_cobs_size(HostProtocolMessage::Bootloader(Bootloader::AckWithIdx { block_idx: 0xFFFFFFFF })),
+            get_cobs_data(HostProtocolMessage::Bootloader(Bootloader::AckWithIdx { block_idx: 0xFFFFFFFF })),
         ),
         (
             "AckWithIdxCrc",
-            get_cobs_size(HostProtocolMessage::Bootloader(Bootloader::AckWithIdxCrc {
+            get_cobs_data(HostProtocolMessage::Bootloader(Bootloader::AckWithIdxCrc {
                 block_idx: 0xFFFFFFFF,
                 crc: 0xFFFFFFFF,
             })),
         ),
         (
             "FirmwareOutOfBounds",
-            get_cobs_size(HostProtocolMessage::Bootloader(Bootloader::FirmwareOutOfBounds {
+            get_cobs_data(HostProtocolMessage::Bootloader(Bootloader::FirmwareOutOfBounds {
                 block_idx: 0xFFFFFFFF,
             })),
         ),
         (
             "NoCosignHeader",
-            get_cobs_size(HostProtocolMessage::Bootloader(Bootloader::NoCosignHeader)),
+            get_cobs_data(HostProtocolMessage::Bootloader(Bootloader::NoCosignHeader)),
         ),
         (
             "AckFirmwareVersion",
-            get_cobs_size(HostProtocolMessage::Bootloader(Bootloader::AckFirmwareVersion {
+            get_cobs_data(HostProtocolMessage::Bootloader(Bootloader::AckFirmwareVersion {
                 version: "v1.2.3",
             })),
         ),
         (
             "AckBootloaderVersion",
-            get_cobs_size(HostProtocolMessage::Bootloader(Bootloader::AckBootloaderVersion {
+            get_cobs_data(HostProtocolMessage::Bootloader(Bootloader::AckBootloaderVersion {
                 version: "v1.2.3-longversionstring",
             })),
         ),
         (
             "AckChallengeSet",
-            get_cobs_size(HostProtocolMessage::Bootloader(Bootloader::AckChallengeSet {
+            get_cobs_data(HostProtocolMessage::Bootloader(Bootloader::AckChallengeSet {
                 result: SecretSaveResponse::Error,
             })),
         ),
     ];
 
     // Test each variant
-    let sizes_bootloader_cobs_recv = [
+    let data_bootloader_cobs_recv = [
         (
             "EraseFirmware",
-            get_cobs_size(HostProtocolMessage::Bootloader(Bootloader::EraseFirmware)),
+            get_cobs_data(HostProtocolMessage::Bootloader(Bootloader::EraseFirmware)),
         ),
-        // Test WriteFirmwareBlock with different sizes
+        // Test WriteFirmwareBlock with different data
         (
             "WriteFirmwareBlock(256)",
-            get_cobs_size(HostProtocolMessage::Bootloader(Bootloader::WriteFirmwareBlock {
+            get_cobs_data(HostProtocolMessage::Bootloader(Bootloader::WriteFirmwareBlock {
                 block_idx: 0xFFFFFFFF,
                 block_data: &[0xFF; 256],
             })),
         ),
         (
             "FirmwareVersion",
-            get_cobs_size(HostProtocolMessage::Bootloader(Bootloader::FirmwareVersion)),
+            get_cobs_data(HostProtocolMessage::Bootloader(Bootloader::FirmwareVersion)),
         ),
         (
             "BootloaderVersion",
-            get_cobs_size(HostProtocolMessage::Bootloader(Bootloader::BootloaderVersion)),
+            get_cobs_data(HostProtocolMessage::Bootloader(Bootloader::BootloaderVersion)),
         ),
         (
             "ChallengeSet",
-            get_cobs_size(HostProtocolMessage::Bootloader(Bootloader::ChallengeSet {
+            get_cobs_data(HostProtocolMessage::Bootloader(Bootloader::ChallengeSet {
                 secret: [0xFFFFFFFF; 8],
             })),
         ),
         (
             "BootFirmware",
-            get_cobs_size(HostProtocolMessage::Bootloader(Bootloader::BootFirmware)),
+            get_cobs_data(HostProtocolMessage::Bootloader(Bootloader::BootFirmware)),
         ),
     ];
 
     // Add new test array for Bluetooth messages
-    let sizes_bluetooth_messages = [
-        ("Enable", get_cobs_size(HostProtocolMessage::Bluetooth(Bluetooth::Enable))),
-        ("Disable", get_cobs_size(HostProtocolMessage::Bluetooth(Bluetooth::Disable))),
+    let data_bluetooth_messages = [
+        (
+            "DisableChannels(37|38)",
+            get_cobs_data(HostProtocolMessage::Bluetooth(Bluetooth::DisableChannels(
+                AdvChan::C37 | AdvChan::C38,
+            ))),
+        ),
+        (
+            "DisableChannels(37|39)",
+            get_cobs_data(HostProtocolMessage::Bluetooth(Bluetooth::DisableChannels(
+                AdvChan::C37 | AdvChan::C39,
+            ))),
+        ),
+        (
+            "DisableChannels(38|39)",
+            get_cobs_data(HostProtocolMessage::Bluetooth(Bluetooth::DisableChannels(
+                AdvChan::C38 | AdvChan::C39,
+            ))),
+        ),
+        ("Enable", get_cobs_data(HostProtocolMessage::Bluetooth(Bluetooth::Enable))),
+        ("Disable", get_cobs_data(HostProtocolMessage::Bluetooth(Bluetooth::Disable))),
         (
             "GetSignalStrength",
-            get_cobs_size(HostProtocolMessage::Bluetooth(Bluetooth::GetSignalStrength)),
+            get_cobs_data(HostProtocolMessage::Bluetooth(Bluetooth::GetSignalStrength)),
         ),
         (
             "SignalStrength",
-            get_cobs_size(HostProtocolMessage::Bluetooth(Bluetooth::SignalStrength(Some(i8::MAX)))),
+            get_cobs_data(HostProtocolMessage::Bluetooth(Bluetooth::SignalStrength(Some(i8::MAX)))),
         ),
         (
             "SendData(256)",
-            get_cobs_size(HostProtocolMessage::Bluetooth(Bluetooth::SendData(&[0xFF; 256]))),
+            get_cobs_data(HostProtocolMessage::Bluetooth(Bluetooth::SendData(&[0xFF; 256]))),
         ),
         (
             "ReceivedData(256)",
-            get_cobs_size(HostProtocolMessage::Bluetooth(Bluetooth::ReceivedData(&[0xFF; 256]))),
+            get_cobs_data(HostProtocolMessage::Bluetooth(Bluetooth::ReceivedData(&[0xFF; 256]))),
         ),
         (
             "GetFirmwareVersion",
-            get_cobs_size(HostProtocolMessage::Bluetooth(Bluetooth::GetFirmwareVersion)),
+            get_cobs_data(HostProtocolMessage::Bluetooth(Bluetooth::GetFirmwareVersion)),
         ),
         (
             "AckFirmwareVersion",
-            get_cobs_size(HostProtocolMessage::Bluetooth(Bluetooth::AckFirmwareVersion { version: "v1.2.3" })),
+            get_cobs_data(HostProtocolMessage::Bluetooth(Bluetooth::AckFirmwareVersion { version: "v1.2.3" })),
         ),
         (
             "GetBtAddress",
-            get_cobs_size(HostProtocolMessage::Bluetooth(Bluetooth::GetBtAddress)),
+            get_cobs_data(HostProtocolMessage::Bluetooth(Bluetooth::GetBtAddress)),
         ),
         (
             "AckBtAddress",
-            get_cobs_size(HostProtocolMessage::Bluetooth(Bluetooth::AckBtAddress { bt_address: [0xFF; 6] })),
+            get_cobs_data(HostProtocolMessage::Bluetooth(Bluetooth::AckBtAddress { bt_address: [0xFF; 6] })),
         ),
     ];
 
     // Print results sorted by size
-    let mut sizes_vec = sizes_bootloader_cobs_recv.to_vec();
-    sizes_vec.sort_by_key(|(_name, size)| *size);
-
-    println!("Message sizes after COBS encoding of bootloader received messages:");
+    let data_vec = data_bootloader_cobs_recv.to_vec();
+    println!("Message data after COBS encoding of bootloader received messages:");
     println!("----------------------------------");
-    for (name, size) in sizes_vec {
-        println!("{}: {} bytes", name, size);
+    for (name, data) in data_vec {
+        println!("{}: {:02x?}", name, data);
     }
 
     // Print results sorted by size
-    let mut sizes_vec = sizes_bootloader_cobs_sent.to_vec();
-    sizes_vec.sort_by_key(|(_name, size)| *size);
-
-    println!("Message sizes after COBS encoding of bootloader sent messages:");
+    let data_vec = data_bootloader_cobs_sent.to_vec();
+    println!("Message data after COBS encoding of bootloader sent messages:");
     println!("----------------------------------");
-    for (name, size) in sizes_vec {
-        println!("{}: {} bytes", name, size);
+    for (name, data) in data_vec {
+        println!("{}: {:02x?}", name, data);
     }
 
-    // Add printing for Bluetooth message sizes
-    let mut bluetooth_sizes = sizes_bluetooth_messages.to_vec();
-    bluetooth_sizes.sort_by_key(|(_name, size)| *size);
-
-    println!("\nMessage sizes after COBS encoding of Bluetooth messages:");
+    // Add printing for Bluetooth message data
+    let bluetooth_data = data_bluetooth_messages.to_vec();
+    println!("\nMessage data after COBS encoding of Bluetooth messages:");
     println!("----------------------------------");
-    for (name, size) in bluetooth_sizes {
-        println!("{}: {} bytes", name, size);
+    for (name, data) in bluetooth_data {
+        println!("{}: {:02x?}", name, data);
     }
 }

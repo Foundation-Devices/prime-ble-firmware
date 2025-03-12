@@ -3,7 +3,7 @@
 
 use crate::nus::*;
 use crate::BT_DATA_TX;
-use crate::{BT_STATE, RSSI_VALUE};
+use crate::{BT_ADV_CHAN, BT_STATE, RSSI_VALUE};
 use consts::{ATT_MTU, DEVICE_NAME, SERVICES_LIST, SHORT_NAME};
 use core::mem;
 use defmt::{debug, error, info, unwrap};
@@ -155,6 +155,7 @@ pub async fn run_bluetooth(sd: &'static Softdevice, server: &Server) {
         // Set advertising timer in units of 625us (about 50ms with 75 units)
         let config = peripheral::Config {
             interval: 75,
+            channel_mask: [0, 0, 0, 0, BT_ADV_CHAN.load(core::sync::atomic::Ordering::Relaxed)],
             ..Default::default()
         };
 

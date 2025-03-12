@@ -51,7 +51,7 @@ futures = { version = "0.3.31", default-features = false }
 heapless = { workspace = true }
 hmac = { workspace = true }
 host-protocol = { path = "../host-protocol" }
-nrf-softdevice = { git = "https://github.com/embassy-rs/nrf-softdevice.git", features = [
+nrf-softdevice = { git = "https://github.com/Foundation-Devices/nrf-softdevice.git", rev = "566c1c2d7b269fa8f9addbc4473811b6b2b0f693", features = [
     "ble-gatt-server",
     "ble-peripheral",
     "ble-rssi",
@@ -61,7 +61,7 @@ nrf-softdevice = { git = "https://github.com/embassy-rs/nrf-softdevice.git", fea
     "nrf52805",
     "s113",
 ] }
-nrf-softdevice-s113 = { git = "https://github.com/embassy-rs/nrf-softdevice.git" }
+nrf-softdevice-s113 = { git = "https://github.com/Foundation-Devices/nrf-softdevice.git", rev = "566c1c2d7b269fa8f9addbc4473811b6b2b0f693" }
 panic-probe = { workspace = true }
 postcard = { workspace = true }
 sha2 = { workspace = true }

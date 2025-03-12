@@ -69,8 +69,8 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     if let Some(cmd) = args.cmd {
         let mut serial = tokio_serial::new(&args.port, args.baudrate).open_native_async()?;
-        let mut buf = [0; 512]; // Buffer large enough for all messages
-        let msg = postcard::to_slice_cobs::<HostProtocolMessage>(&cmd.clone().into(), &mut buf)?;
+        let mut buf = [0u8; 512]; // Buffer large enough for all messages
+        let msg = postcard::to_slice_cobs::<HostProtocolMessage>(&cmd.clone().into(), &mut buf).expect("Failed to serialize message");
         println!(">>{:02x?}", msg);
         serial.write_all(msg).await?;
         serial.flush().await?;
