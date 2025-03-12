@@ -19,7 +19,7 @@ use embassy_time::{with_timeout, Duration};
 use embedded_io_async::Write;
 use heapless::Vec;
 use hmac::{Hmac, Mac};
-use host_protocol::{Bluetooth, HostProtocolMessage, PostcardError, SendDataResponse, State, COBS_MAX_MSG_SIZE};
+use host_protocol::{AdvChan, Bluetooth, HostProtocolMessage, PostcardError, SendDataResponse, State, COBS_MAX_MSG_SIZE};
 use postcard::accumulator::{CobsAccumulator, FeedResult};
 use postcard::to_slice_cobs;
 use sha2::Sha256 as ShaChallenge;
@@ -237,8 +237,12 @@ async fn host_protocol_handler<'a>(recv_msg: HostProtocolMessage<'a>, cobs_buf: 
             match bluetooth_msg {
                 Bluetooth::DisableChannels(chan) => {
                     trace!("Bluetooth set channnels {}", chan);
-                    BT_ADV_CHAN.store(chan.bits(), core::sync::atomic::Ordering::Relaxed);
-                    Some(HostProtocolMessage::Bluetooth(Bluetooth::AckDisableChannels))
+                    if chan == AdvChan::all() {
+                        Some(HostProtocolMessage::Bluetooth(Bluetooth::NackDisableChannels))
+                    } else {
+                        BT_ADV_CHAN.store(chan.bits(), core::sync::atomic::Ordering::Relaxed);
+                        Some(HostProtocolMessage::Bluetooth(Bluetooth::AckDisableChannels))
+                    }
                 }
                 Bluetooth::Enable => {
                     trace!("Bluetooth enabled");

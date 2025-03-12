@@ -27,8 +27,10 @@ bitflags! {
 pub enum Bluetooth<'a> {
     /// Disable some Adv Channels
     DisableChannels(AdvChan),
-    /// Adv Channels disabled
+    /// Acknowledge Adv Channels disabled
     AckDisableChannels,
+    /// Negative acknowledgment of Adv Channels disabling
+    NackDisableChannels,
     /// Turn on the BLE radio
     Enable,
     /// BLE radio enabled
