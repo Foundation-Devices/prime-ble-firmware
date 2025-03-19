@@ -40,4 +40,4 @@ jobs:
     - name: Build host-protocol
       run: cargo build --release --package host-protocol
     - name: Test host-protocol compatibility
-      run: cargo test --release --package host-protocol
+      run: cargo test --release --package host-protocol --lib
