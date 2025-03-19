@@ -40,8 +40,8 @@ bluetooth-app-debug: softdevice
 bootloader-debug: softdevice
     cd bootloader && cargo run --release --features debug
 
-# Run COBS protocol size validation tests
-cobs-size-test:
+# Run protocol encoding tests
+test-encoding:
     cd host-protocol && cargo test -- --nocapture
 
 # Send Host Protocol Enable Bluetooth command
