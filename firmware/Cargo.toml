@@ -9,6 +9,7 @@ version = "0.1.1"
 publish = false
 
 [features]
+default = ["hw-rev-d"]
 debug = ["analytics"]
 
 # Hardware is on rev D

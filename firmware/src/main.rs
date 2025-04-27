@@ -17,7 +17,7 @@ use embassy_time::Timer;
 // time driver
 use panic_probe as _;
 
-use comms::comms_task;
+use comms::{check_ble_rx_task, comms_task};
 use consts::{ATT_MTU, BT_MAX_NUM_PKT};
 use defmt::{info, *};
 use embassy_executor::Spawner;
@@ -130,7 +130,8 @@ async fn main(spawner: Spawner) {
     #[cfg(feature = "hw-rev-d")]
     let spi = {
         // Configure SPI
-        let config_spi = spis::Config::default();
+        let mut config_spi = spis::Config::default();
+        config_spi.orc = 0x51; // to detect padding
         Spis::new(p.SPI0, Irqs, p.P0_18, p.P0_16, p.P0_14, p.P0_12, config_spi)
     };
 
@@ -158,6 +159,8 @@ async fn main(spawner: Spawner) {
     unwrap!(spawner.spawn(comms_task(uart)));
     #[cfg(feature = "hw-rev-d")]
     unwrap!(spawner.spawn(comms_task(spi)));
+    #[cfg(feature = "hw-rev-d")]
+    unwrap!(spawner.spawn(check_ble_rx_task()));
 
     info!("Init tasks");
 
@@ -177,8 +180,7 @@ async fn main(spawner: Spawner) {
             info!("Starting BLE advertisement");
             // source of this idea https://github.com/embassy-rs/nrf-softdevice/blob/master/examples/src/bin/ble_peripheral_onoff.rs
             futures::future::select(run_bluetooth_fut, stop_bluetooth_fut).await;
-        } else {
-            Timer::after_millis(100).await;
         }
+        Timer::after_millis(200).await;
     }
 }
