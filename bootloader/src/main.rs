@@ -23,8 +23,8 @@ use panic_probe as _;
 
 use consts::{FLASH_PAGE, SEALED_SECRET, SEAL_IDX};
 use consts_global::{BASE_APP_ADDR, BASE_BOOTLOADER_ADDR, SIGNATURE_HEADER_SIZE, UICR_SECRET_SIZE, UICR_SECRET_START};
-use core::{cell::RefCell, str::FromStr};
-use cosign2::{Header, VerificationResult};
+use core::cell::RefCell;
+use cosign2::VerificationResult;
 use crc::{Crc, CRC_32_ISCSI};
 use defmt::{debug, error, info, trace};
 use embassy_executor::Spawner;
@@ -64,7 +64,7 @@ use postcard::{
 use postcard::{from_bytes, to_slice};
 use serde::{Deserialize, Serialize};
 use sha2::Sha256 as ShaChallenge;
-use verify::{get_fw_image_slice, verify_fw_image, write_secret};
+use verify::{get_fw_image_slice, read_version_and_build_date, verify_fw_image, write_secret};
 
 // Global mutex for hardware RNG access
 static RNG_HW: CriticalSectionMutex<RefCell<Option<Rng<'_, RNG>>>> = Mutex::new(RefCell::new(None));
@@ -426,12 +426,9 @@ async fn main(_spawner: Spawner) {
                                     }
                                     // Get firmware version from header
                                     Bootloader::FirmwareVersion => {
-                                        if let Ok(Some(header)) = Header::parse_unverified(
-                                            get_fw_image_slice(BASE_APP_ADDR, SIGNATURE_HEADER_SIZE),
-                                            SIGNATURE_HEADER_SIZE as usize,
-                                            true,
-                                        ) {
-                                            firmware_version = heapless::String::from_str(header.version()).unwrap();
+                                        let image = get_fw_image_slice(BASE_APP_ADDR, SIGNATURE_HEADER_SIZE);
+                                        if let Some((version, _build_date)) = read_version_and_build_date(image, false) {
+                                            firmware_version = version;
                                             Some(HostProtocolMessage::Bootloader(Bootloader::AckFirmwareVersion {
                                                 version: &firmware_version,
                                             }))
@@ -605,12 +602,9 @@ async fn main(_spawner: Spawner) {
                         }
                         // Get firmware version from header
                         Bootloader::FirmwareVersion => {
-                            if let Ok(Some(header)) = Header::parse_unverified(
-                                get_fw_image_slice(BASE_APP_ADDR, SIGNATURE_HEADER_SIZE),
-                                SIGNATURE_HEADER_SIZE as usize,
-                                true,
-                            ) {
-                                firmware_version = heapless::String::from_str(header.version()).unwrap();
+                            let image = get_fw_image_slice(BASE_APP_ADDR, SIGNATURE_HEADER_SIZE);
+                            if let Some((version, _build_date)) = read_version_and_build_date(image, false) {
+                                firmware_version = version;
                                 Some(HostProtocolMessage::Bootloader(Bootloader::AckFirmwareVersion {
                                     version: &firmware_version,
                                 }))

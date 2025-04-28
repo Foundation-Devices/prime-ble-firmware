@@ -442,9 +442,19 @@ mod tests {
                 vec![1, 11],
             ),
             (
+                HostProtocolMessage::Bootloader(Bootloader::FirmwareVersion),
+                vec![3, 1, 12, 0],
+                vec![1, 12],
+            ),
+            (
                 HostProtocolMessage::Bootloader(Bootloader::AckFirmwareVersion { version: "v1.2.3" }),
                 vec![10, 1, 13, 6, 118, 49, 46, 50, 46, 51, 0],
                 vec![1, 13, 6, 118, 49, 46, 50, 46, 51],
+            ),
+            (
+                HostProtocolMessage::Bootloader(Bootloader::BootloaderVersion),
+                vec![3, 1, 14, 0],
+                vec![1, 14],
             ),
             (
                 HostProtocolMessage::Bootloader(Bootloader::AckBootloaderVersion {
@@ -458,16 +468,6 @@ mod tests {
                     1, 15, 24, 118, 49, 46, 50, 46, 51, 45, 108, 111, 110, 103, 118, 101, 114, 115, 105, 111, 110, 115, 116, 114, 105, 110,
                     103,
                 ],
-            ),
-            (
-                HostProtocolMessage::Bootloader(Bootloader::FirmwareVersion),
-                vec![3, 1, 12, 0],
-                vec![1, 12],
-            ),
-            (
-                HostProtocolMessage::Bootloader(Bootloader::BootloaderVersion),
-                vec![3, 1, 14, 0],
-                vec![1, 14],
             ),
             (
                 HostProtocolMessage::Bootloader(Bootloader::ChallengeSet { secret: [0xFFFFFFFF; 8] }),

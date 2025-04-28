@@ -10,12 +10,12 @@ install:
     CC="" cargo install --path ../keyOS/imports/cosign2/cosign2-bin --bin cosign2
 
 # Build production firmware package
-build:
-    cargo xtask build-fw-image
+build args="":
+    cargo xtask {{args}} build-fw-image
 
 # Build debug firmware package with UART console without flash protection
-build-debug:
-    cargo xtask build-fw-debug-image
+build-debug args="":
+    cargo xtask {{args}} build-fw-debug-image
 
 unlock:
     nrf-recover -y

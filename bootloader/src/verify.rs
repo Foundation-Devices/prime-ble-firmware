@@ -6,10 +6,12 @@ use crate::RNG_HW;
 use crate::SEALED_SECRET;
 use crate::SEAL_IDX;
 use crate::SIGNATURE_HEADER_SIZE;
+use core::str::FromStr;
 use cortex_m::prelude::_embedded_hal_blocking_delay_DelayMs;
 use cosign2::{Header, Trust, VerificationResult};
 use defmt::info;
 use embassy_time::Delay;
+use heapless::String;
 use micro_ecc_sys::{uECC_decompress, uECC_secp256k1, uECC_valid_public_key, uECC_verify};
 use nrf52805_pac::NVMC;
 use nrf52805_pac::UICR;
@@ -97,12 +99,8 @@ impl cosign2::Sha256 for Sha256 {
 /// Verifies an OS image by checking its version, build date and signature
 pub fn verify_fw_image() -> Option<(VerificationResult, Sha256)> {
     let image = get_fw_image_slice(crate::BASE_APP_ADDR, crate::consts::APP_SIZE);
-    if let Some((version, build_date)) = read_version_and_build_date(image) {
-        info!(
-            "Version : {} - build date : {}",
-            core::str::from_utf8(&version).unwrap_or("invalid"),
-            core::str::from_utf8(&build_date).unwrap_or("invalid")
-        );
+    if let Some((version, build_date)) = read_version_and_build_date(image, true) {
+        info!("Version : {} - build date : {}", version, build_date);
         let (verif_res, hash) = verify_image(image);
         return Some((verif_res, hash));
     }
@@ -176,25 +174,15 @@ fn verify_image(image: &[u8]) -> (VerificationResult, Sha256) {
 }
 
 /// Extracts version and build date information from the firmware header
-fn read_version_and_build_date(image: &[u8]) -> Option<([u8; 20], [u8; 14])> {
-    if let Ok(Some(header)) = Header::parse_unverified(image, SIGNATURE_HEADER_SIZE as usize, true) {
-        let mut version_bytes = [0u8; 20];
-        let str_bytes = header.version().as_bytes();
-        if str_bytes.len() > version_bytes.len() {
-            return None;
+pub fn read_version_and_build_date(image: &[u8], check_fw_size: bool) -> Option<(String<20>, String<14>)> {
+    if let Ok(Some(header)) = Header::parse_unverified(image, SIGNATURE_HEADER_SIZE as usize, check_fw_size) {
+        match (String::from_str(&header.version()), String::from_str(&header.date())) {
+            (Ok(version), Ok(build_date)) => Some((version, build_date)),
+            _ => None,
         }
-        version_bytes[..str_bytes.len()].copy_from_slice(str_bytes);
-
-        let mut date_bytes = [0u8; 14];
-        let str_bytes = header.date().as_bytes();
-        if str_bytes.len() > date_bytes.len() {
-            return None;
-        }
-        date_bytes[..str_bytes.len()].copy_from_slice(str_bytes);
-
-        return Some((version_bytes, date_bytes));
+    } else {
+        None
     }
-    None
 }
 
 /// Creates a slice from raw memory at the given base address
