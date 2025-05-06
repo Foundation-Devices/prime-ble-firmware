@@ -29,6 +29,7 @@ use crc::{Crc, CRC_32_ISCSI};
 use defmt::{debug, error, info, trace};
 use embassy_executor::Spawner;
 use embassy_nrf::{
+    Peripheral,
     bind_interrupts,
     gpio::{Level, Output, OutputDrive},
     nvmc::Nvmc,
@@ -40,10 +41,9 @@ use embassy_nrf::{
     peripherals::SPI0,
     spis::{self, Spis},
 };
-#[cfg(not(feature = "hw-rev-d"))]
 use embassy_nrf::{
     peripherals::UARTE0,
-    uarte::{self, UarteTx},
+    uarte::{self},
 };
 use embassy_sync::blocking_mutex::CriticalSectionMutex;
 use embassy_sync::blocking_mutex::Mutex;
@@ -82,6 +82,7 @@ bind_interrupts!(struct Irqs {
 bind_interrupts!(struct Irqs {
     SPIM0_SPIS0_SPI0 => spis::InterruptHandler<SPI0>;
     RNG => rng::InterruptHandler<RNG>;
+    UARTE0_UART0 => uarte::InterruptHandler<UARTE0>;
 });
 
 /// Tracks the state of firmware updates
@@ -268,6 +269,19 @@ async fn main(_spawner: Spawner) {
         let uart = uarte::Uarte::new(p.UARTE0, Irqs, rxd, txd, config_uart);
         uart.split_with_idle(p.TIMER0, p.PPI_CH0, p.PPI_CH1)
     };
+
+    // Send a wake-up sequence to the MPU (SFT-5196 workaround)
+    #[cfg(feature = "hw-rev-d")]
+    {
+        let rx = unsafe { p.P0_12.clone_unchecked() }; // unused
+        let tx = unsafe { p.P0_16.clone_unchecked() };
+        let mut config_uart = uarte::Config::default();
+        config_uart.parity = uarte::Parity::EXCLUDED;
+        config_uart.baudrate = uarte::Baudrate::BAUD2400;
+
+        let mut uart = uarte::Uarte::new(p.UARTE0, Irqs, rx, tx, config_uart);
+        uart.write(&[0xAA]).await.unwrap();
+    }
 
     #[cfg(feature = "hw-rev-d")]
     let mut spi = {
