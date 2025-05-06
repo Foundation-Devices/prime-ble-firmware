@@ -1,7 +1,7 @@
 # SPDX-FileCopyrightText: 2024 Foundation Devices, Inc. <hello@foundation.xyz>
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-# Install requirments
+# Install requirements
 install:
     cargo install cargo-binutils
     cargo install nrf-recover
