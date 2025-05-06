@@ -39,11 +39,11 @@ use embassy_nrf::{
 use embassy_nrf::{
     peripherals::SPI0,
     spis::{self, Spis},
+    Peripheral,
 };
-#[cfg(not(feature = "hw-rev-d"))]
 use embassy_nrf::{
     peripherals::UARTE0,
-    uarte::{self, UarteTx},
+    uarte::{self},
 };
 use embassy_sync::blocking_mutex::CriticalSectionMutex;
 use embassy_sync::blocking_mutex::Mutex;
@@ -82,6 +82,7 @@ bind_interrupts!(struct Irqs {
 bind_interrupts!(struct Irqs {
     SPIM0_SPIS0_SPI0 => spis::InterruptHandler<SPI0>;
     RNG => rng::InterruptHandler<RNG>;
+    UARTE0_UART0 => uarte::InterruptHandler<UARTE0>;
 });
 
 /// Tracks the state of firmware updates
@@ -121,7 +122,7 @@ fn assert_out_irq() {
 /// Sends a message over UART using postcard with COBS encoding
 #[inline(never)]
 #[cfg(not(feature = "hw-rev-d"))]
-fn ack_msg_send(message: HostProtocolMessage, tx: &mut UarteTx<UARTE0>) {
+fn ack_msg_send(message: HostProtocolMessage, tx: &mut uarte::UarteTx<UARTE0>) {
     let mut buf_cobs = [0_u8; COBS_MAX_MSG_SIZE];
     let cobs_ack = to_slice_cobs(&message, &mut buf_cobs).unwrap();
     let _ = tx.blocking_write(cobs_ack);
@@ -269,6 +270,18 @@ async fn main(_spawner: Spawner) {
         uart.split_with_idle(p.TIMER0, p.PPI_CH0, p.PPI_CH1)
     };
 
+    // Send a wake-up sequence to the MPU (SFT-5196 workaround)
+    #[cfg(feature = "hw-rev-d")]
+    {
+        let tx = unsafe { p.P0_16.clone_unchecked() };
+        let mut config_uart = uarte::Config::default();
+        config_uart.parity = uarte::Parity::EXCLUDED;
+        config_uart.baudrate = uarte::Baudrate::BAUD2400;
+
+        let mut uart = uarte::UarteTx::new(p.UARTE0, Irqs, tx, config_uart);
+        uart.write(&[0xAA]).await.unwrap();
+    }
+
     #[cfg(feature = "hw-rev-d")]
     let mut spi = {
         // Configure SPI
@@ -342,7 +355,7 @@ async fn main(_spawner: Spawner) {
                         trace!("DeserError");
                         (new_wind, Some(HostProtocolMessage::PostcardError(PostcardError::Deser)))
                     }
-                    FeedResult::Success { req, remaining } => {
+                    FeedResult::Success { data: req, remaining } => {
                         trace!("Success");
                         debug!("Remaining {} bytes", remaining.len());
                         (
