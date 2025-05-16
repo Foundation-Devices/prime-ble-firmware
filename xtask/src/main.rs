@@ -42,17 +42,17 @@ enum Commands {
     /// Patch SoftDevice hex file to save some space at the end of it
     #[command(verbatim_doc_comment)]
     PatchSd,
-    
+
     /// Build firmware without signing or packaging
     BuildUnsigned,
-    
+
     /// Sign the firmware with the provided cosign2 config
     SignFirmware {
         /// Path to cosign2.toml config file
         #[arg(default_value = "cosign2.toml")]
         config_path: String,
     },
-    
+
     /// Package the signed firmware
     PackageFirmware,
 }
@@ -313,7 +313,7 @@ fn build_bt_debug_firmware(verbose: bool, rev_d: bool) {
     }
 }
 
-fn sign_bt_firmware(config_path: &str) {
+fn sign_bt_firmware(config_path: &str, developper: bool) {
     let cosign2_config_path = project_root().join(config_path);
     let cosign2_config_path_str = cosign2_config_path.to_str().unwrap();
 
@@ -334,23 +334,20 @@ fn sign_bt_firmware(config_path: &str) {
     let version = Version::parse(FIRMWARE_VERSION).expect("Wrong version format").to_string();
 
     let header_size = SIGNATURE_HEADER_SIZE.to_string();
-    let mut args = vec![
-        "sign",
-        "-i",
-        "./BtPackage/BT_application.bin",
-        "-c",
-        config_path,
-        // "--developer",
+    let mut args = vec!["sign", "-i", "./BtPackage/BT_application.bin", "-c", config_path];
+    if developper {
+        args.push("--developer");
+    }
+    args.extend([
         "--header-size",
         header_size.as_str(),
         "-o",
         "./BtPackage/BT_application_signed.bin",
-    ];
-    args.extend_from_slice(&["--firmware-version", &version]);
+        "--firmware-version",
+        &version,
+    ]);
 
     tracing::info!("Signing binary Bt application with Cosign2...");
-
-    // TODO: SFT-3595 sign again with second key
 
     if !Command::new("cosign2")
         .stdout(Stdio::null())
@@ -557,7 +554,7 @@ fn main() {
             build_tools_check(args.verbose);
             build_bt_bootloader(args.verbose, args.rev_d);
             build_bt_firmware(args.verbose, args.rev_d);
-            sign_bt_firmware("cosign2.toml");
+            sign_bt_firmware("cosign2.toml", true);
             build_bt_package();
         }
         Commands::BuildUnsigned => {
@@ -566,7 +563,7 @@ fn main() {
             build_bt_firmware(args.verbose, args.rev_d);
         }
         Commands::SignFirmware { config_path } => {
-            sign_bt_firmware(&config_path);
+            sign_bt_firmware(&config_path, false);
         }
         Commands::PackageFirmware => {
             build_bt_package();
