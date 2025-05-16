@@ -42,6 +42,19 @@ enum Commands {
     /// Patch SoftDevice hex file to save some space at the end of it
     #[command(verbatim_doc_comment)]
     PatchSd,
+    
+    /// Build firmware without signing or packaging
+    BuildUnsigned,
+    
+    /// Sign the firmware with the provided cosign2 config
+    SignFirmware {
+        /// Path to cosign2.toml config file
+        #[arg(default_value = "cosign2.toml")]
+        config_path: String,
+    },
+    
+    /// Package the signed firmware
+    PackageFirmware,
 }
 
 fn project_root() -> PathBuf {
@@ -300,8 +313,8 @@ fn build_bt_debug_firmware(verbose: bool, rev_d: bool) {
     }
 }
 
-fn sign_bt_firmware() {
-    let cosign2_config_path = project_root().join("cosign2.toml");
+fn sign_bt_firmware(config_path: &str) {
+    let cosign2_config_path = project_root().join(config_path);
     let cosign2_config_path_str = cosign2_config_path.to_str().unwrap();
 
     if let Err(e) = fs::File::open(&cosign2_config_path) {
@@ -326,8 +339,8 @@ fn sign_bt_firmware() {
         "-i",
         "./BtPackage/BT_application.bin",
         "-c",
-        "cosign2.toml",
-        "--developer",
+        config_path,
+        // "--developer",
         "--header-size",
         header_size.as_str(),
         "-o",
@@ -544,7 +557,18 @@ fn main() {
             build_tools_check(args.verbose);
             build_bt_bootloader(args.verbose, args.rev_d);
             build_bt_firmware(args.verbose, args.rev_d);
-            sign_bt_firmware();
+            sign_bt_firmware("cosign2.toml");
+            build_bt_package();
+        }
+        Commands::BuildUnsigned => {
+            build_tools_check(args.verbose);
+            build_bt_bootloader(args.verbose, args.rev_d);
+            build_bt_firmware(args.verbose, args.rev_d);
+        }
+        Commands::SignFirmware { config_path } => {
+            sign_bt_firmware(&config_path);
+        }
+        Commands::PackageFirmware => {
             build_bt_package();
         }
         Commands::BuildFwDebugImage => {

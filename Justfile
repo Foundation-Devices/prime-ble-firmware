@@ -17,6 +17,18 @@ build args="":
 build-debug args="":
     cargo xtask {{args}} build-fw-debug-image
 
+# Build unsigned firmware package (without signing or packaging)
+build-unsigned args="":
+    cargo xtask {{args}} build-unsigned
+
+# Sign firmware with specified cosign2 config
+sign config="cosign2.toml":
+    cargo xtask sign-firmware {{config}}
+
+# Package the signed firmware
+package:
+    cargo xtask package-firmware
+
 unlock:
     nrf-recover -y
 
