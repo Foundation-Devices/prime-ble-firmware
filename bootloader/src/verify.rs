@@ -164,7 +164,7 @@ fn verify_image(image: &[u8]) -> (VerificationResult, Sha256) {
         control_flow_integrity_counter += CF1;
         if let Ok(Some(header)) = res {
             control_flow_integrity_counter += CF2;
-            if *header.firmware_hash() != [0; 32] {
+            if *header.binary_hash() != [0; 32] {
                 control_flow_integrity_counter += CF3;
                 if [Trust::FullyTrusted, Trust::ThirdParty, Trust::Disabled].contains(&header.trust()) {
                     control_flow_integrity_counter += CF4;
@@ -172,13 +172,13 @@ fn verify_image(image: &[u8]) -> (VerificationResult, Sha256) {
                         control_flow_integrity_counter += CF5;
                         let firmware_bytes = &image[SIGNATURE_HEADER_SIZE as usize..];
                         #[allow(clippy::collapsible_if)]
-                        if firmware_bytes.len() as u32 == header.firmware_size() {
+                        if firmware_bytes.len() as u32 == header.bin_size() {
                             control_flow_integrity_counter += CF6;
-                            if core::hint::black_box(firmware_bytes.len() as u32 == header.firmware_size()) {
+                            if core::hint::black_box(firmware_bytes.len() as u32 == header.bin_size()) {
                                 control_flow_integrity_counter += CF7;
                                 let cfi_counter_ptr = &control_flow_integrity_counter as *const u32;
                                 if unsafe { cfi_counter_ptr.read_volatile() } == CF1 + CF2 + CF3 + CF4 + CF5 + CF6 + CF7 {
-                                    let sha256 = header.firmware_hash();
+                                    let sha256 = header.binary_hash();
                                     return (VerificationResult::Valid, Sha256 { sha: *sha256 });
                                 }
                             }
