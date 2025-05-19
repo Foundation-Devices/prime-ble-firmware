@@ -343,7 +343,7 @@ fn sign_bt_firmware(config_path: &str, developper: bool) {
         header_size.as_str(),
         "-o",
         "./BtPackage/BT_application_signed.bin",
-        "--firmware-version",
+        "--binary-version",
         &version,
     ]);
 
