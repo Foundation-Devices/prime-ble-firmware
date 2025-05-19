@@ -241,22 +241,6 @@ fn build_bt_firmware(verbose: bool, rev_d: bool) {
         exit(-1);
     }
 
-    tracing::info!("Creating BT application hex file");
-    let mut cargo_cmd = Command::new(cargo());
-    let cmd = cargo_cmd
-        .current_dir(project_root().join("firmware"))
-        .args(["objcopy", "--release"]);
-    let cmd = if rev_d { cmd.args(["--features", "hw-rev-d"]) } else { cmd };
-    let mut cmd = cmd.args(["--", "-O", "ihex", "../BtPackage/BtApp.hex"]);
-    if !verbose {
-        cmd = cmd.stdout(Stdio::null()).stderr(Stdio::null());
-    }
-    let status = cmd.status().expect("Running Cargo objcopy failed");
-    if !status.success() {
-        tracing::error!("Firmware build failed");
-        exit(-1);
-    }
-
     // Created a full populated flash image to avoid the signed fw is different from the slice to check.
     // We will always get the full slice of flash where app is flashed ( BASE_APP_ADDR up to BASE_BOOTLOADER_ADDR )
     tracing::info!("Creating BT application bin file");
@@ -494,7 +478,6 @@ fn build_bt_package() {
         .current_dir(project_root().join("BtPackage"))
         .arg("-rf")
         .arg("bootloader.hex")
-        .arg("BtApp.hex")
         .status()
         .expect("Running rm failed");
     if !status.success() {
