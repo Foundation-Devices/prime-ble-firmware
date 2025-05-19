@@ -234,7 +234,7 @@ dependencies = [
 
 [[package]]
 name = "bootloader"
-version = "0.1.2"
+version = "1.0.0"
 dependencies = [
  "bindgen",
  "consts",
@@ -507,7 +507,7 @@ dependencies = [
 [[package]]
 name = "cosign2"
 version = "0.4.1"
-source = "git+https://github.com/Foundation-Devices/keyOS#ce836b3c26303e84dcfb2ea3dd3ef90ba1e02dc2"
+source = "git+https://github.com/Foundation-Devices/keyOS#0caf300ebe18c6c62be1285339cdefe479711b04"
 dependencies = [
  "chrono",
 ]
@@ -1005,7 +1005,7 @@ dependencies = [
 
 [[package]]
 name = "firmware"
-version = "0.1.1"
+version = "1.0.0"
 dependencies = [
  "consts",
  "cortex-m",
@@ -1485,7 +1485,7 @@ dependencies = [
 [[package]]
 name = "micro-ecc-sys"
 version = "0.3.2"
-source = "git+https://github.com/Foundation-Devices/micro-ecc-sys.git#973b8a9dd7b112f1c2a5b58016f8ee79bdce46ed"
+source = "git+https://github.com/Foundation-Devices/keyOS#0caf300ebe18c6c62be1285339cdefe479711b04"
 dependencies = [
  "bindgen",
  "cc",

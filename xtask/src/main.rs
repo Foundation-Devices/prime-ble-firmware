@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2024 Foundation Devices, Inc. <hello@foundation.xyz>
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-use cargo_metadata::semver::Version;
+use cargo_metadata::MetadataCommand;
 use clap::{Parser, Subcommand};
 use consts::{BASE_APP_ADDR, BASE_BOOTLOADER_ADDR, SIGNATURE_HEADER_SIZE};
 use std::io::{Read, Write};
@@ -9,8 +9,6 @@ use std::path::{Path, PathBuf};
 use std::process::{exit, Command, Stdio};
 use std::{env, fs};
 use tracing_subscriber::{fmt, prelude::*, EnvFilter};
-
-const FIRMWARE_VERSION: &str = "0.1.1";
 
 #[derive(Parser)]
 #[command(version, about, long_about = None)]
@@ -42,6 +40,19 @@ enum Commands {
     /// Patch SoftDevice hex file to save some space at the end of it
     #[command(verbatim_doc_comment)]
     PatchSd,
+
+    /// Build firmware without signing or packaging
+    BuildUnsigned,
+
+    /// Sign the firmware with the provided cosign2 config
+    SignFirmware {
+        /// Path to cosign2.toml config file
+        #[arg(default_value = "cosign2.toml")]
+        config_path: String,
+    },
+
+    /// Package the signed firmware
+    PackageFirmware,
 }
 
 fn project_root() -> PathBuf {
@@ -228,22 +239,6 @@ fn build_bt_firmware(verbose: bool, rev_d: bool) {
         exit(-1);
     }
 
-    tracing::info!("Creating BT application hex file");
-    let mut cargo_cmd = Command::new(cargo());
-    let cmd = cargo_cmd
-        .current_dir(project_root().join("firmware"))
-        .args(["objcopy", "--release"]);
-    let cmd = if rev_d { cmd.args(["--features", "hw-rev-d"]) } else { cmd };
-    let mut cmd = cmd.args(["--", "-O", "ihex", "../BtPackage/BtApp.hex"]);
-    if !verbose {
-        cmd = cmd.stdout(Stdio::null()).stderr(Stdio::null());
-    }
-    let status = cmd.status().expect("Running Cargo objcopy failed");
-    if !status.success() {
-        tracing::error!("Firmware build failed");
-        exit(-1);
-    }
-
     // Created a full populated flash image to avoid the signed fw is different from the slice to check.
     // We will always get the full slice of flash where app is flashed ( BASE_APP_ADDR up to BASE_BOOTLOADER_ADDR )
     tracing::info!("Creating BT application bin file");
@@ -300,8 +295,8 @@ fn build_bt_debug_firmware(verbose: bool, rev_d: bool) {
     }
 }
 
-fn sign_bt_firmware() {
-    let cosign2_config_path = project_root().join("cosign2.toml");
+fn sign_bt_firmware(config_path: &str, developper: bool) {
+    let cosign2_config_path = project_root().join(config_path);
     let cosign2_config_path_str = cosign2_config_path.to_str().unwrap();
 
     if let Err(e) = fs::File::open(&cosign2_config_path) {
@@ -318,26 +313,30 @@ fn sign_bt_firmware() {
         exit(-1);
     }
 
-    let version = Version::parse(FIRMWARE_VERSION).expect("Wrong version format").to_string();
+    let version = MetadataCommand::new()
+        .exec()
+        .expect("Failed to get workspace metadata")
+        .packages
+        .iter()
+        .find(|p| p.name == "firmware")
+        .map(|p| p.version.to_string())
+        .expect("Target crate not found in workspace");
 
     let header_size = SIGNATURE_HEADER_SIZE.to_string();
-    let mut args = vec![
-        "sign",
-        "-i",
-        "./BtPackage/BT_application.bin",
-        "-c",
-        "cosign2.toml",
-        "--developer",
+    let mut args = vec!["sign", "-i", "./BtPackage/BT_application.bin", "-c", config_path];
+    if developper {
+        args.push("--developer");
+    }
+    args.extend([
         "--header-size",
         header_size.as_str(),
         "-o",
         "./BtPackage/BT_application_signed.bin",
-    ];
-    args.extend_from_slice(&["--firmware-version", &version]);
+        "--binary-version",
+        &version,
+    ]);
 
     tracing::info!("Signing binary Bt application with Cosign2...");
-
-    // TODO: SFT-3595 sign again with second key
 
     if !Command::new("cosign2")
         .stdout(Stdio::null())
@@ -484,7 +483,6 @@ fn build_bt_package() {
         .current_dir(project_root().join("BtPackage"))
         .arg("-rf")
         .arg("bootloader.hex")
-        .arg("BtApp.hex")
         .status()
         .expect("Running rm failed");
     if !status.success() {
@@ -544,7 +542,18 @@ fn main() {
             build_tools_check(args.verbose);
             build_bt_bootloader(args.verbose, args.rev_d);
             build_bt_firmware(args.verbose, args.rev_d);
-            sign_bt_firmware();
+            sign_bt_firmware("cosign2.toml", true);
+            build_bt_package();
+        }
+        Commands::BuildUnsigned => {
+            build_tools_check(args.verbose);
+            build_bt_bootloader(args.verbose, args.rev_d);
+            build_bt_firmware(args.verbose, args.rev_d);
+        }
+        Commands::SignFirmware { config_path } => {
+            sign_bt_firmware(&config_path, false);
+        }
+        Commands::PackageFirmware => {
             build_bt_package();
         }
         Commands::BuildFwDebugImage => {

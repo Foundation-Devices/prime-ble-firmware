@@ -13,3 +13,6 @@ DEFMT_LOG = "debug"
 [alias]
 deb = "run -r --features debug"
 bluetooth-app = "run -r --features analytics"
+
+[unstable]
+trim-paths = true

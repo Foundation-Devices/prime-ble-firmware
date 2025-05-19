@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 [toolchain]
-channel = "nightly-2024-06-08"
+channel = "nightly-2025-04-03"
 components = ["rustfmt", "clippy", "rustc", "llvm-tools"]
 targets = ["thumbv7em-none-eabi"]
 profile = "minimal"

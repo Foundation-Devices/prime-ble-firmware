@@ -12,3 +12,6 @@ DEFMT_LOG = "debug"
 
 [alias]
 deb = "run --release --features debug"
+
+[unstable]
+trim-paths = true
