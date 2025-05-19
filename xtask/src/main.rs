@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2024 Foundation Devices, Inc. <hello@foundation.xyz>
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-use cargo_metadata::semver::Version;
+use cargo_metadata::MetadataCommand;
 use clap::{Parser, Subcommand};
 use consts::{BASE_APP_ADDR, BASE_BOOTLOADER_ADDR, SIGNATURE_HEADER_SIZE};
 use std::io::{Read, Write};
@@ -9,8 +9,6 @@ use std::path::{Path, PathBuf};
 use std::process::{exit, Command, Stdio};
 use std::{env, fs};
 use tracing_subscriber::{fmt, prelude::*, EnvFilter};
-
-const FIRMWARE_VERSION: &str = "1.0.0";
 
 #[derive(Parser)]
 #[command(version, about, long_about = None)]
@@ -315,7 +313,14 @@ fn sign_bt_firmware(config_path: &str, developper: bool) {
         exit(-1);
     }
 
-    let version = Version::parse(FIRMWARE_VERSION).expect("Wrong version format").to_string();
+    let version = MetadataCommand::new()
+        .exec()
+        .expect("Failed to get workspace metadata")
+        .packages
+        .iter()
+        .find(|p| p.name == "firmware")
+        .map(|p| p.version.to_string())
+        .expect("Target crate not found in workspace");
 
     let header_size = SIGNATURE_HEADER_SIZE.to_string();
     let mut args = vec!["sign", "-i", "./BtPackage/BT_application.bin", "-c", config_path];
