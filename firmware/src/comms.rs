@@ -220,7 +220,6 @@ pub async fn comms_task(mut spi: Spis<'static, SPI0>) {
                 error!("Failed to serialize response");
             }
         }
-        Timer::after_millis(1).await;
     }
 }
 
