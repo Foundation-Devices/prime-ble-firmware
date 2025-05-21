@@ -35,10 +35,6 @@ pub const NUS_UUID: u128 = 0x6E400001_B5A3_F393_E0A9_E50E24DCCA9E;
 /// Currently only includes the Nordic UART Service (NUS).
 pub const SERVICES_LIST: [[u8; 16]; 1] = [NUS_UUID.to_le_bytes()];
 
-/// Maximum number of BLE packets that can be buffered.
-/// This limits memory usage while ensuring reliable data transfer.
-pub const BT_MAX_NUM_PKT: usize = 4;
-
 /// Starting address in UICR (User Information Configuration Registers) where the device secret is stored.
 /// UICR is non-volatile memory that persists across resets and firmware updates.
 /// This secret is used for challenge-response authentication between the MPU and this device.

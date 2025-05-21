@@ -17,8 +17,8 @@ use embassy_time::Timer;
 // time driver
 use panic_probe as _;
 
-use comms::{check_ble_rx_task, comms_task};
-use consts::{ATT_MTU, BT_MAX_NUM_PKT};
+use comms::comms_task;
+use consts::ATT_MTU;
 use defmt::{info, *};
 use embassy_executor::Spawner;
 use embassy_nrf::bind_interrupts;
@@ -56,6 +56,10 @@ bind_interrupts!(struct Irqs {
 bind_interrupts!(struct Irqs {
     SPIM0_SPIS0_SPI0 => spis::InterruptHandler<SPI0>;
 });
+
+/// Maximum number of BLE packets that can be buffered.
+/// This limits memory usage while ensuring reliable data transfer.
+pub const BT_MAX_NUM_PKT: usize = 8;
 
 // Signal for BT state
 static BT_STATE: AtomicBool = AtomicBool::new(false);
@@ -159,8 +163,6 @@ async fn main(spawner: Spawner) {
     unwrap!(spawner.spawn(comms_task(uart)));
     #[cfg(feature = "hw-rev-d")]
     unwrap!(spawner.spawn(comms_task(spi)));
-    #[cfg(feature = "hw-rev-d")]
-    unwrap!(spawner.spawn(check_ble_rx_task()));
 
     info!("Init tasks");
 

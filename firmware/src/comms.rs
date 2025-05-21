@@ -1,9 +1,8 @@
 // SPDX-FileCopyrightText: 2024 Foundation Devices, Inc. <hello@foundation.xyz>
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-use crate::{BT_ADDRESS, BT_DATA_TX, IRQ_OUT_PIN};
-use crate::{BT_ADV_CHAN, BT_DATA_RX, BT_STATE, RSSI_VALUE};
-use consts::{APP_MTU, BT_MAX_NUM_PKT, UICR_SECRET_SIZE, UICR_SECRET_START};
+use crate::{BT_ADDRESS, BT_ADV_CHAN, BT_DATA_RX, BT_DATA_TX, BT_MAX_NUM_PKT, BT_STATE, IRQ_OUT_PIN, RSSI_VALUE};
+use consts::{APP_MTU, UICR_SECRET_SIZE, UICR_SECRET_START};
 use defmt::{debug, error, trace};
 #[cfg(not(feature = "hw-rev-d"))]
 use embassy_nrf::{
@@ -220,17 +219,6 @@ pub async fn comms_task(mut spi: Spis<'static, SPI0>) {
                 error!("Failed to serialize response");
             }
         }
-    }
-}
-
-#[cfg(feature = "hw-rev-d")]
-#[embassy_executor::task]
-pub async fn check_ble_rx_task() {
-    loop {
-        if !BT_DATA_RX.is_empty() {
-            assert_out_irq().await;
-        }
-        Timer::after_millis(50).await;
     }
 }
 
