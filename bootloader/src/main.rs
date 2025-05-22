@@ -135,14 +135,14 @@ fn ack_msg_send(message: HostProtocolMessage, tx: &mut uarte::UarteTx<UARTE0>) {
 #[cfg(feature = "hw-rev-d")]
 fn ack_msg_send(message: HostProtocolMessage, spi: &mut Spis<SPI0>) {
     let mut buf = [0_u8; MAX_MSG_SIZE];
-    let Ok(resp) = to_slice(&message, &mut buf) else {
+    let Ok(resp) = to_slice(&message, &mut buf[2..]) else {
         error!("Failed to serialize response");
         return;
     };
-    let resp_len = u16::to_be_bytes(resp.len() as u16);
+    let resp_len = resp.len();
+    buf[..2].copy_from_slice(&u16::to_be_bytes(resp_len as u16));
     assert_out_irq();
-    let _ = spi.blocking_write_from_ram(&resp_len);
-    let _ = spi.blocking_write_from_ram(&resp);
+    let _ = spi.blocking_write_from_ram(&buf[..resp_len + 2]);
 }
 
 #[cfg(not(feature = "debug"))]
