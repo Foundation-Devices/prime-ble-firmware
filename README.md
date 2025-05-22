@@ -82,7 +82,28 @@ Follow the [probe-rs installation guide](https://probe.rs/docs/getting-started/i
    just bluetooth-app
    ```
 
+### Building with Docker
 
+The firmware can be built using `docker` without installing anything.
+This needs a file called `.github-access-token` in the repository
+root, which is a [github personal access token](https://github.com/settings/tokens/)
+with access to `repo`, `read:org`, and `gist`, and will be used for
+`gh auth login`.
+
+**Build a default production firmware**
+```bash
+./run-with-docker.sh
+```
+
+**Run any other command in the build shell**
+```bash
+./run-with-docker.sh just build-unsigned
+./run-with-docker.sh bash
+```
+
+Caveat: The docker build only mounts the current working directory, so
+if the cosign PEM file is outside this directory, code signing will
+not work.
 
 ### Fixing `JtagNoDeviceConnected` error
 
