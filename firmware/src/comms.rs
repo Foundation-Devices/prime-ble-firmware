@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 use crate::{BT_ADDRESS, BT_ADV_CHAN, BT_DATA_RX, BT_DATA_TX, BT_MAX_NUM_PKT, BT_STATE, IRQ_OUT_PIN, RSSI_VALUE};
-use consts::{APP_MTU, UICR_SECRET_SIZE, UICR_SECRET_START};
+use consts::{APP_MTU, ATT_MTU, UICR_SECRET_SIZE, UICR_SECRET_START};
 use defmt::{debug, error, trace};
 #[cfg(not(feature = "hw-rev-d"))]
 use embassy_nrf::{
@@ -13,15 +13,13 @@ use embassy_nrf::{
 use embassy_nrf::{peripherals::SPI0, spis::Spis};
 #[cfg(feature = "analytics")]
 use embassy_time::Instant;
-#[cfg(feature = "hw-rev-d")]
-use embassy_time::Timer;
 #[cfg(not(feature = "hw-rev-d"))]
 use embassy_time::{with_timeout, Duration};
 #[cfg(not(feature = "hw-rev-d"))]
 use embedded_io_async::Write;
 use heapless::Vec;
 use hmac::{Hmac, Mac};
-use host_protocol::{AdvChan, Bluetooth, HostProtocolMessage, PostcardError, SendDataResponse, State, COBS_MAX_MSG_SIZE};
+use host_protocol::{AdvChan, Bluetooth, HostProtocolMessage, PostcardError, SendDataResponse, State, MAX_MSG_SIZE};
 #[cfg(not(feature = "hw-rev-d"))]
 use postcard::{
     accumulator::{CobsAccumulator, FeedResult},
@@ -33,6 +31,7 @@ use sha2::Sha256 as ShaChallenge;
 
 /// Helper function to signal the MPU via GPIO
 /// Sends a falling edge pulse on the IRQ line
+#[cfg(not(feature = "hw-rev-d"))]
 async fn assert_out_irq() {
     let irq_out = IRQ_OUT_PIN.lock().await;
     {
@@ -101,7 +100,7 @@ pub async fn comms_task(uart: BufferedUarte<'static, UARTE0, TIMER1>) {
     #[cfg(feature = "analytics")]
     let mut timer_tot: Instant = Instant::now();
 
-    let mut resp_buf = [0u8; COBS_MAX_MSG_SIZE];
+    let mut resp_buf = [0u8; MAX_MSG_SIZE];
 
     // Split UART into RX and TX
     let (mut rx, mut tx) = uart.split();
@@ -110,7 +109,7 @@ pub async fn comms_task(uart: BufferedUarte<'static, UARTE0, TIMER1>) {
     let mut raw_buf = [0u8; 64];
 
     // COBS accumulator for decoding incoming messages
-    let mut cobs_buf: CobsAccumulator<COBS_MAX_MSG_SIZE> = CobsAccumulator::new();
+    let mut cobs_buf: CobsAccumulator<MAX_MSG_SIZE> = CobsAccumulator::new();
     loop {
         #[cfg(feature = "analytics")]
         log_performance(&mut timer_pkt, &mut rx_packet, &mut pkt_counter, &mut data_counter, &mut timer_tot);
@@ -152,7 +151,7 @@ pub async fn comms_task(uart: BufferedUarte<'static, UARTE0, TIMER1>) {
                 };
 
                 if let Some(msg) = resp {
-                    let mut buf = [0u8; COBS_MAX_MSG_SIZE];
+                    let mut buf = [0u8; MAX_MSG_SIZE];
 
                     if let Ok(resp) = to_slice_cobs(&msg, &mut buf) {
                         let _ = tx.write_all(resp).await;
@@ -170,32 +169,14 @@ pub async fn comms_task(uart: BufferedUarte<'static, UARTE0, TIMER1>) {
 #[cfg(feature = "hw-rev-d")]
 #[embassy_executor::task]
 pub async fn comms_task(mut spi: Spis<'static, SPI0>) {
-    // Rough performance metrics
-    #[cfg(feature = "analytics")]
-    let mut data_counter: u64 = 0;
-    #[cfg(feature = "analytics")]
-    let mut pkt_counter: u64 = 0;
-    #[cfg(feature = "analytics")]
-    let mut rx_packet = false;
-    #[cfg(feature = "analytics")]
-    let mut timer_pkt: Instant = Instant::now();
-    #[cfg(feature = "analytics")]
-    let mut timer_tot: Instant = Instant::now();
-
-    let mut resp_buf = [0u8; COBS_MAX_MSG_SIZE];
-
     // Buffer for raw incoming SPI data
-    let mut raw_buf = [0u8; 64];
+    let mut req_buf = [0u8; MAX_MSG_SIZE];
+    let mut data_buf = [0u8; ATT_MTU];
+    let mut resp_buf = [0u8; MAX_MSG_SIZE];
 
     loop {
-        #[cfg(feature = "analytics")]
-        log_performance(&mut timer_pkt, &mut rx_packet, &mut pkt_counter, &mut data_counter, &mut timer_tot);
-
-        // Clear the response buffer
-        resp_buf.fill(0);
-
         // Read data from SPI
-        let res = spi.read(&mut raw_buf).await;
+        let res = spi.read(&mut req_buf).await;
 
         // Exit if no data received
         let Ok(n) = res else {
@@ -203,27 +184,29 @@ pub async fn comms_task(mut spi: Spis<'static, SPI0>) {
             continue;
         };
 
-        let buf = &raw_buf[..n];
-        if let Some(resp) = match from_bytes(buf) {
-            Ok(req) => host_protocol_handler(req, &mut resp_buf).await,
+        if let Some(resp) = match from_bytes(&req_buf[..n]) {
+            Ok(req) => host_protocol_handler(req, &mut data_buf).await,
             Err(_) => Some(HostProtocolMessage::PostcardError(PostcardError::Deser)),
         } {
             trace!("Sending response");
-            let mut buf = [0u8; COBS_MAX_MSG_SIZE];
-            if let Ok(resp) = to_slice(&resp, &mut buf) {
-                assert_out_irq().await;
-                let resp_len = u16::to_be_bytes(resp.len() as u16);
-                let _ = spi.write(&resp_len).await;
-                let _ = spi.write(resp).await;
-            } else {
+            let Ok(resp) = to_slice(&resp, &mut resp_buf) else {
                 error!("Failed to serialize response");
-            }
+                continue;
+            };
+            let resp_len = u16::to_be_bytes(resp.len() as u16);
+            let irq_out = IRQ_OUT_PIN.lock().await;
+            let mut pin = irq_out.borrow_mut();
+            // Generate falling edge pulse
+            pin.as_mut().unwrap().set_low();
+            pin.as_mut().unwrap().set_high();
+            let _ = spi.blocking_write_from_ram(&resp_len);
+            let _ = spi.blocking_write_from_ram(resp);
         }
     }
 }
 
 /// Handles HostProtocol messages received from the MPU
-async fn host_protocol_handler<'a>(req: HostProtocolMessage<'a>, resp_buf: &'a mut [u8]) -> Option<HostProtocolMessage<'a>> {
+async fn host_protocol_handler<'a>(req: HostProtocolMessage<'a>, data_buf: &'a mut [u8]) -> Option<HostProtocolMessage<'a>> {
     match req {
         HostProtocolMessage::Bluetooth(bluetooth_msg) => {
             trace!("Received HostProtocolMessage::Bluetooth");
@@ -264,8 +247,8 @@ async fn host_protocol_handler<'a>(req: HostProtocolMessage<'a>, resp_buf: &'a m
                 Bluetooth::GetReceivedData => Some(HostProtocolMessage::Bluetooth(if let Ok(data) = BT_DATA_RX.try_receive() {
                     trace!("GetReceivedData Some");
                     let len = data.len();
-                    resp_buf[..len].copy_from_slice(data.as_slice());
-                    Bluetooth::ReceivedData(&resp_buf[..len])
+                    data_buf[..len].copy_from_slice(data.as_slice());
+                    Bluetooth::ReceivedData(&data_buf[..len])
                 } else {
                     trace!("GetReceivedData None");
                     Bluetooth::NoReceivedData

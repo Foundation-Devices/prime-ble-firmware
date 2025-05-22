@@ -41,7 +41,7 @@ use embassy_sync::mutex::Mutex;
 use futures::pin_mut;
 use heapless::Vec;
 #[cfg(not(feature = "hw-rev-d"))]
-use host_protocol::COBS_MAX_MSG_SIZE;
+use host_protocol::MAX_MSG_SIZE;
 use nrf_softdevice::ble::get_address;
 use nrf_softdevice::Softdevice;
 use server::{initialize_sd, run_bluetooth, stop_bluetooth, Server};
@@ -107,8 +107,8 @@ async fn main(spawner: Spawner) {
         config_uart.parity = uarte::Parity::EXCLUDED;
         config_uart.baudrate = baud_rate;
 
-        static TX_BUFFER: StaticCell<[u8; COBS_MAX_MSG_SIZE]> = StaticCell::new();
-        static RX_BUFFER: StaticCell<[u8; COBS_MAX_MSG_SIZE]> = StaticCell::new();
+        static TX_BUFFER: StaticCell<[u8; MAX_MSG_SIZE]> = StaticCell::new();
+        static RX_BUFFER: StaticCell<[u8; MAX_MSG_SIZE]> = StaticCell::new();
 
         #[cfg(not(feature = "debug"))]
         let (rxd, txd) = (p.P0_14, p.P0_12);
@@ -126,8 +126,8 @@ async fn main(spawner: Spawner) {
             rxd,
             txd,
             config_uart,
-            &mut TX_BUFFER.init([0; COBS_MAX_MSG_SIZE])[..],
-            &mut RX_BUFFER.init([0; COBS_MAX_MSG_SIZE])[..],
+            &mut TX_BUFFER.init([0; MAX_MSG_SIZE])[..],
+            &mut RX_BUFFER.init([0; MAX_MSG_SIZE])[..],
         )
     };
 

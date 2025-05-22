@@ -11,7 +11,10 @@ use serde::{Deserialize, Serialize};
 
 /// Maximum supported message size to be serialized or deserialized by `postcard`.
 /// Messages larger than this will be rejected.
-pub const COBS_MAX_MSG_SIZE: usize = 512;
+#[cfg(feature = "no-cobs")]
+pub const MAX_MSG_SIZE: usize = 270;
+#[cfg(not(feature = "no-cobs"))]
+pub const MAX_MSG_SIZE: usize = 512;
 
 bitflags! {
     #[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq)]

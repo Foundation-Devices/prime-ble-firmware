@@ -1268,7 +1268,7 @@ dependencies = [
 
 [[package]]
 name = "host-protocol"
-version = "0.2.0"
+version = "1.0.0"
 dependencies = [
  "bitflags 2.6.0",
  "clap",

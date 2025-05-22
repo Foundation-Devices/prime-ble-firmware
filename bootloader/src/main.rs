@@ -49,7 +49,7 @@ use embassy_sync::blocking_mutex::CriticalSectionMutex;
 use embassy_sync::blocking_mutex::Mutex;
 use embedded_storage::nor_flash::{NorFlash, ReadNorFlash};
 use hmac::{Hmac, Mac};
-use host_protocol::COBS_MAX_MSG_SIZE;
+use host_protocol::MAX_MSG_SIZE;
 use host_protocol::{Bootloader, SecretSaveResponse};
 use host_protocol::{HostProtocolMessage, PostcardError};
 use jump_app::jump_to_app;
@@ -123,7 +123,7 @@ fn assert_out_irq() {
 #[inline(never)]
 #[cfg(not(feature = "hw-rev-d"))]
 fn ack_msg_send(message: HostProtocolMessage, tx: &mut uarte::UarteTx<UARTE0>) {
-    let mut buf_cobs = [0_u8; COBS_MAX_MSG_SIZE];
+    let mut buf_cobs = [0_u8; MAX_MSG_SIZE];
     let cobs_ack = to_slice_cobs(&message, &mut buf_cobs).unwrap();
     let _ = tx.blocking_write(cobs_ack);
     assert_out_irq();
@@ -133,12 +133,15 @@ fn ack_msg_send(message: HostProtocolMessage, tx: &mut uarte::UarteTx<UARTE0>) {
 #[inline(never)]
 #[cfg(feature = "hw-rev-d")]
 fn ack_msg_send(message: HostProtocolMessage, spi: &mut Spis<SPI0>) {
-    let mut buf = [0_u8; COBS_MAX_MSG_SIZE];
-    let resp = to_slice(&message, &mut buf).unwrap();
-    assert_out_irq(); // with SPI, we assert the IRQ line before sending
+    let mut buf = [0_u8; MAX_MSG_SIZE];
+    let Ok(resp) = to_slice(&message, &mut buf) else {
+        error!("Failed to serialize response");
+        return;
+    };
     let resp_len = u16::to_be_bytes(resp.len() as u16);
-    let _ = spi.blocking_write(&resp_len);
-    let _ = spi.blocking_write(resp);
+    assert_out_irq();
+    let _ = spi.blocking_write_from_ram(&resp_len);
+    let _ = spi.blocking_write_from_ram(&resp);
 }
 
 #[cfg(not(feature = "debug"))]
@@ -319,7 +322,7 @@ async fn main(_spawner: Spawner) {
 
     let mut raw_buf = [0u8; 512];
     #[cfg(not(feature = "hw-rev-d"))]
-    let mut cobs_buf: CobsAccumulator<COBS_MAX_MSG_SIZE> = CobsAccumulator::new();
+    let mut cobs_buf: CobsAccumulator<MAX_MSG_SIZE> = CobsAccumulator::new();
     let mut firmware_version: heapless::String<20>;
 
     // Main command processing loop
