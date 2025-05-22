@@ -13,6 +13,8 @@ use embassy_nrf::{
 use embassy_nrf::{peripherals::SPI0, spis::Spis};
 #[cfg(feature = "analytics")]
 use embassy_time::Instant;
+#[cfg(feature = "hw-rev-d")]
+use embassy_time::Timer;
 #[cfg(not(feature = "hw-rev-d"))]
 use embassy_time::{with_timeout, Duration};
 #[cfg(not(feature = "hw-rev-d"))]
@@ -198,6 +200,7 @@ pub async fn comms_task(mut spi: Spis<'static, SPI0>) {
             let mut pin = irq_out.borrow_mut();
             // Generate falling edge pulse
             pin.as_mut().unwrap().set_low();
+            let _ = Timer::after_micros(1);
             pin.as_mut().unwrap().set_high();
             let _ = spi.blocking_write_from_ram(&resp_len);
             let _ = spi.blocking_write_from_ram(resp);

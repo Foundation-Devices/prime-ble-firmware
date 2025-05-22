@@ -114,6 +114,7 @@ fn assert_out_irq() {
         if let Some(pin) = IRQ_OUT_PIN.as_mut() {
             // Generate falling edge pulse using the static pin
             pin.set_low();
+            let _ = embassy_time::Timer::after_micros(1);
             pin.set_high();
         }
     }
