@@ -13,8 +13,6 @@ use embassy_nrf::{
 use embassy_nrf::{peripherals::SPI0, spis::Spis};
 #[cfg(feature = "analytics")]
 use embassy_time::Instant;
-#[cfg(feature = "hw-rev-d")]
-use embassy_time::Timer;
 #[cfg(not(feature = "hw-rev-d"))]
 use embassy_time::{with_timeout, Duration};
 #[cfg(not(feature = "hw-rev-d"))]
@@ -177,6 +175,9 @@ pub async fn comms_task(mut spi: Spis<'static, SPI0>) {
     let mut resp_buf = [0u8; MAX_MSG_SIZE];
 
     loop {
+        {
+            IRQ_OUT_PIN.lock().await.borrow_mut().as_mut().unwrap().set_high();
+        }
         // Read data from SPI
         let res = spi.read(&mut req_buf).await;
 
@@ -191,19 +192,16 @@ pub async fn comms_task(mut spi: Spis<'static, SPI0>) {
             Err(_) => Some(HostProtocolMessage::PostcardError(PostcardError::Deser)),
         } {
             trace!("Sending response");
-            let Ok(resp) = to_slice(&resp, &mut resp_buf) else {
+            let Ok(resp) = to_slice(&resp, &mut resp_buf[2..]) else {
                 error!("Failed to serialize response");
                 continue;
             };
-            let resp_len = u16::to_be_bytes(resp.len() as u16);
-            let irq_out = IRQ_OUT_PIN.lock().await;
-            let mut pin = irq_out.borrow_mut();
-            // Generate falling edge pulse
-            pin.as_mut().unwrap().set_low();
-            let _ = Timer::after_micros(1);
-            pin.as_mut().unwrap().set_high();
-            let _ = spi.blocking_write_from_ram(&resp_len);
-            let _ = spi.blocking_write_from_ram(resp);
+            let resp_len = resp.len();
+            resp_buf[..2].copy_from_slice(&u16::to_be_bytes(resp_len as u16));
+            {
+                IRQ_OUT_PIN.lock().await.borrow_mut().as_mut().unwrap().set_low();
+            }
+            let _ = spi.blocking_write_from_ram(&resp_buf[..resp_len + 2]);
         }
     }
 }
