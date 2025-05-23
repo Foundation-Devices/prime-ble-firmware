@@ -109,6 +109,7 @@ impl BootState {
 /// Used to notify MPU of important events or available data
 ///
 /// Safety: Accesses static IRQ_OUT_PIN which is only modified during init
+#[cfg(not(feature = "hw-rev-d"))]
 fn assert_out_irq() {
     unsafe {
         if let Some(pin) = IRQ_OUT_PIN.as_mut() {
@@ -141,7 +142,12 @@ fn ack_msg_send(message: HostProtocolMessage, spi: &mut Spis<SPI0>) {
     };
     let resp_len = resp.len();
     buf[..2].copy_from_slice(&u16::to_be_bytes(resp_len as u16));
-    assert_out_irq();
+    unsafe {
+        if let Some(pin) = IRQ_OUT_PIN.as_mut() {
+            // Generate falling edge using the static pin
+            pin.set_low();
+        }
+    }
     let _ = spi.blocking_write_from_ram(&buf[..resp_len + 2]);
 }
 
@@ -330,6 +336,14 @@ async fn main(_spawner: Spawner) {
     loop {
         #[cfg(not(feature = "hw-rev-d"))]
         let n = rx.read_until_idle(&mut raw_buf).await;
+
+        #[cfg(feature = "hw-rev-d")]
+        unsafe {
+            if let Some(pin) = IRQ_OUT_PIN.as_mut() {
+                // Re-arm the IRQ to signal ready to read SPI
+                pin.set_high();
+            }
+        }
         #[cfg(feature = "hw-rev-d")]
         let n = spi.read(&mut raw_buf).await;
 
