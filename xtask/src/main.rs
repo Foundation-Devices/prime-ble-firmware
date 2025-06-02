@@ -26,14 +26,20 @@ struct XtaskArgs {
 enum Commands {
     /// Build a full flashable firmware image with:
     /// SoftDevice
-    /// Bootloader in release version (MPU UART pins - baud rate 460800)
+    /// Bootloader in release version
     /// Memory protection (no probe access and bootloader and SD MBR area protected)
     #[command(verbatim_doc_comment)]
     BuildFwImage,
 
+    /// Build a minimal flashable firmware image with:
+    /// SoftDevice
+    /// Bootloader in release version
+    /// Memory protection (no probe access and bootloader and SD MBR area protected)
+    #[command(verbatim_doc_comment)]
+    BuildMinimalImage,
+
     /// Build a full package image with SD, bootloader and application without:
     /// Flash protection
-    /// UART pins are redirected to the console at 115200 baud rate
     #[command(verbatim_doc_comment)]
     BuildFwDebugImage,
 
@@ -491,6 +497,30 @@ fn build_bt_package() {
     }
 }
 
+fn build_bt_minimal_package() {
+    tracing::info!("Merging softdevice and bootloader in single hex");
+    merge_files(
+        vec![
+            MergeableFile::IHex(project_root().join("misc/s113_nrf52_7.3.0_softdevice.hex")),
+            MergeableFile::IHex(project_root().join("BtPackage/bootloader.hex")),
+        ],
+        patches_7_3_0(0xB4),
+        project_root().join("BtPackage/BT_Minimal_Image.hex"),
+    );
+
+    tracing::info!("Removing temporary files");
+    let status = Command::new("rm")
+        .current_dir(project_root().join("BtPackage"))
+        .arg("-rf")
+        .arg("bootloader.hex")
+        .status()
+        .expect("Running rm failed");
+    if !status.success() {
+        tracing::error!("Removing single hex files failed");
+        exit(-1)
+    }
+}
+
 fn build_bt_package_debug() {
     tracing::info!("Merging softdevice bootloader and BT signed application in single hex");
     merge_files(
@@ -544,6 +574,11 @@ fn main() {
             build_bt_firmware(args.verbose, args.rev_d);
             sign_bt_firmware("cosign2.toml", true);
             build_bt_package();
+        }
+        Commands::BuildMinimalImage => {
+            build_tools_check(args.verbose);
+            build_bt_bootloader(args.verbose, args.rev_d);
+            build_bt_minimal_package();
         }
         Commands::BuildUnsigned => {
             build_tools_check(args.verbose);

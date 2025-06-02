@@ -13,6 +13,10 @@ install:
 build args="":
     cargo xtask {{args}} build-fw-image
 
+# Build production firmware package
+build-minimal args="":
+    cargo xtask {{args}} build-minimal-image
+
 # Build debug firmware package with UART console without flash protection
 build-debug args="":
     cargo xtask {{args}} build-fw-debug-image
