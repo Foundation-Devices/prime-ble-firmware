@@ -329,18 +329,22 @@ fn sign_bt_firmware(config_path: &str, developper: bool) {
         .expect("Target crate not found in workspace");
 
     let header_size = SIGNATURE_HEADER_SIZE.to_string();
-    let mut args = vec!["sign", "-i", "./BtPackage/BT_application.bin", "-c", config_path];
+    let signed_once = std::fs::metadata("./BtPackage/BT_application_signed_once.bin").is_ok();
+    let mut args = vec!["sign", "-c", config_path, "-i"];
+    if signed_once {
+        args.push("./BtPackage/BT_application_signed_once.bin");
+    } else {
+        args.push("./BtPackage/BT_application.bin");
+    }
     if developper {
         args.push("--developer");
     }
-    args.extend([
-        "--header-size",
-        header_size.as_str(),
-        "-o",
-        "./BtPackage/BT_application_signed.bin",
-        "--binary-version",
-        &version,
-    ]);
+    args.extend(["--header-size", header_size.as_str(), "--binary-version", &version, "-o"]);
+    if signed_once || developper {
+        args.push("./BtPackage/BT_application_signed.bin");
+    } else {
+        args.push("./BtPackage/BT_application_signed_once.bin");
+    }
 
     tracing::info!("Signing binary Bt application with Cosign2...");
 
