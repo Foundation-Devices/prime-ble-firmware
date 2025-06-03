@@ -301,7 +301,7 @@ fn build_bt_debug_firmware(verbose: bool, rev_d: bool) {
     }
 }
 
-fn sign_bt_firmware(config_path: &str, developper: bool) {
+fn sign_bt_firmware(config_path: &str, developer: bool) {
     let cosign2_config_path = project_root().join(config_path);
     let cosign2_config_path_str = cosign2_config_path.to_str().unwrap();
 
@@ -336,11 +336,11 @@ fn sign_bt_firmware(config_path: &str, developper: bool) {
     } else {
         args.push("./BtPackage/BT_application.bin");
     }
-    if developper {
+    if developer {
         args.push("--developer");
     }
     args.extend(["--header-size", header_size.as_str(), "--binary-version", &version, "-o"]);
-    if signed_once || developper {
+    if signed_once || developer {
         args.push("./BtPackage/BT_application_signed.bin");
     } else {
         args.push("./BtPackage/BT_application_signed_once.bin");
