@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 use crate::{BT_ADDRESS, BT_ADV_CHAN, BT_DATA_RX, BT_DATA_TX, BT_MAX_NUM_PKT, BT_STATE, IRQ_OUT_PIN, RSSI_VALUE};
-use consts::{APP_MTU, ATT_MTU, UICR_SECRET_SIZE, UICR_SECRET_START};
+use consts::{UICR_SECRET_SIZE, UICR_SECRET_START};
 use defmt::{debug, error, trace};
 #[cfg(not(feature = "hw-rev-d"))]
 use embassy_nrf::{
@@ -17,7 +17,6 @@ use embassy_time::Instant;
 use embassy_time::{with_timeout, Duration};
 #[cfg(not(feature = "hw-rev-d"))]
 use embedded_io_async::Write;
-use heapless::Vec;
 use hmac::{Hmac, Mac};
 use host_protocol::{AdvChan, Bluetooth, HostProtocolMessage, PostcardError, SendDataResponse, State, MAX_MSG_SIZE};
 #[cfg(not(feature = "hw-rev-d"))]
@@ -37,8 +36,8 @@ async fn assert_out_irq() {
     {
         let mut pin = irq_out.borrow_mut();
         // Generate falling edge pulse
-        pin.as_mut().unwrap().set_low();
-        pin.as_mut().unwrap().set_high();
+        pin.as_mut().map(|p| p.set_low());
+        pin.as_mut().map(|p| p.set_high());
     }
 }
 
@@ -171,12 +170,11 @@ pub async fn comms_task(uart: BufferedUarte<'static, UARTE0, TIMER1>) {
 pub async fn comms_task(mut spi: Spis<'static, SPI0>) {
     // Buffer for raw incoming SPI data
     let mut req_buf = [0u8; MAX_MSG_SIZE];
-    let mut data_buf = [0u8; ATT_MTU];
     let mut resp_buf = [0u8; MAX_MSG_SIZE];
 
     loop {
         {
-            IRQ_OUT_PIN.lock().await.borrow_mut().as_mut().unwrap().set_high();
+            IRQ_OUT_PIN.lock().await.borrow_mut().as_mut().map(|pin| pin.set_high());
         }
         // Read data from SPI
         let res = spi.read(&mut req_buf).await;
@@ -188,7 +186,7 @@ pub async fn comms_task(mut spi: Spis<'static, SPI0>) {
         };
 
         if let Some(resp) = match from_bytes(&req_buf[..n]) {
-            Ok(req) => host_protocol_handler(req, &mut data_buf).await,
+            Ok(req) => host_protocol_handler(req).await,
             Err(_) => Some(HostProtocolMessage::PostcardError(PostcardError::Deser)),
         } {
             trace!("Sending response");
@@ -199,7 +197,7 @@ pub async fn comms_task(mut spi: Spis<'static, SPI0>) {
             let resp_len = resp.len();
             resp_buf[..2].copy_from_slice(&u16::to_be_bytes(resp_len as u16));
             {
-                IRQ_OUT_PIN.lock().await.borrow_mut().as_mut().unwrap().set_low();
+                IRQ_OUT_PIN.lock().await.borrow_mut().as_mut().map(|pin| pin.set_low());
             }
             let _ = spi.blocking_write_from_ram(&resp_buf[..resp_len + 2]);
         }
@@ -207,7 +205,7 @@ pub async fn comms_task(mut spi: Spis<'static, SPI0>) {
 }
 
 /// Handles HostProtocol messages received from the MPU
-async fn host_protocol_handler<'a>(req: HostProtocolMessage<'a>, data_buf: &'a mut [u8]) -> Option<HostProtocolMessage<'a>> {
+async fn host_protocol_handler<'a>(req: HostProtocolMessage<'a>) -> Option<HostProtocolMessage<'a>> {
     match req {
         HostProtocolMessage::Bluetooth(bluetooth_msg) => {
             trace!("Received HostProtocolMessage::Bluetooth");
@@ -245,21 +243,22 @@ async fn host_protocol_handler<'a>(req: HostProtocolMessage<'a>, data_buf: &'a m
                     let version = env!("CARGO_PKG_VERSION");
                     Some(HostProtocolMessage::Bluetooth(Bluetooth::AckFirmwareVersion { version }))
                 }
-                Bluetooth::GetReceivedData => Some(HostProtocolMessage::Bluetooth(if let Ok(data) = BT_DATA_RX.try_receive() {
-                    trace!("GetReceivedData Some");
-                    let len = data.len();
-                    data_buf[..len].copy_from_slice(data.as_slice());
-                    Bluetooth::ReceivedData(&data_buf[..len])
-                } else {
-                    trace!("GetReceivedData None");
-                    Bluetooth::NoReceivedData
+                Bluetooth::GetReceivedData => Some(HostProtocolMessage::Bluetooth(match BT_DATA_RX.try_receive() {
+                    Ok(data) => {
+                        trace!("GetReceivedData Some");
+                        Bluetooth::ReceivedData(data)
+                    }
+                    Err(_) => {
+                        trace!("GetReceivedData None");
+                        Bluetooth::NoReceivedData
+                    }
                 })),
-                Bluetooth::SendData(data) => Some(HostProtocolMessage::Bluetooth(if data.len() <= APP_MTU {
+                Bluetooth::SendData(data) => Some(HostProtocolMessage::Bluetooth({
                     trace!("SendData Some");
                     // Only accept data packets within APP_MTU size limit
                     let mut buffer_tx_bt = BT_DATA_TX.lock().await;
                     if buffer_tx_bt.len() < BT_MAX_NUM_PKT {
-                        if buffer_tx_bt.push(Vec::from_slice(data).unwrap()).is_err() {
+                        if buffer_tx_bt.push(data).is_err() {
                             Bluetooth::SendDataResponse(SendDataResponse::BufferFull)
                         } else {
                             Bluetooth::SendDataResponse(SendDataResponse::Sent)
@@ -268,9 +267,6 @@ async fn host_protocol_handler<'a>(req: HostProtocolMessage<'a>, data_buf: &'a m
                         trace!("SendData Full");
                         Bluetooth::SendDataResponse(SendDataResponse::BufferFull)
                     }
-                } else {
-                    trace!("SendData TooLarge");
-                    Bluetooth::SendDataResponse(SendDataResponse::DataTooLarge)
                 })),
                 Bluetooth::GetBtAddress => Some(HostProtocolMessage::Bluetooth(Bluetooth::AckBtAddress {
                     bt_address: *BT_ADDRESS.lock().await,

@@ -5,18 +5,17 @@
 //! [NUS]: https://developer.nordicsemi.com/nRF_Connect_SDK/doc/latest/nrf/libraries/bluetooth_services/services/nus.html
 
 use crate::BT_DATA_RX;
-use consts::ATT_MTU;
 use defmt::{debug, error, info};
-use heapless::Vec;
+use host_protocol::Message;
 use nrf_softdevice::gatt_service;
 
 #[gatt_service(uuid = "6E400001-B5A3-F393-E0A9-E50E24DCCA9E")]
 pub struct Nus {
     #[characteristic(uuid = "6E400002-B5A3-F393-E0A9-E50E24DCCA9E", write_without_response)]
-    rx: Vec<u8, ATT_MTU>,
+    rx: Message,
 
     #[characteristic(uuid = "6E400003-B5A3-F393-E0A9-E50E24DCCA9E", notify)]
-    tx: Vec<u8, ATT_MTU>,
+    tx: Message,
 }
 
 impl Nus {

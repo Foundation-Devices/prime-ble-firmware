@@ -6,7 +6,10 @@
 //! Defines message types and structures for communication between the two processors.
 
 #![no_std]
+
 use bitflags::bitflags;
+use consts::ATT_MTU;
+use heapless::Vec;
 use serde::{Deserialize, Serialize};
 
 /// Maximum supported message size to be serialized or deserialized by `postcard`.
@@ -24,6 +27,8 @@ bitflags! {
         const C37 = 1 << 5;
     }
 }
+
+pub type Message = Vec<u8, ATT_MTU>;
 
 /// Bluetooth-specific messages for controlling the BLE radio and data transfer.
 ///
@@ -51,14 +56,14 @@ pub enum Bluetooth<'a> {
     SignalStrength(Option<i8>),
 
     /// Send raw data over BLE connection
-    SendData(&'a [u8]),
+    SendData(Message),
     /// Response to data send request
     SendDataResponse(SendDataResponse),
 
     /// Request latest received data (if any)
     GetReceivedData,
     /// Data received over BLE connection
-    ReceivedData(&'a [u8]),
+    ReceivedData(Message),
     /// No data has been received since last `GetReceivedData` request
     NoReceivedData,
 

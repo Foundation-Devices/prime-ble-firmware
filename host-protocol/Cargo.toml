@@ -10,7 +10,9 @@ version = "1.0.0"
 publish = false
 
 [dependencies]
+consts = { path = "../consts", features = ["dle"] }
 bitflags = { workspace = true, features = ["serde"] }
+heapless = { workspace = true }
 postcard = { workspace = true }
 serde = { workspace = true }
 
