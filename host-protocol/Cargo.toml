@@ -6,7 +6,7 @@ authors = ["Foundation Devices, Inc. <hello@foundation.xyz>"]
 edition = "2021"
 name = "host-protocol"
 description = "Communication protocol for uart using postcards"
-version = "1.0.0"
+version = "1.1.0"
 publish = false
 
 [dependencies]
