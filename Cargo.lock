@@ -1008,7 +1008,7 @@ dependencies = [
 
 [[package]]
 name = "firmware"
-version = "2.0.0"
+version = "2.1.0"
 dependencies = [
  "consts",
  "cortex-m",
@@ -1217,6 +1217,7 @@ checksum = "0bfb9eb618601c89945a70e254898da93b13be0388091d42117462b265bb3fad"
 dependencies = [
  "defmt",
  "hash32 0.3.1",
+ "serde",
  "stable_deref_trait",
 ]
 
@@ -1271,11 +1272,13 @@ dependencies = [
 
 [[package]]
 name = "host-protocol"
-version = "1.0.0"
+version = "1.1.0"
 dependencies = [
  "bitflags 2.6.0",
  "clap",
+ "consts",
  "crc",
+ "heapless 0.8.0",
  "postcard",
  "pretty_env_logger",
  "serde",

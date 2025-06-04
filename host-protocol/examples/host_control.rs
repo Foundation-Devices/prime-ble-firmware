@@ -32,7 +32,7 @@ impl From<Command> for HostProtocolMessage<'_> {
             Command::Rssi => HostProtocolMessage::Bluetooth(Bluetooth::GetSignalStrength),
             Command::Address => HostProtocolMessage::Bluetooth(Bluetooth::GetBtAddress),
             Command::FwVersion => HostProtocolMessage::Bluetooth(Bluetooth::GetFirmwareVersion),
-            Command::SendData => HostProtocolMessage::Bluetooth(Bluetooth::SendData(&[0x30; 200])),
+            Command::SendData => HostProtocolMessage::Bluetooth(Bluetooth::SendData(heapless::Vec::from_iter([0x30; 200].into_iter()))),
             Command::EraseApp => HostProtocolMessage::Bootloader(Bootloader::EraseFirmware),
             Command::UpdateApp => HostProtocolMessage::Bootloader(Bootloader::EraseFirmware),
         }

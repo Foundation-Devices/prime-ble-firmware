@@ -14,11 +14,11 @@ use defmt_rtt as _;
 // global logger
 use embassy_nrf as _;
 use embassy_time::Timer;
+use host_protocol::Message;
 // time driver
 use panic_probe as _;
 
 use comms::comms_task;
-use consts::ATT_MTU;
 use defmt::{info, *};
 use embassy_executor::Spawner;
 use embassy_nrf::bind_interrupts;
@@ -64,9 +64,9 @@ pub const BT_MAX_NUM_PKT: usize = 8;
 // Signal for BT state
 static BT_STATE: AtomicBool = AtomicBool::new(false);
 static BT_ADV_CHAN: AtomicU8 = AtomicU8::new(0);
-static BT_DATA_TX: Mutex<ThreadModeRawMutex, Vec<Vec<u8, ATT_MTU>, BT_MAX_NUM_PKT>> = Mutex::new(Vec::new());
+static BT_DATA_TX: Mutex<ThreadModeRawMutex, Vec<Message, BT_MAX_NUM_PKT>> = Mutex::new(Vec::new());
 static RSSI_VALUE: AtomicI8 = AtomicI8::new(i8::MIN); // by convention equivalent to None
-static BT_DATA_RX: Channel<ThreadModeRawMutex, Vec<u8, ATT_MTU>, BT_MAX_NUM_PKT> = Channel::new();
+static BT_DATA_RX: Channel<ThreadModeRawMutex, Message, BT_MAX_NUM_PKT> = Channel::new();
 static BT_ADDRESS: Mutex<ThreadModeRawMutex, [u8; 6]> = Mutex::new([0xFF; 6]);
 
 /// nRF -> MPU IRQ output pin
