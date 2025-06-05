@@ -75,7 +75,20 @@ pub fn initialize_sd() -> &'static mut Softdevice {
         ..Default::default()
     };
 
-    Softdevice::enable(&config)
+    let sd = Softdevice::enable(&config);
+
+    // Set TX power to +4 dBm
+    let tx_power_dbm: i8 = 4;
+    unsafe {
+        let ret = raw::sd_ble_gap_tx_power_set(raw::BLE_GAP_TX_POWER_ROLES_BLE_GAP_TX_POWER_ROLE_ADV as u8, 0, tx_power_dbm);
+        if ret != raw::NRF_SUCCESS {
+            error!("Failed to set TX power: {}", ret);
+        } else {
+            info!("TX power set to {} dBm", tx_power_dbm);
+        }
+    }
+
+    sd
 }
 
 /// Notifies the connected client about new data.
