@@ -2,8 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 use crate::nus::*;
-use crate::BT_DATA_TX;
-use crate::{BT_ADV_CHAN, BT_STATE, RSSI_VALUE};
+use crate::{BT_ADV_CHAN, BT_DATA_TX, BT_STATE, RSSI_VALUE, TX_PWR_VALUE};
 use consts::{ATT_MTU, DEVICE_NAME, SERVICES_LIST, SHORT_NAME};
 use core::mem;
 use defmt::{debug, error, info, unwrap};
@@ -75,20 +74,7 @@ pub fn initialize_sd() -> &'static mut Softdevice {
         ..Default::default()
     };
 
-    let sd = Softdevice::enable(&config);
-
-    // Set TX power to +4 dBm
-    let tx_power_dbm: i8 = 4;
-    unsafe {
-        let ret = raw::sd_ble_gap_tx_power_set(raw::BLE_GAP_TX_POWER_ROLES_BLE_GAP_TX_POWER_ROLE_ADV as u8, 0, tx_power_dbm);
-        if ret != raw::NRF_SUCCESS {
-            error!("Failed to set TX power: {}", ret);
-        } else {
-            info!("TX power set to {} dBm", tx_power_dbm);
-        }
-    }
-
-    sd
+    Softdevice::enable(&config)
 }
 
 /// Notifies the connected client about new data.
@@ -161,6 +147,16 @@ pub async fn run_bluetooth(sd: &'static Softdevice, server: &Server) {
         adv_data: &ADV_DATA,
         scan_data: &SCAN_DATA,
     };
+
+    let tx_power_dbm: i8 = TX_PWR_VALUE.load(core::sync::atomic::Ordering::Relaxed);
+    unsafe {
+        let ret = raw::sd_ble_gap_tx_power_set(raw::BLE_GAP_TX_POWER_ROLES_BLE_GAP_TX_POWER_ROLE_ADV as u8, 0, tx_power_dbm);
+        if ret != raw::NRF_SUCCESS {
+            error!("Failed to set TX power: {}", ret);
+        } else {
+            info!("TX power set to {} dBm", tx_power_dbm);
+        }
+    }
 
     loop {
         set_data_event_ext();

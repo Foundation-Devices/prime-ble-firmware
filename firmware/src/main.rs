@@ -68,6 +68,7 @@ static BT_DATA_TX: Mutex<ThreadModeRawMutex, Vec<Message, BT_MAX_NUM_PKT>> = Mut
 static RSSI_VALUE: AtomicI8 = AtomicI8::new(i8::MIN); // by convention equivalent to None
 static BT_DATA_RX: Channel<ThreadModeRawMutex, Message, BT_MAX_NUM_PKT> = Channel::new();
 static BT_ADDRESS: Mutex<ThreadModeRawMutex, [u8; 6]> = Mutex::new([0xFF; 6]);
+static TX_PWR_VALUE: AtomicI8 = AtomicI8::new(0i8);
 
 /// nRF -> MPU IRQ output pin
 static IRQ_OUT_PIN: Mutex<ThreadModeRawMutex, RefCell<Option<Output>>> = Mutex::new(RefCell::new(None));

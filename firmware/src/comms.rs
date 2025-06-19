@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2024 Foundation Devices, Inc. <hello@foundation.xyz>
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-use crate::{BT_ADDRESS, BT_ADV_CHAN, BT_DATA_RX, BT_DATA_TX, BT_MAX_NUM_PKT, BT_STATE, IRQ_OUT_PIN, RSSI_VALUE};
+use crate::{BT_ADDRESS, BT_ADV_CHAN, BT_DATA_RX, BT_DATA_TX, BT_MAX_NUM_PKT, BT_STATE, IRQ_OUT_PIN, RSSI_VALUE, TX_PWR_VALUE};
 use consts::{UICR_SECRET_SIZE, UICR_SECRET_START};
 use defmt::{debug, error, trace};
 #[cfg(not(feature = "hw-rev-d"))]
@@ -271,6 +271,11 @@ async fn host_protocol_handler<'a>(req: HostProtocolMessage<'a>) -> Option<HostP
                 Bluetooth::GetBtAddress => Some(HostProtocolMessage::Bluetooth(Bluetooth::AckBtAddress {
                     bt_address: *BT_ADDRESS.lock().await,
                 })),
+                Bluetooth::SetTxPower { power } => {
+                    trace!("SetTxPower");
+                    TX_PWR_VALUE.store(i8::from(power), core::sync::atomic::Ordering::Relaxed);
+                    Some(HostProtocolMessage::Bluetooth(Bluetooth::AckTxPower))
+                }
                 _ => {
                     trace!("Other");
                     Some(HostProtocolMessage::InappropriateMessage(get_state()))
