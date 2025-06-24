@@ -14,7 +14,7 @@ use nrf_softdevice::ble::gatt_server::{notify_value, NotifyValueError};
 use nrf_softdevice::ble::peripheral;
 #[cfg(feature = "ble-phy2")]
 use nrf_softdevice::ble::PhySet;
-use nrf_softdevice::ble::{gatt_server, Connection};
+use nrf_softdevice::ble::{gatt_server, Connection, TxPower};
 use nrf_softdevice::gatt_server;
 use nrf_softdevice::{raw, RawError, Softdevice};
 use raw::ble_gap_conn_params_t;
@@ -148,16 +148,6 @@ pub async fn run_bluetooth(sd: &'static Softdevice, server: &Server) {
         scan_data: &SCAN_DATA,
     };
 
-    let tx_power_dbm: i8 = TX_PWR_VALUE.load(core::sync::atomic::Ordering::Relaxed);
-    unsafe {
-        let ret = raw::sd_ble_gap_tx_power_set(raw::BLE_GAP_TX_POWER_ROLES_BLE_GAP_TX_POWER_ROLE_ADV as u8, 0, tx_power_dbm);
-        if ret != raw::NRF_SUCCESS {
-            error!("Failed to set TX power: {}", ret);
-        } else {
-            info!("TX power set to {} dBm", tx_power_dbm);
-        }
-    }
-
     loop {
         set_data_event_ext();
 
@@ -165,6 +155,17 @@ pub async fn run_bluetooth(sd: &'static Softdevice, server: &Server) {
         let config = peripheral::Config {
             interval: 75,
             channel_mask: [0, 0, 0, 0, BT_ADV_CHAN.load(core::sync::atomic::Ordering::Relaxed)],
+            tx_power: match TX_PWR_VALUE.load(core::sync::atomic::Ordering::Relaxed) {
+                -40 => TxPower::Minus40dBm,
+                -20 => TxPower::Minus20dBm,
+                -16 => TxPower::Minus16dBm,
+                -12 => TxPower::Minus12dBm,
+                -8 => TxPower::Minus8dBm,
+                -4 => TxPower::Minus4dBm,
+                3 => TxPower::Plus3dBm,
+                4 => TxPower::Plus4dBm,
+                _ => TxPower::ZerodBm,
+            },
             ..Default::default()
         };
 
