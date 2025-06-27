@@ -110,6 +110,11 @@ pub enum Bluetooth<'a> {
     SetTxPower { power: TxPower },
     /// Tx Output Power set
     AckTxPower,
+
+    /// Get device id
+    GetDeviceId,
+    /// Send device id
+    AckDeviceId { device_id: [u8; 8] },
 }
 
 impl Bluetooth<'_> {
@@ -135,6 +140,8 @@ impl Bluetooth<'_> {
             Self::AckBtAddress { .. } => false,
             Self::SetTxPower { .. } => true,
             Self::AckTxPower => false,
+            Self::GetDeviceId => true,
+            Self::AckDeviceId { .. } => false,
         }
     }
 }
@@ -688,6 +695,21 @@ mod tests {
                 }),
                 vec![1, 3, 18, 8, 0],
                 vec![0, 18, 8],
+            ),
+            (
+                HostProtocolMessage::Bluetooth(Bluetooth::AckTxPower),
+                vec![1, 2, 19, 0],
+                vec![0, 19],
+            ),
+            (
+                HostProtocolMessage::Bluetooth(Bluetooth::GetDeviceId),
+                vec![1, 2, 20, 0],
+                vec![0, 20],
+            ),
+            (
+                HostProtocolMessage::Bluetooth(Bluetooth::AckDeviceId { device_id: [0xFF; 8] }),
+                vec![1, 10, 21, 255, 255, 255, 255, 255, 255, 255, 255, 0],
+                vec![0, 21, 255, 255, 255, 255, 255, 255, 255, 255],
             ),
         ];
 

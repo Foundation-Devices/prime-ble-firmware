@@ -5,7 +5,7 @@
 authors = ["Foundation Devices, Inc. <hello@foundation.xyz>"]
 edition = "2021"
 name = "firmware"
-version = "2.2.0"
+version = "2.3.0"
 publish = false
 
 [features]
@@ -52,6 +52,7 @@ futures = { version = "0.3.31", default-features = false }
 heapless = { workspace = true }
 hmac = { workspace = true }
 host-protocol = { path = "../host-protocol", default-features = false }
+nrf52805-pac = "0.12.2"
 nrf-softdevice = { git = "https://github.com/Foundation-Devices/nrf-softdevice.git", rev = "566c1c2d7b269fa8f9addbc4473811b6b2b0f693", features = [
     "ble-gatt-server",
     "ble-peripheral",

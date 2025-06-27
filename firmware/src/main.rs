@@ -42,6 +42,7 @@ use futures::pin_mut;
 use heapless::Vec;
 #[cfg(not(feature = "hw-rev-d"))]
 use host_protocol::MAX_MSG_SIZE;
+use nrf52805_pac::FICR;
 use nrf_softdevice::ble::get_address;
 use nrf_softdevice::Softdevice;
 use server::{initialize_sd, run_bluetooth, stop_bluetooth, Server};
@@ -68,6 +69,7 @@ static BT_DATA_TX: Mutex<ThreadModeRawMutex, Vec<Message, BT_MAX_NUM_PKT>> = Mut
 static RSSI_VALUE: AtomicI8 = AtomicI8::new(i8::MIN); // by convention equivalent to None
 static BT_DATA_RX: Channel<ThreadModeRawMutex, Message, BT_MAX_NUM_PKT> = Channel::new();
 static BT_ADDRESS: Mutex<ThreadModeRawMutex, [u8; 6]> = Mutex::new([0xFF; 6]);
+static DEVICE_ID: Mutex<ThreadModeRawMutex, [u8; 8]> = Mutex::new([0xFF; 8]);
 static TX_PWR_VALUE: AtomicI8 = AtomicI8::new(0i8);
 
 /// nRF -> MPU IRQ output pin
@@ -172,6 +174,15 @@ async fn main(spawner: Spawner) {
     address.reverse();
     info!("Address : {=[u8;6]:#X}", address);
     *BT_ADDRESS.lock().await = address;
+
+    unsafe {
+        let ficr = &*FICR::ptr();
+        let device_id_low = ficr.deviceid[0].read().bits();
+        let device_id_high = ficr.deviceid[1].read().bits();
+        let device_id = (device_id_high as u64) << 16 | (device_id_low as u64);
+        info!("Device ID : {:08x}", device_id);
+        *DEVICE_ID.lock().await = device_id.to_le_bytes();
+    }
 
     loop {
         if BT_STATE.load(core::sync::atomic::Ordering::Relaxed) {
