@@ -2,8 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 use crate::nus::*;
-use crate::BT_DATA_TX;
-use crate::{BT_ADV_CHAN, BT_STATE, RSSI_VALUE};
+use crate::{BT_ADV_CHAN, BT_DATA_TX, BT_STATE, RSSI_VALUE, TX_PWR_VALUE};
 use consts::{ATT_MTU, DEVICE_NAME, SERVICES_LIST, SHORT_NAME};
 use core::mem;
 use defmt::{debug, error, info, unwrap};
@@ -15,7 +14,7 @@ use nrf_softdevice::ble::gatt_server::{notify_value, NotifyValueError};
 use nrf_softdevice::ble::peripheral;
 #[cfg(feature = "ble-phy2")]
 use nrf_softdevice::ble::PhySet;
-use nrf_softdevice::ble::{gatt_server, Connection};
+use nrf_softdevice::ble::{gatt_server, Connection, TxPower};
 use nrf_softdevice::gatt_server;
 use nrf_softdevice::{raw, RawError, Softdevice};
 use raw::ble_gap_conn_params_t;
@@ -156,6 +155,17 @@ pub async fn run_bluetooth(sd: &'static Softdevice, server: &Server) {
         let config = peripheral::Config {
             interval: 75,
             channel_mask: [0, 0, 0, 0, BT_ADV_CHAN.load(core::sync::atomic::Ordering::Relaxed)],
+            tx_power: match TX_PWR_VALUE.load(core::sync::atomic::Ordering::Relaxed) {
+                -40 => TxPower::Minus40dBm,
+                -20 => TxPower::Minus20dBm,
+                -16 => TxPower::Minus16dBm,
+                -12 => TxPower::Minus12dBm,
+                -8 => TxPower::Minus8dBm,
+                -4 => TxPower::Minus4dBm,
+                3 => TxPower::Plus3dBm,
+                4 => TxPower::Plus4dBm,
+                _ => TxPower::ZerodBm,
+            },
             ..Default::default()
         };
 

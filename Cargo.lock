@@ -1008,7 +1008,7 @@ dependencies = [
 
 [[package]]
 name = "firmware"
-version = "2.1.0"
+version = "2.1.1"
 dependencies = [
  "consts",
  "cortex-m",
@@ -1272,7 +1272,7 @@ dependencies = [
 
 [[package]]
 name = "host-protocol"
-version = "1.1.0"
+version = "1.2.0"
 dependencies = [
  "bitflags 2.6.0",
  "clap",

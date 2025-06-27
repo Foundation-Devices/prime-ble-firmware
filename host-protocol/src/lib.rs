@@ -30,6 +30,35 @@ bitflags! {
 
 pub type Message = Vec<u8, ATT_MTU>;
 
+#[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq)]
+pub enum TxPower {
+    Negative40dBm,
+    Negative20dBm,
+    Negative16dBm,
+    Negative12dBm,
+    Negative8dBm,
+    Negative4dBm,
+    ZerodBm,
+    Positive3dBm,
+    Positive4dBm,
+}
+
+impl From<TxPower> for i8 {
+    fn from(value: TxPower) -> Self {
+        match value {
+            TxPower::Negative40dBm => -40,
+            TxPower::Negative20dBm => -20,
+            TxPower::Negative16dBm => -16,
+            TxPower::Negative12dBm => -12,
+            TxPower::Negative8dBm => -8,
+            TxPower::Negative4dBm => -4,
+            TxPower::ZerodBm => 0,
+            TxPower::Positive3dBm => 3,
+            TxPower::Positive4dBm => 4,
+        }
+    }
+}
+
 /// Bluetooth-specific messages for controlling the BLE radio and data transfer.
 ///
 /// Make sure to only append new messages at the end of the enum, to keep backward compatibility
@@ -76,6 +105,11 @@ pub enum Bluetooth<'a> {
     GetBtAddress,
     /// Send bt address
     AckBtAddress { bt_address: [u8; 6] },
+
+    /// Set Tx Output Power
+    SetTxPower { power: TxPower },
+    /// Tx Output Power set
+    AckTxPower,
 }
 
 impl Bluetooth<'_> {
@@ -99,6 +133,8 @@ impl Bluetooth<'_> {
             Self::AckFirmwareVersion { .. } => false,
             Self::GetBtAddress => true,
             Self::AckBtAddress { .. } => false,
+            Self::SetTxPower { .. } => true,
+            Self::AckTxPower => false,
         }
     }
 }
@@ -645,6 +681,13 @@ mod tests {
                 HostProtocolMessage::Bluetooth(Bluetooth::AckBtAddress { bt_address: [0xFF; 6] }),
                 vec![1, 8, 17, 255, 255, 255, 255, 255, 255, 0],
                 vec![0, 17, 255, 255, 255, 255, 255, 255],
+            ),
+            (
+                HostProtocolMessage::Bluetooth(Bluetooth::SetTxPower {
+                    power: TxPower::Positive4dBm,
+                }),
+                vec![1, 3, 18, 8, 0],
+                vec![0, 18, 8],
             ),
         ];
 
