@@ -179,7 +179,7 @@ async fn main(spawner: Spawner) {
         let ficr = &*FICR::ptr();
         let device_id_low = ficr.deviceid[0].read().bits();
         let device_id_high = ficr.deviceid[1].read().bits();
-        let device_id = (device_id_high as u64) << 16 | (device_id_low as u64);
+        let device_id = (device_id_high as u64) << 32 | (device_id_low as u64);
         info!("Device ID : {:08x}", device_id);
         *DEVICE_ID.lock().await = device_id.to_le_bytes();
     }
