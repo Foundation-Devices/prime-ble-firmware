@@ -17,8 +17,6 @@ struct XtaskArgs {
     #[command(subcommand)]
     command: Commands,
     #[arg(short, long)]
-    rev_d: bool,
-    #[arg(short, long)]
     verbose: bool,
 }
 
@@ -165,13 +163,12 @@ fn build_tools_check_debug(verbose: bool) {
     }
 }
 
-fn build_bt_bootloader(verbose: bool, rev_d: bool) {
+fn build_bt_bootloader(verbose: bool) {
     tracing::info!("Building bootloader....");
     let mut cargo_cmd = Command::new(cargo());
-    let cmd = cargo_cmd
+    let mut cmd = cargo_cmd
         .current_dir(project_root().join("bootloader"))
         .args(["build", "--release"]);
-    let mut cmd = if rev_d { cmd.args(["--features", "hw-rev-d"]) } else { cmd };
     if !verbose {
         cmd = cmd.stdout(Stdio::null()).stderr(Stdio::null()).arg("--quiet");
     }
@@ -186,7 +183,6 @@ fn build_bt_bootloader(verbose: bool, rev_d: bool) {
     let cmd = cargo_cmd
         .current_dir(project_root().join("bootloader"))
         .args(["objcopy", "--release"]);
-    let cmd = if rev_d { cmd.args(["--features", "hw-rev-d"]) } else { cmd };
     let mut cmd = cmd.args(["--", "-O", "ihex", "../BtPackage/bootloader.hex"]);
     if !verbose {
         cmd = cmd.stdout(Stdio::null()).stderr(Stdio::null());
@@ -198,13 +194,12 @@ fn build_bt_bootloader(verbose: bool, rev_d: bool) {
     }
 }
 
-fn build_bt_bootloader_debug(verbose: bool, rev_d: bool) {
+fn build_bt_bootloader_debug(verbose: bool) {
     tracing::info!("Building debug bootloader....");
     let mut cargo_cmd = Command::new(cargo());
-    let cmd = cargo_cmd
+    let mut cmd = cargo_cmd
         .current_dir(project_root().join("bootloader"))
         .args(["build", "--release"]);
-    let mut cmd = if rev_d { cmd.args(["--features", "hw-rev-d"]) } else { cmd };
     if !verbose {
         cmd = cmd.stdout(Stdio::null()).stderr(Stdio::null()).arg("--quiet");
     }
@@ -219,7 +214,6 @@ fn build_bt_bootloader_debug(verbose: bool, rev_d: bool) {
     let cmd = cargo_cmd
         .current_dir(project_root().join("bootloader"))
         .args(["objcopy", "--release"]);
-    let cmd = if rev_d { cmd.args(["--features", "hw-rev-d"]) } else { cmd };
     let mut cmd = cmd.args(["--", "-O", "ihex", "../BtPackageDebug/bootloaderDebug.hex"]);
     if !verbose {
         cmd = cmd.stdout(Stdio::null()).stderr(Stdio::null());
@@ -231,11 +225,10 @@ fn build_bt_bootloader_debug(verbose: bool, rev_d: bool) {
     }
 }
 
-fn build_bt_firmware(verbose: bool, rev_d: bool) {
+fn build_bt_firmware(verbose: bool) {
     tracing::info!("Building application...");
     let mut cargo_cmd = Command::new(cargo());
-    let cmd = cargo_cmd.current_dir(project_root().join("firmware")).args(["build", "--release"]);
-    let mut cmd = if rev_d { cmd.args(["--features", "hw-rev-d"]) } else { cmd };
+    let mut cmd = cargo_cmd.current_dir(project_root().join("firmware")).args(["build", "--release"]);
     if !verbose {
         cmd = cmd.stdout(Stdio::null()).stderr(Stdio::null()).arg("--quiet");
     }
@@ -253,7 +246,6 @@ fn build_bt_firmware(verbose: bool, rev_d: bool) {
     let cmd = cargo_cmd
         .current_dir(project_root().join("firmware"))
         .args(["objcopy", "--release"]);
-    let cmd = if rev_d { cmd.args(["--features", "hw-rev-d"]) } else { cmd };
     let mut cmd = cmd.args([
         "--",
         "--pad-to",
@@ -272,11 +264,10 @@ fn build_bt_firmware(verbose: bool, rev_d: bool) {
     }
 }
 
-fn build_bt_debug_firmware(verbose: bool, rev_d: bool) {
+fn build_bt_debug_firmware(verbose: bool) {
     tracing::info!("Building debug application...");
     let mut cargo_cmd = Command::new(cargo());
-    let cmd = cargo_cmd.current_dir(project_root().join("firmware")).args(["build", "--release"]);
-    let mut cmd = if rev_d { cmd.args(["--features", "hw-rev-d"]) } else { cmd };
+    let mut cmd = cargo_cmd.current_dir(project_root().join("firmware")).args(["build", "--release"]);
     if !verbose {
         cmd = cmd.stdout(Stdio::null()).stderr(Stdio::null()).arg("--quiet");
     }
@@ -290,7 +281,6 @@ fn build_bt_debug_firmware(verbose: bool, rev_d: bool) {
     let cmd = cargo_cmd
         .current_dir(project_root().join("firmware"))
         .args(["objcopy", "--release"]);
-    let cmd = if rev_d { cmd.args(["--features", "hw-rev-d"]) } else { cmd };
     let mut cmd = cmd.args(["--", "-O", "ihex", "../BtPackageDebug/BtappDebug.hex"]);
     if !verbose {
         cmd = cmd.stdout(Stdio::null()).stderr(Stdio::null());
@@ -574,20 +564,20 @@ fn main() {
     match args.command {
         Commands::BuildFwImage => {
             build_tools_check(args.verbose);
-            build_bt_bootloader(args.verbose, args.rev_d);
-            build_bt_firmware(args.verbose, args.rev_d);
+            build_bt_bootloader(args.verbose);
+            build_bt_firmware(args.verbose);
             sign_bt_firmware("cosign2.toml", true);
             build_bt_package();
         }
         Commands::BuildMinimalImage => {
             build_tools_check(args.verbose);
-            build_bt_bootloader(args.verbose, args.rev_d);
+            build_bt_bootloader(args.verbose);
             build_bt_minimal_package();
         }
         Commands::BuildUnsigned => {
             build_tools_check(args.verbose);
-            build_bt_bootloader(args.verbose, args.rev_d);
-            build_bt_firmware(args.verbose, args.rev_d);
+            build_bt_bootloader(args.verbose);
+            build_bt_firmware(args.verbose);
         }
         Commands::SignFirmware { config_path } => {
             sign_bt_firmware(&config_path, false);
@@ -597,8 +587,8 @@ fn main() {
         }
         Commands::BuildFwDebugImage => {
             build_tools_check_debug(args.verbose);
-            build_bt_bootloader_debug(args.verbose, args.rev_d);
-            build_bt_debug_firmware(args.verbose, args.rev_d);
+            build_bt_bootloader_debug(args.verbose);
+            build_bt_debug_firmware(args.verbose);
             build_bt_package_debug();
         }
         Commands::PatchSd => {
