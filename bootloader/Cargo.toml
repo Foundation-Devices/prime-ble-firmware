@@ -9,11 +9,7 @@ version = "2.0.1"
 publish = false
 
 [features]
-default = ["hw-rev-d"]
 debug = []
-
-# Hardware is on rev D
-hw-rev-d = ["host-protocol/no-cobs"]
 
 [dependencies]
 consts_global = { path = "../consts", package = "consts" }
@@ -44,7 +40,9 @@ embassy-time = { version = "0.3.2", features = [
 embedded-storage = "0.3.1"
 heapless = { workspace = true }
 hmac = { workspace = true }
-host-protocol = { path = "../host-protocol", default-features = false }
+host-protocol = { path = "../host-protocol", default-features = false, features = [
+    "no-cobs",
+] }
 micro-ecc-sys = { git = "https://github.com/Foundation-Devices/keyOS.git", default-features = false }
 nrf-softdevice = { git = "https://github.com/Foundation-Devices/nrf-softdevice.git", rev = "566c1c2d7b269fa8f9addbc4473811b6b2b0f693", features = [
     "ble-peripheral",

@@ -4,42 +4,13 @@
 use crate::{BT_ADDRESS, BT_ADV_CHAN, BT_DATA_RX, BT_DATA_TX, BT_MAX_NUM_PKT, BT_STATE, DEVICE_ID, IRQ_OUT_PIN, RSSI_VALUE, TX_PWR_VALUE};
 use consts::{UICR_SECRET_SIZE, UICR_SECRET_START};
 use defmt::{debug, error, trace};
-#[cfg(not(feature = "hw-rev-d"))]
-use embassy_nrf::{
-    buffered_uarte::{BufferedUarte, BufferedUarteTx},
-    peripherals::{TIMER1, UARTE0},
-};
-#[cfg(feature = "hw-rev-d")]
 use embassy_nrf::{peripherals::SPI0, spis::Spis};
 #[cfg(feature = "analytics")]
 use embassy_time::Instant;
-#[cfg(not(feature = "hw-rev-d"))]
-use embassy_time::{with_timeout, Duration};
-#[cfg(not(feature = "hw-rev-d"))]
-use embedded_io_async::Write;
 use hmac::{Hmac, Mac};
 use host_protocol::{AdvChan, Bluetooth, HostProtocolMessage, PostcardError, SendDataResponse, State, MAX_MSG_SIZE};
-#[cfg(not(feature = "hw-rev-d"))]
-use postcard::{
-    accumulator::{CobsAccumulator, FeedResult},
-    to_slice_cobs,
-};
-#[cfg(feature = "hw-rev-d")]
 use postcard::{from_bytes, to_slice};
 use sha2::Sha256 as ShaChallenge;
-
-/// Helper function to signal the MPU via GPIO
-/// Sends a falling edge pulse on the IRQ line
-#[cfg(not(feature = "hw-rev-d"))]
-async fn assert_out_irq() {
-    let irq_out = IRQ_OUT_PIN.lock().await;
-    {
-        let mut pin = irq_out.borrow_mut();
-        // Generate falling edge pulse
-        pin.as_mut().map(|p| p.set_low());
-        pin.as_mut().map(|p| p.set_high());
-    }
-}
 
 #[cfg(feature = "analytics")]
 /// Logs performance metrics if 1.5s has passed since the last log
@@ -82,90 +53,8 @@ fn log_infra_packet(
     *pkt_counter += 1;
 }
 
-/// Main communication task that handles incoming UART messages from the MPU
-/// Decodes COBS-encoded messages and routes them to appropriate handlers
-#[cfg(not(feature = "hw-rev-d"))]
-#[embassy_executor::task]
-pub async fn comms_task(uart: BufferedUarte<'static, UARTE0, TIMER1>) {
-    // Rough performance metrics
-    #[cfg(feature = "analytics")]
-    let mut data_counter: u64 = 0;
-    #[cfg(feature = "analytics")]
-    let mut pkt_counter: u64 = 0;
-    #[cfg(feature = "analytics")]
-    let mut rx_packet = false;
-    #[cfg(feature = "analytics")]
-    let mut timer_pkt: Instant = Instant::now();
-    #[cfg(feature = "analytics")]
-    let mut timer_tot: Instant = Instant::now();
-
-    let mut resp_buf = [0u8; MAX_MSG_SIZE];
-
-    // Split UART into RX and TX
-    let (mut rx, mut tx) = uart.split();
-
-    // Buffer for raw incoming UART data
-    let mut raw_buf = [0u8; 64];
-
-    // COBS accumulator for decoding incoming messages
-    let mut cobs_buf: CobsAccumulator<MAX_MSG_SIZE> = CobsAccumulator::new();
-    loop {
-        #[cfg(feature = "analytics")]
-        log_performance(&mut timer_pkt, &mut rx_packet, &mut pkt_counter, &mut data_counter, &mut timer_tot);
-
-        // Read data from UART
-        if let Ok(n) = with_timeout(Duration::from_micros(200), rx.read(&mut raw_buf)).await {
-            // Clear the response buffer
-            resp_buf.fill(0);
-
-            // Exit if no data received
-            let Ok(num) = n else {
-                continue;
-            };
-
-            let buf = &raw_buf[..num];
-            let mut window = buf;
-            let mut resp: Option<HostProtocolMessage>;
-
-            // Process all complete COBS messages in the buffer
-            'cobs: while !window.is_empty() {
-                (window, resp) = match cobs_buf.feed_ref::<HostProtocolMessage>(window) {
-                    FeedResult::Consumed => {
-                        break 'cobs;
-                    }
-                    FeedResult::OverFull(new_wind) => {
-                        trace!("overfull");
-                        (new_wind, Some(HostProtocolMessage::PostcardError(PostcardError::OverFull)))
-                    }
-                    FeedResult::DeserError(new_wind) => {
-                        trace!("DeserError");
-                        (new_wind, Some(HostProtocolMessage::PostcardError(PostcardError::Deser)))
-                    }
-                    FeedResult::Success { data, remaining } => {
-                        trace!("Success");
-                        debug!("Remaining {} bytes", remaining.len());
-                        // Route message to appropriate handler based on type
-                        (remaining, host_protocol_handler(data, &mut resp_buf).await)
-                    }
-                };
-
-                if let Some(msg) = resp {
-                    let mut buf = [0u8; MAX_MSG_SIZE];
-
-                    if let Ok(resp) = to_slice_cobs(&msg, &mut buf) {
-                        let _ = tx.write_all(resp).await;
-                        let _ = tx.flush().await;
-                        assert_out_irq().await;
-                    }
-                }
-            }
-        }
-    }
-}
-
 /// Main communication task that handles incoming SPI messages from the MPU
 /// Decodes postcard-encoded messages and routes them to appropriate handlers
-#[cfg(feature = "hw-rev-d")]
 #[embassy_executor::task]
 pub async fn comms_task(mut spi: Spis<'static, SPI0>) {
     // Buffer for raw incoming SPI data
