@@ -65,6 +65,21 @@
 
           customPackages = self.packages.${system};
 
+          nrf-recover = pkgs.rustPlatform.buildRustPackage rec {
+            pname = "nrf-recover";
+            version = "0.1.0";
+            src = pkgs.fetchCrate {
+              inherit pname version;
+              hash = "sha256-IHkCHhYfZscQACNiRFaN7w0oUy0vrSPM5AWZLdYnJ2Q=";
+            };
+            cargoHash = "sha256-0/mpBfFldWCjMQg7x4DVEo2CUu5iVn81S/kAqOM2Aeo=";
+            nativeBuildInputs = [
+              pkgs.pkg-config
+              pkgs.rustfmt
+            ];
+            buildInputs = [ pkgs.libusb1.dev ];
+          };
+
           buildPackages =
             with pkgs;
             [
@@ -87,11 +102,11 @@
               rust-analyzer
             ])
             ++ (with pkgs; [
-              dbus.dev # for host-ble tool
-              libusb1.dev # for nrf-recover
-              picocom
               pkg-config # for host-ble tool
               probe-rs # for flashing/debugging
+            ])
+            ++ ([
+              nrf-recover
             ]);
 
           darwinPackages =
@@ -123,6 +138,7 @@
                 packages = packages ++ linuxPackages ++ darwinPackages;
                 hardeningDisable = [ "all" ];
                 buildInputs = with pkgs; [
+                  dbus.dev # for host-ble tool
                 ];
 
                 LD_LIBRARY_PATH =
