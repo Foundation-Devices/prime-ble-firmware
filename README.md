@@ -1,9 +1,9 @@
 <!-- SPDX-FileCopyrightText: 2024 Foundation Devices, Inc. <hello@foundation.xyz> -->
 <!-- SPDX-License-Identifier: GPL-3.0-or-later -->
 
-## `prime-ble-firmware`
+# `prime-ble-firmware`
 
-### Passport Prime BLE controller firmware.
+## Passport Prime BLE controller firmware.
 
 This workspace contains the following crates:
 
@@ -11,10 +11,18 @@ This workspace contains the following crates:
 - `firmware`: Main BLE application firmware that implements the Bluetooth protocol
 - `host-protocol`: Shared protocol definitions for MPU-BLE communication
 
-The firmware and bootloader communicate with the main MCU via UART using the COBS protocol for reliable serial data transfer. The host protocol defines the message types and structures used for this communication.
+The `firmware` and `bootloader` communicate with the main MCU using the `host-protocol`.
 
 
-### Prerequisites
+## Prerequisites
+
+### Nix develop environment
+
+   ```bash
+   nix develop
+   ```
+
+### Manual installation
 
    ```bash
    # Install xtask for custom build scripts
@@ -41,7 +49,11 @@ The firmware and bootloader communicate with the main MCU via UART using the COB
    rustup target add thumbv7em-none-eabi
    ```
 
-### Installation and Running with probe-rs
+## Customizing environment
+
+Rename the `env-example` file into `.env` and edit its values to match your environment.
+
+## Installation and Running with probe-rs
 
 Follow the [probe-rs installation guide](https://probe.rs/docs/getting-started/installation/) to get started.
 
@@ -82,7 +94,7 @@ Follow the [probe-rs installation guide](https://probe.rs/docs/getting-started/i
    just bluetooth-app
    ```
 
-### Building with Docker
+## Building with Docker
 
 The firmware can be built using `docker` without installing anything.
 This needs a file called `.github-access-token` in the repository
@@ -105,7 +117,7 @@ Caveat: The docker build only mounts the current working directory, so
 if the cosign PEM file is outside this directory, code signing will
 not work.
 
-### Fixing `JtagNoDeviceConnected` error
+## Fixing `JtagNoDeviceConnected` error
 
 Some nRF52 chips are coming locked from the fab and need an unlocking procedure to be programmed.
 The unlocking requires a J-Link probe and cannot be done with ST-Link probe.
@@ -133,9 +145,7 @@ The unlocking requires a J-Link probe and cannot be done with ST-Link probe.
 - Power cycle the board and try to program the `SoftDevice` again.
 
 
-
-
-### Notes about `Access port protection` use and chip revisions
+## Notes about `Access port protection` use and chip revisions
 
 As reported by [Informational Notice](./misc/in_153_v1.0.1.pdf) there was a change in the way 'Access port protection' is used in rev. B of the chip due to a possible attack.
 

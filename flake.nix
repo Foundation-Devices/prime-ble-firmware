@@ -152,10 +152,8 @@
                   export CC="arm-none-eabi-gcc"
                   export CC_thumbv7em_none_eabi="arm-none-eabi-gcc"
                   export CARGO_NET_GIT_FETCH_WITH_CLI=true
-                  export PROBE_RS_PROBE=1366:0105:000269305101
-                  export ROBE_RS_PROTOCOL=swd
+                  export PROBE_RS_PROTOCOL=swd
                   export PROBE_RS_CHIP=nrf52805_xxAA
-                  export BT_UART=/dev/serial/by-id/usb-Silicon_Labs_CP2102N_USB_to_UART_Bridge_Controller_7263cbc4e498ed11b0e4a9b7a7669f5d-if00-port0
                 '';
               }
               // linuxAttrs
