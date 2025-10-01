@@ -12,6 +12,18 @@ cosign2.toml
 *.pem
 firmware/memory.x
 *.pcap
+.env
+.envrc
+.direnv
+.rustup/
+.cargo/registry
+.cargo/.crates.toml
+.cargo/.crates2.json
+.cargo/.global-cache
+.cargo/.package-cache
+.cargo/.package-cache-mutate
+.cargo/git
+.cargo/bin
 
 # GitHub access token file for git access inside Docker
 .github-access-token

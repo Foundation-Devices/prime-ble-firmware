@@ -3,11 +3,7 @@
 
 # Install requirements
 install:
-    cargo install cargo-binutils
     cargo install nrf-recover
-    rustup component add llvm-tools
-    rustup target add thumbv7em-none-eabi
-    CC="" cargo install --path ../keyOS/imports/cosign2/cosign2-bin --bin cosign2
 
 # Build production firmware package
 build args="":
