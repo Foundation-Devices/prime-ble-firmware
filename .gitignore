@@ -27,4 +27,3 @@ firmware/memory.x
 
 # GitHub access token file for git access inside Docker
 .github-access-token
-false

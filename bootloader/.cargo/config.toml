@@ -12,7 +12,6 @@ rustflags = [
   "-C", "link-arg=-nostdlib",
   "-C", "code-model=small",
   "-C", "debuginfo=0",
-  "-C", "incremental=false",
   "-C", "lto=fat"
 ]
 

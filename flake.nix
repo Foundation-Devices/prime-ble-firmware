@@ -167,9 +167,10 @@
                   export RUSTUP_HOME=$PWD/.rustup
                   export CARGO_HOME=$PWD/.cargo
                   export PATH=$PATH:''${CARGO_HOME}/bin:''${RUSTUP_HOME}/toolchains/$RUSTC_VERSION-x86_64-unknown-linux-gnu/bin/
-                  export CC="arm-none-eabi-gcc"
+                  # export CC="arm-none-eabi-gcc"
                   export CC_thumbv7em_none_eabi="arm-none-eabi-gcc"
                   export CARGO_NET_GIT_FETCH_WITH_CLI=true
+                  export CARGO_INCREMENTAL=0
                   export PROBE_RS_PROTOCOL=swd
                   export PROBE_RS_CHIP=nrf52805_xxAA
                 '';
