@@ -1,10 +1,6 @@
 # SPDX-FileCopyrightText: 2024 Foundation Devices, Inc. <hello@foundation.xyz>
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-# Install requirements
-install:
-    cargo install nrf-recover
-
 # Build production firmware package
 build args="":
     cargo xtask {{args}} build-fw-image
