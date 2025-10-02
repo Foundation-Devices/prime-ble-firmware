@@ -1,14 +1,6 @@
 # SPDX-FileCopyrightText: 2024 Foundation Devices, Inc. <hello@foundation.xyz>
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-# Install requirements
-install:
-    cargo install cargo-binutils
-    cargo install nrf-recover
-    rustup component add llvm-tools
-    rustup target add thumbv7em-none-eabi
-    CC="" cargo install --path ../keyOS/imports/cosign2/cosign2-bin --bin cosign2
-
 # Build production firmware package
 build args="":
     cargo xtask {{args}} build-fw-image
@@ -16,6 +8,9 @@ build args="":
 # Build production firmware package
 build-minimal args="":
     cargo xtask {{args}} build-minimal-image
+    @echo -n 'Commit '
+    @git rev-parse HEAD
+    @sha256sum BtPackage/*
 
 # Build debug firmware package with UART console without flash protection
 build-debug args="":
@@ -24,6 +19,9 @@ build-debug args="":
 # Build unsigned firmware package (without signing or packaging)
 build-unsigned args="":
     cargo xtask {{args}} build-unsigned
+    @echo -n 'Commit '
+    @git rev-parse HEAD
+    @sha256sum BtPackage/*
 
 # Sign firmware with specified cosign2 config
 sign config="cosign2.toml":

@@ -6,6 +6,14 @@ runner = "probe-rs run --chip nrf52805_xxAA"
 
 [build]
 target = "thumbv7em-none-eabi" # Cortex-M4 and Cortex-M7 (no FPU)
+rustflags = [
+  "-C", "linker=arm-none-eabi-gcc",
+  "-C", "link-arg=-nostartfiles",
+  "-C", "link-arg=-nostdlib",
+  "-C", "code-model=small",
+  "-C", "debuginfo=0",
+  "-C", "lto=fat"
+]
 
 [env]
 DEFMT_LOG = "debug"
