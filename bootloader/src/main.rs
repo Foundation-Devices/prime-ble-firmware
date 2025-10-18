@@ -62,9 +62,6 @@ use verify::{get_fw_image_slice, read_version_and_build_date, verify_fw_image, w
 // Global mutex for hardware RNG access
 static RNG_HW: CriticalSectionMutex<RefCell<Option<Rng<'_, RNG>>>> = Mutex::new(RefCell::new(None));
 
-// Global static pin for IRQ output
-static mut IRQ_OUT_PIN: Option<Output<'static>> = None;
-
 // Bind hardware interrupts to their handlers
 bind_interrupts!(struct Irqs {
     SPIM0_SPIS0_SPI0 => spis::InterruptHandler<SPI0>;
@@ -100,12 +97,6 @@ fn ack_msg_send(message: HostProtocolMessage, spi: &mut Spis<SPI0>) {
     };
     let resp_len = resp.len();
     buf[..2].copy_from_slice(&u16::to_be_bytes(resp_len as u16));
-    unsafe {
-        if let Some(pin) = IRQ_OUT_PIN.as_mut() {
-            // Generate falling edge using the static pin
-            pin.set_low();
-        }
-    }
     let _ = spi.blocking_write_from_ram(&buf[..resp_len + 2]);
 }
 
@@ -243,9 +234,7 @@ async fn main(_spawner: Spawner) {
     }
 
     // Initialize IRQ_OUT pin
-    unsafe {
-        IRQ_OUT_PIN = Some(Output::new(p.P0_20, Level::High, OutputDrive::Standard));
-    }
+    let _irq_out_pin = Output::new(p.P0_20, Level::High, OutputDrive::Standard);
 
     // Initialize flash controller
     let mut flash = Nvmc::new(p.NVMC);
@@ -260,12 +249,6 @@ async fn main(_spawner: Spawner) {
 
     // Main command processing loop
     loop {
-        unsafe {
-            if let Some(pin) = IRQ_OUT_PIN.as_mut() {
-                // Re-arm the IRQ to signal ready to read SPI
-                pin.set_high();
-            }
-        }
         let n = spi.read(&mut raw_buf).await;
 
         if let Ok(n) = n {
