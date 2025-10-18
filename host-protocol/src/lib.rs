@@ -14,10 +14,7 @@ use serde::{Deserialize, Serialize};
 
 /// Maximum supported message size to be serialized or deserialized by `postcard`.
 /// Messages larger than this will be rejected.
-#[cfg(feature = "no-cobs")]
 pub const MAX_MSG_SIZE: usize = 270;
-#[cfg(not(feature = "no-cobs"))]
-pub const MAX_MSG_SIZE: usize = 512;
 
 bitflags! {
     #[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq)]
@@ -307,9 +304,9 @@ mod tests {
     extern crate std;
 
     use super::*;
-    use postcard::{to_slice, to_slice_cobs};
+    use postcard::to_slice;
     use std::println;
-    use std::{vec, vec::Vec};
+    use std::vec::Vec;
 
     fn encoded_data(msg: HostProtocolMessage) -> Vec<u8> {
         let mut buf = [0u8; 512]; // Buffer large enough for all messages
@@ -317,411 +314,229 @@ mod tests {
         serialized.to_vec()
     }
 
-    fn encoded_data_cobs(msg: HostProtocolMessage) -> Vec<u8> {
-        let mut buf = [0u8; 512]; // Buffer large enough for all messages
-        let serialized = to_slice_cobs(&msg, &mut buf).unwrap();
-        serialized.to_vec()
+    fn check_messages(name: &str, messages: &[(HostProtocolMessage, &[u8])]) {
+        println!("----------------------------------");
+        println!("{name} messages data after encoding:");
+        println!("----------------------------------");
+        for (msg, wanted) in messages {
+            println!("{msg:02x?}");
+            // make sure these encoded messages stay the same for backward compatibility
+            let encoded = encoded_data(msg.clone());
+            assert!(encoded.starts_with(wanted), "{encoded:02x?}\ndid not start with\n{wanted:02x?}");
+        }
     }
 
     #[test]
     fn check_base_messages() {
         // Test each variant
-        let data_base_messages = [
-            (HostProtocolMessage::Reset, vec![2, 2, 0], vec![2]),
-            (HostProtocolMessage::GetState, vec![2, 3, 0], vec![3]),
-            (HostProtocolMessage::AckState(State::Disabled), vec![3, 4, 1, 0], vec![4, 1]),
-            (HostProtocolMessage::AckState(State::Enabled), vec![2, 4, 1, 0], vec![4, 0]),
-            (HostProtocolMessage::AckState(State::FirmwareUpgrade), vec![3, 4, 2, 0], vec![4, 2]),
-            (HostProtocolMessage::AckState(State::Unknown), vec![3, 4, 3, 0], vec![4, 3]),
-            (HostProtocolMessage::ChallengeRequest { nonce: 0 }, vec![2, 5, 1, 0], vec![5, 0]),
-            (
-                HostProtocolMessage::ChallengeResult { result: [0u8; 32] },
-                vec![
-                    2, 6, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0,
-                ],
-                vec![
-                    6, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-                ],
-            ),
-            (
-                HostProtocolMessage::PostcardError(PostcardError::Deser),
-                vec![2, 7, 1, 0],
-                vec![7, 0],
-            ),
-            (
-                HostProtocolMessage::PostcardError(PostcardError::OverFull),
-                vec![3, 7, 1, 0],
-                vec![7, 1],
-            ),
-            (
-                HostProtocolMessage::InappropriateMessage(State::Disabled),
-                vec![3, 8, 1, 0],
-                vec![8, 1],
-            ),
-            (
-                HostProtocolMessage::InappropriateMessage(State::Enabled),
-                vec![2, 8, 1, 0],
-                vec![8, 0],
-            ),
-            (
-                HostProtocolMessage::InappropriateMessage(State::FirmwareUpgrade),
-                vec![3, 8, 2, 0],
-                vec![8, 2],
-            ),
-            (
-                HostProtocolMessage::InappropriateMessage(State::Unknown),
-                vec![3, 8, 3, 0],
-                vec![8, 3],
-            ),
-        ];
-
-        println!("----------------------------------");
-        println!("Base messages data after encoding:");
-        println!("----------------------------------");
-        for (msg, wanted_cobs, wanted) in data_base_messages {
-            println!("{:02x?}", msg);
-            // make sure these encoded messages stay the same for backward compatibility
-            assert_eq!(encoded_data_cobs(msg.clone()), wanted_cobs);
-            // make sure these encoded messages stay the same for backward compatibility
-            assert_eq!(encoded_data(msg), wanted);
-        }
+        check_messages(
+            "Base",
+            &[
+                (HostProtocolMessage::Reset, &[2]),
+                (HostProtocolMessage::GetState, &[3]),
+                (HostProtocolMessage::AckState(State::Disabled), &[4, 1]),
+                (HostProtocolMessage::AckState(State::Enabled), &[4, 0]),
+                (HostProtocolMessage::AckState(State::FirmwareUpgrade), &[4, 2]),
+                (HostProtocolMessage::AckState(State::Unknown), &[4, 3]),
+                (HostProtocolMessage::ChallengeRequest { nonce: 0 }, &[5, 0]),
+                (
+                    HostProtocolMessage::ChallengeResult { result: [0u8; 32] },
+                    &[
+                        6, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                    ],
+                ),
+                (HostProtocolMessage::PostcardError(PostcardError::Deser), &[7, 0]),
+                (HostProtocolMessage::PostcardError(PostcardError::OverFull), &[7, 1]),
+                (HostProtocolMessage::InappropriateMessage(State::Disabled), &[8, 1]),
+                (HostProtocolMessage::InappropriateMessage(State::Enabled), &[8, 0]),
+                (HostProtocolMessage::InappropriateMessage(State::FirmwareUpgrade), &[8, 2]),
+                (HostProtocolMessage::InappropriateMessage(State::Unknown), &[8, 3]),
+            ],
+        );
     }
 
     #[test]
     fn check_bootloader_messages() {
         // Test each variant
-        let data_bootloader_messages = [
-            (
-                HostProtocolMessage::Bootloader(Bootloader::EraseFirmware),
-                vec![2, 1, 1, 0],
-                vec![1, 0],
-            ),
-            (
-                HostProtocolMessage::Bootloader(Bootloader::AckEraseFirmware),
-                vec![3, 1, 1, 0],
-                vec![1, 1],
-            ),
-            (
-                HostProtocolMessage::Bootloader(Bootloader::NackEraseFirmwareRead),
-                vec![3, 1, 2, 0],
-                vec![1, 2],
-            ),
-            (
-                HostProtocolMessage::Bootloader(Bootloader::NackEraseFirmware),
-                vec![3, 1, 3, 0],
-                vec![1, 3],
-            ),
-            (
-                HostProtocolMessage::Bootloader(Bootloader::NackEraseFirmwareWrite),
-                vec![3, 1, 4, 0],
-                vec![1, 4],
-            ),
-            (
-                HostProtocolMessage::Bootloader(Bootloader::AckVerifyFirmware {
-                    result: true,
-                    hash: [0; 32],
-                }),
-                vec![
-                    4, 1, 5, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0,
-                ],
-                vec![
-                    1, 5, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-                ],
-            ),
-            (
-                HostProtocolMessage::Bootloader(Bootloader::NackWithIdx { block_idx: 0xFFFFFFFF }),
-                vec![8, 1, 6, 255, 255, 255, 255, 15, 0],
-                vec![1, 6, 255, 255, 255, 255, 15],
-            ),
-            (
-                HostProtocolMessage::Bootloader(Bootloader::AckWithIdx { block_idx: 0xFFFFFFFF }),
-                vec![8, 1, 7, 255, 255, 255, 255, 15, 0],
-                vec![1, 7, 255, 255, 255, 255, 15],
-            ),
-            (
-                HostProtocolMessage::Bootloader(Bootloader::AckWithIdxCrc {
-                    block_idx: 0xFFFFFFFF,
-                    crc: 0xFFFFFFFF,
-                }),
-                vec![13, 1, 8, 255, 255, 255, 255, 15, 255, 255, 255, 255, 15, 0],
-                vec![1, 8, 255, 255, 255, 255, 15, 255, 255, 255, 255, 15],
-            ),
-            (
-                HostProtocolMessage::Bootloader(Bootloader::WriteFirmwareBlock {
-                    block_idx: 0xFFFFFFFF,
-                    block_data: &[0xFF; 256],
-                }),
-                vec![
-                    255, 1, 9, 255, 255, 255, 255, 15, 128, 2, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
-                    255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
-                    255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
-                    255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
-                    255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
-                    255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
-                    255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
-                    255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
-                    255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
-                    255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
-                    255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 12, 255, 255, 255, 255, 255, 255, 255, 255, 255,
-                    255, 255, 0,
-                ],
-                vec![
-                    1, 9, 255, 255, 255, 255, 15, 128, 2, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
-                    255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
-                    255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
-                    255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
-                    255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
-                    255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
-                    255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
-                    255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
-                    255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
-                    255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
-                    255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
-                ],
-            ),
-            (
-                HostProtocolMessage::Bootloader(Bootloader::FirmwareOutOfBounds { block_idx: 0xFFFFFFFF }),
-                vec![8, 1, 10, 255, 255, 255, 255, 15, 0],
-                vec![1, 10, 255, 255, 255, 255, 15],
-            ),
-            (
-                HostProtocolMessage::Bootloader(Bootloader::NoCosignHeader),
-                vec![3, 1, 11, 0],
-                vec![1, 11],
-            ),
-            (
-                HostProtocolMessage::Bootloader(Bootloader::FirmwareVersion),
-                vec![3, 1, 12, 0],
-                vec![1, 12],
-            ),
-            (
-                HostProtocolMessage::Bootloader(Bootloader::AckFirmwareVersion { version: "v1.2.3" }),
-                vec![10, 1, 13, 6, 118, 49, 46, 50, 46, 51, 0],
-                vec![1, 13, 6, 118, 49, 46, 50, 46, 51],
-            ),
-            (
-                HostProtocolMessage::Bootloader(Bootloader::BootloaderVersion),
-                vec![3, 1, 14, 0],
-                vec![1, 14],
-            ),
-            (
-                HostProtocolMessage::Bootloader(Bootloader::AckBootloaderVersion {
-                    version: "v1.2.3-longversionstring",
-                }),
-                vec![
-                    28, 1, 15, 24, 118, 49, 46, 50, 46, 51, 45, 108, 111, 110, 103, 118, 101, 114, 115, 105, 111, 110, 115, 116, 114, 105,
-                    110, 103, 0,
-                ],
-                vec![
-                    1, 15, 24, 118, 49, 46, 50, 46, 51, 45, 108, 111, 110, 103, 118, 101, 114, 115, 105, 111, 110, 115, 116, 114, 105, 110,
-                    103,
-                ],
-            ),
-            (
-                HostProtocolMessage::Bootloader(Bootloader::ChallengeSet { secret: [0xFFFFFFFF; 8] }),
-                vec![
-                    43, 1, 16, 255, 255, 255, 255, 15, 255, 255, 255, 255, 15, 255, 255, 255, 255, 15, 255, 255, 255, 255, 15, 255, 255,
-                    255, 255, 15, 255, 255, 255, 255, 15, 255, 255, 255, 255, 15, 255, 255, 255, 255, 15, 0,
-                ],
-                vec![
-                    1, 16, 255, 255, 255, 255, 15, 255, 255, 255, 255, 15, 255, 255, 255, 255, 15, 255, 255, 255, 255, 15, 255, 255, 255,
-                    255, 15, 255, 255, 255, 255, 15, 255, 255, 255, 255, 15, 255, 255, 255, 255, 15,
-                ],
-            ),
-            (
-                HostProtocolMessage::Bootloader(Bootloader::AckChallengeSet {
-                    result: SecretSaveResponse::Error,
-                }),
-                vec![4, 1, 17, 2, 0],
-                vec![1, 17, 2],
-            ),
-            (
-                HostProtocolMessage::Bootloader(Bootloader::BootFirmware),
-                vec![3, 1, 18, 0],
-                vec![1, 18],
-            ),
-        ];
-
-        println!("----------------------------------");
-        println!("Bootloader messages data after encoding:");
-        println!("----------------------------------");
-        for (msg, wanted_cobs, wanted) in data_bootloader_messages {
-            println!(" {:02x?}", msg);
-            // make sure these encoded messages stay the same for backward compatibility
-            assert_eq!(encoded_data_cobs(msg.clone()), wanted_cobs);
-            // make sure these encoded messages stay the same for backward compatibility
-            assert_eq!(encoded_data(msg), wanted);
-        }
+        check_messages(
+            "Bootloader",
+            &[
+                (HostProtocolMessage::Bootloader(Bootloader::EraseFirmware), &[1, 0]),
+                (HostProtocolMessage::Bootloader(Bootloader::AckEraseFirmware), &[1, 1]),
+                (HostProtocolMessage::Bootloader(Bootloader::NackEraseFirmwareRead), &[1, 2]),
+                (HostProtocolMessage::Bootloader(Bootloader::NackEraseFirmware), &[1, 3]),
+                (HostProtocolMessage::Bootloader(Bootloader::NackEraseFirmwareWrite), &[1, 4]),
+                (
+                    HostProtocolMessage::Bootloader(Bootloader::AckVerifyFirmware {
+                        result: true,
+                        hash: [0; 32],
+                    }),
+                    &[
+                        1, 5, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                    ],
+                ),
+                (
+                    HostProtocolMessage::Bootloader(Bootloader::NackWithIdx { block_idx: 0xFFFFFFFF }),
+                    &[1, 6, 255, 255, 255, 255, 15],
+                ),
+                (
+                    HostProtocolMessage::Bootloader(Bootloader::AckWithIdx { block_idx: 0xFFFFFFFF }),
+                    &[1, 7, 255, 255, 255, 255, 15],
+                ),
+                (
+                    HostProtocolMessage::Bootloader(Bootloader::AckWithIdxCrc {
+                        block_idx: 0xFFFFFFFF,
+                        crc: 0xFFFFFFFF,
+                    }),
+                    &[1, 8, 255, 255, 255, 255, 15, 255, 255, 255, 255, 15],
+                ),
+                (
+                    HostProtocolMessage::Bootloader(Bootloader::WriteFirmwareBlock {
+                        block_idx: 0xFFFFFFFF,
+                        block_data: &[0xFF; 256],
+                    }),
+                    &[
+                        1, 9, 255, 255, 255, 255, 15, 128, 2, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
+                        255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
+                        255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
+                        255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
+                        255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
+                        255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
+                        255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
+                        255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
+                        255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
+                        255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
+                        255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
+                        255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
+                    ],
+                ),
+                (
+                    HostProtocolMessage::Bootloader(Bootloader::FirmwareOutOfBounds { block_idx: 0xFFFFFFFF }),
+                    &[1, 10, 255, 255, 255, 255, 15],
+                ),
+                (HostProtocolMessage::Bootloader(Bootloader::NoCosignHeader), &[1, 11]),
+                (HostProtocolMessage::Bootloader(Bootloader::FirmwareVersion), &[1, 12]),
+                (
+                    HostProtocolMessage::Bootloader(Bootloader::AckFirmwareVersion { version: "v1.2.3" }),
+                    &[1, 13, 6, 118, 49, 46, 50, 46, 51],
+                ),
+                (HostProtocolMessage::Bootloader(Bootloader::BootloaderVersion), &[1, 14]),
+                (
+                    HostProtocolMessage::Bootloader(Bootloader::AckBootloaderVersion {
+                        version: "v1.2.3-longversionstring",
+                    }),
+                    &[
+                        1, 15, 24, 118, 49, 46, 50, 46, 51, 45, 108, 111, 110, 103, 118, 101, 114, 115, 105, 111, 110, 115, 116, 114, 105,
+                        110, 103,
+                    ],
+                ),
+                (
+                    HostProtocolMessage::Bootloader(Bootloader::ChallengeSet { secret: [0xFFFFFFFF; 8] }),
+                    &[
+                        1, 16, 255, 255, 255, 255, 15, 255, 255, 255, 255, 15, 255, 255, 255, 255, 15, 255, 255, 255, 255, 15, 255, 255,
+                        255, 255, 15, 255, 255, 255, 255, 15, 255, 255, 255, 255, 15, 255, 255, 255, 255, 15,
+                    ],
+                ),
+                (
+                    HostProtocolMessage::Bootloader(Bootloader::AckChallengeSet {
+                        result: SecretSaveResponse::Error,
+                    }),
+                    &[1, 17, 2],
+                ),
+                (HostProtocolMessage::Bootloader(Bootloader::BootFirmware), &[1, 18]),
+            ],
+        );
     }
 
     #[test]
     fn check_bluetooth_messages() {
-        let data_bluetooth_messages = [
-            (
-                HostProtocolMessage::Bluetooth(Bluetooth::DisableChannels(AdvChan::C37 | AdvChan::C38)),
-                vec![1, 1, 2, 96, 0],
-                vec![0, 0, 96],
-            ),
-            (
-                HostProtocolMessage::Bluetooth(Bluetooth::DisableChannels(AdvChan::C37 | AdvChan::C39)),
-                vec![1, 1, 2, 160, 0],
-                vec![0, 0, 160],
-            ),
-            (
-                HostProtocolMessage::Bluetooth(Bluetooth::DisableChannels(AdvChan::C38 | AdvChan::C39)),
-                vec![1, 1, 2, 192, 0],
-                vec![0, 0, 192],
-            ),
-            (
-                HostProtocolMessage::Bluetooth(Bluetooth::AckDisableChannels),
-                vec![1, 2, 1, 0],
-                vec![0, 1],
-            ),
-            (
-                HostProtocolMessage::Bluetooth(Bluetooth::NackDisableChannels),
-                vec![1, 2, 2, 0],
-                vec![0, 2],
-            ),
-            (HostProtocolMessage::Bluetooth(Bluetooth::Enable), vec![1, 2, 3, 0], vec![0, 3]),
-            (HostProtocolMessage::Bluetooth(Bluetooth::AckEnable), vec![1, 2, 4, 0], vec![0, 4]),
-            (HostProtocolMessage::Bluetooth(Bluetooth::Disable), vec![1, 2, 5, 0], vec![0, 5]),
-            (HostProtocolMessage::Bluetooth(Bluetooth::AckDisable), vec![1, 2, 6, 0], vec![0, 6]),
-            (
-                HostProtocolMessage::Bluetooth(Bluetooth::GetSignalStrength),
-                vec![1, 2, 7, 0],
-                vec![0, 7],
-            ),
-            (
-                HostProtocolMessage::Bluetooth(Bluetooth::SignalStrength(Some(i8::MAX))),
-                vec![1, 4, 8, 1, 127, 0],
-                vec![0, 8, 1, 127],
-            ),
-            (
-                HostProtocolMessage::Bluetooth(Bluetooth::SendData(heapless::Vec::from_iter([0xFF; ATT_MTU].into_iter()))),
-                vec![
-                    1, 251, 9, 247, 1, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
-                    255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
-                    255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
-                    255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
-                    255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
-                    255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
-                    255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
-                    255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
-                    255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
-                    255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
-                    255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 0,
-                ],
-                vec![
-                    0, 9, 247, 1, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
-                    255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
-                    255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
-                    255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
-                    255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
-                    255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
-                    255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
-                    255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
-                    255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
-                    255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
-                    255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
-                ],
-            ),
-            (
-                HostProtocolMessage::Bluetooth(Bluetooth::SendDataResponse(SendDataResponse::Sent)),
-                vec![1, 2, 10, 1, 0],
-                vec![0, 10, 0],
-            ),
-            (
-                HostProtocolMessage::Bluetooth(Bluetooth::GetReceivedData),
-                vec![1, 2, 11, 0],
-                vec![0, 11],
-            ),
-            (
-                HostProtocolMessage::Bluetooth(Bluetooth::ReceivedData(heapless::Vec::from_iter([0xFF; ATT_MTU].into_iter()))),
-                vec![
-                    1, 251, 12, 247, 1, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
-                    255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
-                    255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
-                    255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
-                    255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
-                    255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
-                    255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
-                    255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
-                    255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
-                    255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
-                    255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 0,
-                ],
-                vec![
-                    0, 12, 247, 1, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
-                    255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
-                    255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
-                    255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
-                    255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
-                    255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
-                    255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
-                    255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
-                    255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
-                    255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
-                    255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
-                ],
-            ),
-            (
-                HostProtocolMessage::Bluetooth(Bluetooth::NoReceivedData),
-                vec![1, 2, 13, 0],
-                vec![0, 13],
-            ),
-            (
-                HostProtocolMessage::Bluetooth(Bluetooth::GetFirmwareVersion),
-                vec![1, 2, 14, 0],
-                vec![0, 14],
-            ),
-            (
-                HostProtocolMessage::Bluetooth(Bluetooth::AckFirmwareVersion { version: "v1.2.3" }),
-                vec![1, 9, 15, 6, 118, 49, 46, 50, 46, 51, 0],
-                vec![0, 15, 6, 118, 49, 46, 50, 46, 51],
-            ),
-            (
-                HostProtocolMessage::Bluetooth(Bluetooth::GetBtAddress),
-                vec![1, 2, 16, 0],
-                vec![0, 16],
-            ),
-            (
-                HostProtocolMessage::Bluetooth(Bluetooth::AckBtAddress { bt_address: [0xFF; 6] }),
-                vec![1, 8, 17, 255, 255, 255, 255, 255, 255, 0],
-                vec![0, 17, 255, 255, 255, 255, 255, 255],
-            ),
-            (
-                HostProtocolMessage::Bluetooth(Bluetooth::SetTxPower {
-                    power: TxPower::Positive4dBm,
-                }),
-                vec![1, 3, 18, 8, 0],
-                vec![0, 18, 8],
-            ),
-            (
-                HostProtocolMessage::Bluetooth(Bluetooth::AckTxPower),
-                vec![1, 2, 19, 0],
-                vec![0, 19],
-            ),
-            (
-                HostProtocolMessage::Bluetooth(Bluetooth::GetDeviceId),
-                vec![1, 2, 20, 0],
-                vec![0, 20],
-            ),
-            (
-                HostProtocolMessage::Bluetooth(Bluetooth::AckDeviceId { device_id: [0xFF; 8] }),
-                vec![1, 10, 21, 255, 255, 255, 255, 255, 255, 255, 255, 0],
-                vec![0, 21, 255, 255, 255, 255, 255, 255, 255, 255],
-            ),
-        ];
-
-        println!("----------------------------------");
-        println!("Bluetooth messages data after encoding:");
-        println!("----------------------------------");
-        for (msg, wanted_cobs, wanted) in data_bluetooth_messages {
-            println!("{:02x?}", msg);
-            // make sure these encoded messages stay the same for backward compatibility
-            assert_eq!(encoded_data_cobs(msg.clone()), wanted_cobs);
-            // make sure these encoded messages stay the same for backward compatibility
-            assert_eq!(encoded_data(msg), wanted);
-        }
+        check_messages(
+            "Bluetooth",
+            &[
+                (
+                    HostProtocolMessage::Bluetooth(Bluetooth::DisableChannels(AdvChan::C37 | AdvChan::C38)),
+                    &[0, 0, 96],
+                ),
+                (
+                    HostProtocolMessage::Bluetooth(Bluetooth::DisableChannels(AdvChan::C37 | AdvChan::C39)),
+                    &[0, 0, 160],
+                ),
+                (
+                    HostProtocolMessage::Bluetooth(Bluetooth::DisableChannels(AdvChan::C38 | AdvChan::C39)),
+                    &[0, 0, 192],
+                ),
+                (HostProtocolMessage::Bluetooth(Bluetooth::AckDisableChannels), &[0, 1]),
+                (HostProtocolMessage::Bluetooth(Bluetooth::NackDisableChannels), &[0, 2]),
+                (HostProtocolMessage::Bluetooth(Bluetooth::Enable), &[0, 3]),
+                (HostProtocolMessage::Bluetooth(Bluetooth::AckEnable), &[0, 4]),
+                (HostProtocolMessage::Bluetooth(Bluetooth::Disable), &[0, 5]),
+                (HostProtocolMessage::Bluetooth(Bluetooth::AckDisable), &[0, 6]),
+                (HostProtocolMessage::Bluetooth(Bluetooth::GetSignalStrength), &[0, 7]),
+                (
+                    HostProtocolMessage::Bluetooth(Bluetooth::SignalStrength(Some(i8::MAX))),
+                    &[0, 8, 1, 127],
+                ),
+                (
+                    HostProtocolMessage::Bluetooth(Bluetooth::SendData(heapless::Vec::from_iter([0xFF; ATT_MTU].into_iter()))),
+                    &[
+                        0, 9, 247, 1, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
+                        255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
+                        255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
+                        255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
+                        255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
+                        255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
+                        255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
+                        255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
+                        255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
+                        255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
+                        255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
+                    ],
+                ),
+                (
+                    HostProtocolMessage::Bluetooth(Bluetooth::SendDataResponse(SendDataResponse::Sent)),
+                    &[0, 10, 0],
+                ),
+                (HostProtocolMessage::Bluetooth(Bluetooth::GetReceivedData), &[0, 11]),
+                (
+                    HostProtocolMessage::Bluetooth(Bluetooth::ReceivedData(heapless::Vec::from_iter([0xFF; ATT_MTU].into_iter()))),
+                    &[
+                        0, 12, 247, 1, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
+                        255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
+                        255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
+                        255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
+                        255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
+                        255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
+                        255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
+                        255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
+                        255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
+                        255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
+                        255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
+                    ],
+                ),
+                (HostProtocolMessage::Bluetooth(Bluetooth::NoReceivedData), &[0, 13]),
+                (HostProtocolMessage::Bluetooth(Bluetooth::GetFirmwareVersion), &[0, 14]),
+                (
+                    HostProtocolMessage::Bluetooth(Bluetooth::AckFirmwareVersion { version: "v1.2.3" }),
+                    &[0, 15, 6, 118, 49, 46, 50, 46, 51],
+                ),
+                (HostProtocolMessage::Bluetooth(Bluetooth::GetBtAddress), &[0, 16]),
+                (
+                    HostProtocolMessage::Bluetooth(Bluetooth::AckBtAddress { bt_address: [0xFF; 6] }),
+                    &[0, 17, 255, 255, 255, 255, 255, 255],
+                ),
+                (
+                    HostProtocolMessage::Bluetooth(Bluetooth::SetTxPower {
+                        power: TxPower::Positive4dBm,
+                    }),
+                    &[0, 18, 8],
+                ),
+                (HostProtocolMessage::Bluetooth(Bluetooth::AckTxPower), &[0, 19]),
+                (HostProtocolMessage::Bluetooth(Bluetooth::GetDeviceId), &[0, 20]),
+                (
+                    HostProtocolMessage::Bluetooth(Bluetooth::AckDeviceId { device_id: [0xFF; 8] }),
+                    &[0, 21, 255, 255, 255, 255, 255, 255, 255, 255],
+                ),
+            ],
+        );
     }
 }
