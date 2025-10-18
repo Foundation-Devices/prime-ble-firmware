@@ -18,7 +18,7 @@ mod verify;
 
 use defmt_rtt as _;
 use embassy_nrf::{self as _};
-use host_protocol::State;
+use host_protocol::{State, TrustLevel};
 use panic_probe as _;
 
 use consts::{FLASH_PAGE, SEALED_SECRET, SEAL_IDX};
@@ -367,15 +367,11 @@ async fn main(_spawner: Spawner) {
                             Some(HostProtocolMessage::Bootloader(Bootloader::AckChallengeSet { result }))
                         }
                         // Handle request to boot into firmware
-                        Bootloader::BootFirmware => {
-                            // Double check firmware validity before jumping
-                            match verify_fw_image() {
-                                Some((VerificationResult::Valid, hash)) => {
+                        Bootloader::BootFirmware { trust } => {
+                            match verify_fw_image(trust) {
+                                Some((VerificationResult::Valid, VerificationResult::Valid, hash)) => {
                                     info!("fw is valid");
-                                    let msg = HostProtocolMessage::Bootloader(Bootloader::AckVerifyFirmware {
-                                        result: true,
-                                        hash: hash.sha,
-                                    });
+                                    let msg = HostProtocolMessage::Bootloader(Bootloader::AckVerifyFirmware { result: true, hash });
                                     #[cfg(not(feature = "debug"))]
                                     flash_protect_sd_application();
                                     // immedate send response before jumping
@@ -387,11 +383,11 @@ async fn main(_spawner: Spawner) {
                                         jump_to_app();
                                     }
                                 }
-                                Some((VerificationResult::Invalid, hash)) => {
+                                Some((_, _, hash)) => {
                                     info!("fw is invalid");
                                     Some(HostProtocolMessage::Bootloader(Bootloader::AckVerifyFirmware {
                                         result: false,
-                                        hash: hash.sha,
+                                        hash,
                                     }))
                                 }
                                 None => Some(HostProtocolMessage::Bootloader(Bootloader::NoCosignHeader)),

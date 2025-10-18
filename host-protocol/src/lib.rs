@@ -27,7 +27,7 @@ bitflags! {
 
 pub type Message = Vec<u8, ATT_MTU>;
 
-#[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, Eq, PartialEq)]
 pub enum TxPower {
     Negative40dBm,
     Negative20dBm,
@@ -185,7 +185,7 @@ pub enum Bootloader<'a> {
     /// Response to challenge secret setting
     AckChallengeSet { result: SecretSaveResponse },
     /// Boot firmware
-    BootFirmware,
+    BootFirmware { trust: TrustLevel },
 }
 
 impl Bootloader<'_> {
@@ -209,13 +209,13 @@ impl Bootloader<'_> {
             Self::AckBootloaderVersion { .. } => false,
             Self::ChallengeSet { .. } => true,
             Self::AckChallengeSet { .. } => false,
-            Self::BootFirmware => true,
+            Self::BootFirmware { .. } => true,
         }
     }
 }
 
 /// Response codes for challenge secret saving operations
-#[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
+#[derive(Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Debug)]
 pub enum SecretSaveResponse {
     /// Secret has already been saved - cannot be overwritten
     NotAllowed,
@@ -225,8 +225,17 @@ pub enum SecretSaveResponse {
     Error,
 }
 
+/// Firmware trust levels
+#[derive(Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Debug)]
+pub enum TrustLevel {
+    /// Full trust required
+    Full,
+    /// Development firmwares allowed
+    Developer,
+}
+
 /// Current operational state of the BLE controller
-#[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, Eq, PartialEq)]
 pub enum State {
     /// BLE radio is on and ready for communication
     Enabled,
@@ -239,7 +248,7 @@ pub enum State {
 }
 
 /// Errors that can occur during postcard serialization or deserialization
-#[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, Eq, PartialEq)]
 pub enum PostcardError {
     /// Error deserializing message
     Deser,
@@ -248,7 +257,7 @@ pub enum PostcardError {
 }
 
 /// Response codes for sending data over BLE connection
-#[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
+#[derive(Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Debug)]
 pub enum SendDataResponse {
     /// Data sent successfully
     Sent,
@@ -443,7 +452,17 @@ mod tests {
                     }),
                     &[1, 17, 2],
                 ),
-                (HostProtocolMessage::Bootloader(Bootloader::BootFirmware), &[1, 18]),
+                // IMPORTANT: These need to start with [1, 18] to be compatible with pre-3.0 bootloaders.
+                (
+                    HostProtocolMessage::Bootloader(Bootloader::BootFirmware { trust: TrustLevel::Full }),
+                    &[1, 18, 0],
+                ),
+                (
+                    HostProtocolMessage::Bootloader(Bootloader::BootFirmware {
+                        trust: TrustLevel::Developer,
+                    }),
+                    &[1, 18, 1],
+                ),
             ],
         );
     }
