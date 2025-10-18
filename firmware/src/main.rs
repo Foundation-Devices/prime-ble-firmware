@@ -91,7 +91,7 @@ async fn main(spawner: Spawner) {
             .lock()
             .await
             .borrow_mut()
-            .replace(Output::new(p.P0_20, Level::Low, OutputDrive::Standard));
+            .replace(Output::new(p.P0_20, Level::High, OutputDrive::Standard));
     }
 
     // set priority to avoid collisions with softdevice

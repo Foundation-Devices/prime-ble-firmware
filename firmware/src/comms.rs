@@ -62,9 +62,6 @@ pub async fn comms_task(mut spi: Spis<'static, SPI0>) {
     let mut resp_buf = [0u8; MAX_MSG_SIZE];
 
     loop {
-        {
-            IRQ_OUT_PIN.lock().await.borrow_mut().as_mut().map(|pin| pin.set_high());
-        }
         // Read data from SPI
         let res = spi.read(&mut req_buf).await;
 
@@ -85,9 +82,6 @@ pub async fn comms_task(mut spi: Spis<'static, SPI0>) {
             };
             let resp_len = resp.len();
             resp_buf[..2].copy_from_slice(&u16::to_be_bytes(resp_len as u16));
-            {
-                IRQ_OUT_PIN.lock().await.borrow_mut().as_mut().map(|pin| pin.set_low());
-            }
             let _ = spi.blocking_write_from_ram(&resp_buf[..resp_len + 2]);
         }
     }
@@ -139,6 +133,7 @@ async fn host_protocol_handler<'a>(req: HostProtocolMessage<'a>) -> Option<HostP
                     }
                     Err(_) => {
                         trace!("GetReceivedData None");
+                        IRQ_OUT_PIN.lock().await.borrow_mut().as_mut().map(|pin| pin.set_high());
                         Bluetooth::NoReceivedData
                     }
                 })),
