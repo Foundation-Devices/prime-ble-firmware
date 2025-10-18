@@ -3,7 +3,6 @@
 
 // External dependencies and imports
 use crate::RNG_HW;
-use crate::SEALED_SECRET;
 use crate::SEAL_IDX;
 use crate::SIGNATURE_HEADER_SIZE;
 use core::str::FromStr;
@@ -180,7 +179,7 @@ pub fn get_fw_image_slice<'a>(base_address: u32, len: u32) -> &'a [u8] {
 }
 
 /// Writes a secret to UICR memory and verifies it was written correctly
-pub unsafe fn write_secret(secret: [u32; 8]) -> bool {
+pub unsafe fn write_secret(secret: [u32; 8], seal: u32) -> bool {
     let nvmc = &*NVMC::ptr();
     let uicr = &*UICR::ptr();
 
@@ -208,7 +207,7 @@ pub unsafe fn write_secret(secret: [u32; 8]) -> bool {
     // Write seal value
     nvmc.config.write(|w| w.wen().wen());
     while nvmc.ready.read().ready().is_busy() {}
-    uicr.customer[SEAL_IDX].write(|w| unsafe { w.bits(SEALED_SECRET) });
+    uicr.customer[SEAL_IDX].write(|w| unsafe { w.bits(seal) });
     while nvmc.ready.read().ready().is_busy() {}
     nvmc.config.reset();
     while nvmc.ready.read().ready().is_busy() {}

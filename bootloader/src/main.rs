@@ -21,7 +21,7 @@ use embassy_nrf::{self as _};
 use host_protocol::{State, TrustLevel};
 use panic_probe as _;
 
-use consts::{FLASH_PAGE, SEALED_SECRET, SEAL_IDX};
+use consts::{FLASH_PAGE, SEALED_SECRET, SEALED_WIPED, SEAL_IDX};
 use consts_global::{BASE_APP_ADDR, BASE_BOOTLOADER_ADDR, SIGNATURE_HEADER_SIZE, UICR_SECRET_SIZE, UICR_SECRET_START};
 use core::cell::RefCell;
 use cosign2::VerificationResult;
@@ -240,7 +240,7 @@ async fn main(_spawner: Spawner) {
     let mut flash = Nvmc::new(p.NVMC);
 
     // Check if secrets are sealed
-    let seal = unsafe { &*nrf52805_pac::UICR::ptr() }.customer[SEAL_IDX].read().customer().bits();
+    let mut seal = unsafe { &*nrf52805_pac::UICR::ptr() }.customer[SEAL_IDX].read().customer().bits();
 
     let mut boot_status: BootState = Default::default();
 
@@ -351,13 +351,14 @@ async fn main(_spawner: Spawner) {
                         }
                         // Set challenge secret
                         Bootloader::ChallengeSet { secret } => {
-                            let result = if seal == SEALED_SECRET {
+                            let result = if seal == SEALED_SECRET || seal == SEALED_WIPED {
                                 SecretSaveResponse::NotAllowed
                             } else {
                                 unsafe {
-                                    match write_secret(secret) {
+                                    match write_secret(secret, SEALED_SECRET) {
                                         true => {
                                             info!("Challenge secret is saved");
+                                            seal = SEALED_SECRET;
                                             SecretSaveResponse::Sealed
                                         }
                                         false => SecretSaveResponse::Error,
@@ -371,6 +372,10 @@ async fn main(_spawner: Spawner) {
                             match verify_fw_image(trust) {
                                 Some((VerificationResult::Valid, VerificationResult::Valid, hash)) => {
                                     info!("fw is valid");
+                                    // Clear the authentication secret if we are possibly booting a dev firmware
+                                    if seal == SEALED_SECRET && trust == TrustLevel::Developer {
+                                        unsafe { write_secret([0; 8], SEALED_WIPED) };
+                                    }
                                     let msg = HostProtocolMessage::Bootloader(Bootloader::AckVerifyFirmware { result: true, hash });
                                     #[cfg(not(feature = "debug"))]
                                     flash_protect_sd_application();
