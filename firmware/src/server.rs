@@ -176,7 +176,7 @@ pub async fn run_bluetooth(sd: &'static Softdevice, server: &Server) {
         let gap_conn_param = ble_gap_conn_params_t {
             conn_sup_timeout: 500,         // 5s
             max_conn_interval: ci_ms!(50), // 50ms
-            min_conn_interval: ci_ms!(45), // 45ms - do not permit too low connection interval to not perturb BLE throughput
+            min_conn_interval: ci_ms!(5),  // 5ms
             slave_latency: 0,
         };
         // Request connection param update
@@ -231,8 +231,6 @@ pub async fn run_bluetooth(sd: &'static Softdevice, server: &Server) {
                 info!("gatt_server run exited: {:?}", e);
             }
         }
-        // Force false
-        BT_STATE.store(true, core::sync::atomic::Ordering::Relaxed);
         // Clear RSSI value
         RSSI_VALUE.store(i8::MIN, core::sync::atomic::Ordering::Relaxed);
     }

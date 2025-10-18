@@ -71,24 +71,25 @@ pub async fn comms_task(mut spi: Spis<'static, SPI0>) {
             continue;
         };
 
-        if let Some(resp) = match from_bytes(&req_buf[..n]) {
+        let resp = match from_bytes(&req_buf[..n]) {
             Ok(req) => host_protocol_handler(req).await,
-            Err(_) => Some(HostProtocolMessage::PostcardError(PostcardError::Deser)),
-        } {
-            trace!("Sending response");
-            let Ok(resp) = to_slice(&resp, &mut resp_buf[2..]) else {
-                error!("Failed to serialize response");
-                continue;
-            };
-            let resp_len = resp.len();
-            resp_buf[..2].copy_from_slice(&u16::to_be_bytes(resp_len as u16));
-            let _ = spi.blocking_write_from_ram(&resp_buf[..resp_len + 2]);
-        }
+            Err(_) => HostProtocolMessage::PostcardError(PostcardError::Deser),
+        };
+        trace!("Sending response");
+        let Ok(resp) = to_slice(&resp, &mut resp_buf[2..]) else {
+            error!("Failed to serialize response");
+            continue;
+        };
+        let resp_len = resp.len();
+        resp_buf[..2].copy_from_slice(&u16::to_be_bytes(resp_len as u16));
+        // Async and blocking perform exactly the same, but an async write
+        // makes the subsequent read unreliable.
+        let _ = spi.blocking_write_from_ram(&resp_buf[..resp_len + 2]);
     }
 }
 
 /// Handles HostProtocol messages received from the MPU
-async fn host_protocol_handler<'a>(req: HostProtocolMessage<'a>) -> Option<HostProtocolMessage<'a>> {
+async fn host_protocol_handler<'a>(req: HostProtocolMessage<'a>) -> HostProtocolMessage<'a> {
     match req {
         HostProtocolMessage::Bluetooth(bluetooth_msg) => {
             trace!("Received HostProtocolMessage::Bluetooth");
@@ -96,37 +97,33 @@ async fn host_protocol_handler<'a>(req: HostProtocolMessage<'a>) -> Option<HostP
                 Bluetooth::DisableChannels(chan) => {
                     trace!("DisableChannels");
                     if chan == AdvChan::all() {
-                        Some(HostProtocolMessage::Bluetooth(Bluetooth::NackDisableChannels))
+                        HostProtocolMessage::Bluetooth(Bluetooth::NackDisableChannels)
                     } else {
                         BT_ADV_CHAN.store(chan.bits(), core::sync::atomic::Ordering::Relaxed);
-                        Some(HostProtocolMessage::Bluetooth(Bluetooth::AckDisableChannels))
+                        HostProtocolMessage::Bluetooth(Bluetooth::AckDisableChannels)
                     }
                 }
                 Bluetooth::Enable => {
                     trace!("Enabled");
                     BT_STATE.store(true, core::sync::atomic::Ordering::Relaxed);
-                    Some(HostProtocolMessage::Bluetooth(Bluetooth::AckEnable))
+                    HostProtocolMessage::Bluetooth(Bluetooth::AckEnable)
                 }
                 Bluetooth::Disable => {
                     trace!("Disabled");
                     BT_STATE.store(false, core::sync::atomic::Ordering::Relaxed);
-                    Some(HostProtocolMessage::Bluetooth(Bluetooth::AckDisable))
+                    HostProtocolMessage::Bluetooth(Bluetooth::AckDisable)
                 }
                 Bluetooth::GetSignalStrength => {
                     trace!("GetSignalStrength");
                     let rssi = RSSI_VALUE.load(core::sync::atomic::Ordering::Relaxed);
-                    Some(HostProtocolMessage::Bluetooth(Bluetooth::SignalStrength(if rssi == i8::MIN {
-                        None
-                    } else {
-                        Some(rssi)
-                    })))
+                    HostProtocolMessage::Bluetooth(Bluetooth::SignalStrength(if rssi == i8::MIN { None } else { Some(rssi) }))
                 }
                 Bluetooth::GetFirmwareVersion => {
                     trace!("GetFirmwareVersion");
                     let version = env!("CARGO_PKG_VERSION");
-                    Some(HostProtocolMessage::Bluetooth(Bluetooth::AckFirmwareVersion { version }))
+                    HostProtocolMessage::Bluetooth(Bluetooth::AckFirmwareVersion { version })
                 }
-                Bluetooth::GetReceivedData => Some(HostProtocolMessage::Bluetooth(match BT_DATA_RX.try_receive() {
+                Bluetooth::GetReceivedData => HostProtocolMessage::Bluetooth(match BT_DATA_RX.try_receive() {
                     Ok(data) => {
                         trace!("GetReceivedData Some");
                         Bluetooth::ReceivedData(data)
@@ -136,8 +133,8 @@ async fn host_protocol_handler<'a>(req: HostProtocolMessage<'a>) -> Option<HostP
                         IRQ_OUT_PIN.lock().await.borrow_mut().as_mut().map(|pin| pin.set_high());
                         Bluetooth::NoReceivedData
                     }
-                })),
-                Bluetooth::SendData(data) => Some(HostProtocolMessage::Bluetooth({
+                }),
+                Bluetooth::SendData(data) => HostProtocolMessage::Bluetooth({
                     trace!("SendData Some");
                     // Only accept data packets within APP_MTU size limit
                     let mut buffer_tx_bt = BT_DATA_TX.lock().await;
@@ -151,21 +148,21 @@ async fn host_protocol_handler<'a>(req: HostProtocolMessage<'a>) -> Option<HostP
                         trace!("SendData Full");
                         Bluetooth::SendDataResponse(SendDataResponse::BufferFull)
                     }
-                })),
-                Bluetooth::GetBtAddress => Some(HostProtocolMessage::Bluetooth(Bluetooth::AckBtAddress {
+                }),
+                Bluetooth::GetBtAddress => HostProtocolMessage::Bluetooth(Bluetooth::AckBtAddress {
                     bt_address: *BT_ADDRESS.lock().await,
-                })),
+                }),
                 Bluetooth::SetTxPower { power } => {
                     trace!("SetTxPower");
                     TX_PWR_VALUE.store(i8::from(power), core::sync::atomic::Ordering::Relaxed);
-                    Some(HostProtocolMessage::Bluetooth(Bluetooth::AckTxPower))
+                    HostProtocolMessage::Bluetooth(Bluetooth::AckTxPower)
                 }
-                Bluetooth::GetDeviceId => Some(HostProtocolMessage::Bluetooth(Bluetooth::AckDeviceId {
+                Bluetooth::GetDeviceId => HostProtocolMessage::Bluetooth(Bluetooth::AckDeviceId {
                     device_id: *DEVICE_ID.lock().await,
-                })),
+                }),
                 _ => {
                     trace!("Other");
-                    Some(HostProtocolMessage::InappropriateMessage(get_state()))
+                    HostProtocolMessage::InappropriateMessage(get_state())
                 }
             }
         }
@@ -175,15 +172,15 @@ async fn host_protocol_handler<'a>(req: HostProtocolMessage<'a>) -> Option<HostP
         }
         HostProtocolMessage::ChallengeRequest { nonce } => {
             trace!("ChallengeRequest");
-            Some(hmac_challenge_response(nonce))
+            hmac_challenge_response(nonce)
         }
         HostProtocolMessage::GetState => {
             trace!("GetState");
-            Some(HostProtocolMessage::AckState(get_state()))
+            HostProtocolMessage::AckState(get_state())
         }
         _ => {
             trace!("Other");
-            None
+            HostProtocolMessage::InappropriateMessage(get_state())
         }
     }
 }
