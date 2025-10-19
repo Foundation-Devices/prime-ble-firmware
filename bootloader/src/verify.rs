@@ -3,7 +3,6 @@
 
 // External dependencies and imports
 use crate::RNG_HW;
-use crate::SEALED_SECRET;
 use crate::SEAL_IDX;
 use crate::SIGNATURE_HEADER_SIZE;
 use core::str::FromStr;
@@ -12,6 +11,7 @@ use cosign2::{Header, Trust, VerificationResult};
 use defmt::info;
 use embassy_time::Delay;
 use heapless::String;
+use host_protocol::TrustLevel;
 use micro_ecc_sys::{uECC_decompress, uECC_secp256k1, uECC_valid_public_key, uECC_verify};
 use nrf52805_pac::NVMC;
 use nrf52805_pac::UICR;
@@ -98,9 +98,7 @@ impl cosign2::Secp256k1Verify for EccVerifier {
 
 /// Wrapper struct for SHA-256 hash operations
 #[derive(Debug)]
-pub struct Sha256 {
-    pub sha: [u8; 32],
-}
+pub struct Sha256;
 
 /// Implementation of SHA-256 hashing
 impl cosign2::Sha256 for Sha256 {
@@ -115,14 +113,14 @@ impl cosign2::Sha256 for Sha256 {
 }
 
 /// Verifies an OS image by checking its version, build date and signature
-pub fn verify_fw_image() -> Option<(VerificationResult, Sha256)> {
+pub fn verify_fw_image(trust: TrustLevel) -> Option<(VerificationResult, VerificationResult, [u8; 32])> {
     let image = get_fw_image_slice(crate::BASE_APP_ADDR, crate::consts::APP_SIZE);
-    if let Some((version, build_date)) = read_version_and_build_date(image, true) {
-        info!("Version : {} - build date : {}", version, build_date);
-        let (verif_res, hash) = verify_image(image);
-        return Some((verif_res, hash));
-    }
-    None
+    let (version, build_date) = read_version_and_build_date(image, true)?;
+    info!("Version : {} - build date : {}", version, build_date);
+    // Check the firmware twice, so that glitching it once is not enough.
+    let r1 = core::hint::black_box(verify_image(image, trust));
+    let r2 = core::hint::black_box(verify_image(image, trust));
+    Some((r1.0, r2.0, r1.1))
 }
 
 /// Introduces a random delay to mitigate timing attacks
@@ -133,8 +131,8 @@ fn random_delay() {
             let mut rng = rng.borrow_mut();
             let mut delay = Delay;
             rng.as_mut().unwrap().blocking_fill_bytes(&mut bytes);
-            // Get 0 - 200 ms
-            bytes[0] %= 200;
+            // Get 0 - 20 ms
+            bytes[0] %= 20;
             delay.delay_ms(bytes[0]);
             // Clear sensitive data
             bytes[0] = 0;
@@ -143,52 +141,19 @@ fn random_delay() {
 }
 
 /// Core image verification function that checks signatures and hashes
-fn verify_image(image: &[u8]) -> (VerificationResult, Sha256) {
-    let mut control_flow_integrity_counter = 0;
-    const CF1: u32 = 3;
-    const CF2: u32 = 5;
-    const CF3: u32 = 7;
-    const CF4: u32 = 11;
-    const CF5: u32 = 13;
-    const CF6: u32 = 17;
-    const CF7: u32 = 19;
+fn verify_image(image: &[u8], trust: TrustLevel) -> (VerificationResult, [u8; 32]) {
     let ecc = EccVerifier::new();
-    let sha = Sha256 { sha: [0; 32] };
-
     // Random delay to thwart glitching the condition
     random_delay();
-
     // Parse and verify firmware signatures with multiple integrity checks
-    let res = Header::parse(image, &KNOWN_SIGNERS, &sha, &ecc, SIGNATURE_HEADER_SIZE as usize);
-    if res.is_ok() {
-        control_flow_integrity_counter += CF1;
-        if let Ok(Some(header)) = res {
-            control_flow_integrity_counter += CF2;
-            if *header.binary_hash() != [0; 32] {
-                control_flow_integrity_counter += CF3;
-                if [Trust::FullyTrusted, Trust::ThirdParty, Trust::Disabled].contains(&header.trust()) {
-                    control_flow_integrity_counter += CF4;
-                    if image.len() > SIGNATURE_HEADER_SIZE as usize {
-                        control_flow_integrity_counter += CF5;
-                        let firmware_bytes = &image[SIGNATURE_HEADER_SIZE as usize..];
-                        #[allow(clippy::collapsible_if)]
-                        if firmware_bytes.len() as u32 == header.bin_size() {
-                            control_flow_integrity_counter += CF6;
-                            if core::hint::black_box(firmware_bytes.len() as u32 == header.bin_size()) {
-                                control_flow_integrity_counter += CF7;
-                                let cfi_counter_ptr = &control_flow_integrity_counter as *const u32;
-                                if unsafe { cfi_counter_ptr.read_volatile() } == CF1 + CF2 + CF3 + CF4 + CF5 + CF6 + CF7 {
-                                    let sha256 = header.binary_hash();
-                                    return (VerificationResult::Valid, Sha256 { sha: *sha256 });
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
+    let Ok(Some(header)) = Header::parse(image, &KNOWN_SIGNERS, &Sha256, &ecc, SIGNATURE_HEADER_SIZE as usize) else {
+        return (VerificationResult::Valid, [0; 32]);
+    };
+    if header.trust() == Trust::FullyTrusted || trust == TrustLevel::Developer {
+        (VerificationResult::Valid, *header.binary_hash())
+    } else {
+        (VerificationResult::Invalid, *header.binary_hash())
     }
-    (VerificationResult::Invalid, Sha256 { sha: [0; 32] })
 }
 
 /// Extracts version and build date information from the firmware header
@@ -214,7 +179,7 @@ pub fn get_fw_image_slice<'a>(base_address: u32, len: u32) -> &'a [u8] {
 }
 
 /// Writes a secret to UICR memory and verifies it was written correctly
-pub unsafe fn write_secret(secret: [u32; 8]) -> bool {
+pub unsafe fn write_secret(secret: [u32; 8], seal: u32) -> bool {
     let nvmc = &*NVMC::ptr();
     let uicr = &*UICR::ptr();
 
@@ -242,7 +207,7 @@ pub unsafe fn write_secret(secret: [u32; 8]) -> bool {
     // Write seal value
     nvmc.config.write(|w| w.wen().wen());
     while nvmc.ready.read().ready().is_busy() {}
-    uicr.customer[SEAL_IDX].write(|w| unsafe { w.bits(SEALED_SECRET) });
+    uicr.customer[SEAL_IDX].write(|w| unsafe { w.bits(seal) });
     while nvmc.ready.read().ready().is_busy() {}
     nvmc.config.reset();
     while nvmc.ready.read().ready().is_busy() {}

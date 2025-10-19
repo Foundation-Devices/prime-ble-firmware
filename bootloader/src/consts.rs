@@ -55,3 +55,8 @@ pub const SEAL_IDX: usize = 8;
 /// that the secret has been properly sealed and cannot be overwritten. The value
 /// 0x5A5A5A5A is chosen as a recognizable pattern that is unlikely to occur randomly.
 pub const SEALED_SECRET: u32 = 0x5A5A5A5A;
+
+/// Magic value used to signify that a development firmware was booted at least once,
+/// so the secret in UICR has been wiped. Since bits in the UICR can only be set to
+/// 0 from 1 without erasing, this seal has strictly more 0 bits than SEALED_SECRET
+pub const SEALED_WIPED: u32 = 0x42424242;
