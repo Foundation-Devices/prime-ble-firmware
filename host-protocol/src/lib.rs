@@ -8,7 +8,7 @@
 #![no_std]
 
 use bitflags::bitflags;
-use consts::ATT_MTU;
+use consts::APP_MTU;
 use heapless::Vec;
 use serde::{Deserialize, Serialize};
 
@@ -25,7 +25,7 @@ bitflags! {
     }
 }
 
-pub type Message = Vec<u8, ATT_MTU>;
+pub type Message = Vec<u8, APP_MTU>;
 
 #[derive(Serialize, Deserialize, Clone, Copy, Debug, Eq, PartialEq)]
 pub enum TxPower {
