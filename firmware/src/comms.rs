@@ -5,8 +5,6 @@ use crate::{server::Server, BT_ADV_CHAN, BT_DATA_RX, BT_STATE, CONNECTION, IRQ_O
 use consts::{UICR_SECRET_SIZE, UICR_SECRET_START};
 use defmt::{debug, error, trace};
 use embassy_nrf::{peripherals::SPI0, spis::Spis};
-#[cfg(feature = "analytics")]
-use embassy_time::Instant;
 use hmac::{Hmac, Mac};
 use host_protocol::{AdvChan, Bluetooth, HostProtocolMessage, PostcardError, SendDataResponse, State, MAX_MSG_SIZE};
 use postcard::{from_bytes, to_slice};
@@ -16,47 +14,6 @@ pub struct CommsContext<'a> {
     pub address: [u8; 6],
     pub device_id: [u8; 8],
     pub server: &'a Server,
-}
-
-#[cfg(feature = "analytics")]
-/// Logs performance metrics if 1.5s has passed since the last log
-fn log_performance(timer_pkt: &mut Instant, rx_packet: &mut bool, pkt_counter: &mut u64, data_counter: &mut u64, timer_tot: &mut Instant) {
-    if timer_pkt.elapsed().as_millis() > 1500 && *rx_packet {
-        let pkt_time = timer_tot.elapsed().as_millis() - 1500;
-        debug!(
-            "Total packet number: {}, time: {} ms, data incoming: {} bytes",
-            pkt_counter, pkt_time, data_counter
-        );
-        if (timer_tot.elapsed().as_secs()) > 0 {
-            let rate = (*data_counter as f32 / pkt_time as f32) * 8.0;
-            debug!("Rough data rate: {} kbps", rate);
-        }
-        *data_counter = 0;
-        *pkt_counter = 0;
-        *rx_packet = false;
-        *timer_pkt = Instant::now();
-        *timer_tot = Instant::now();
-    }
-}
-
-#[cfg(feature = "analytics")]
-/// Logs the time taken to process an infra packet
-fn log_infra_packet(
-    timer_pkt: &mut Instant,
-    rx_packet: &mut bool,
-    data_counter: &mut u64,
-    pkt_counter: &mut u64,
-    timer_tot: &mut Instant,
-    data: &[u8],
-) {
-    if !*rx_packet {
-        *rx_packet = true;
-        *timer_tot = Instant::now();
-    }
-    debug!("Infra packet time: {}", timer_pkt.elapsed().as_millis());
-    *timer_pkt = Instant::now();
-    *data_counter += data.len() as u64;
-    *pkt_counter += 1;
 }
 
 /// Main communication task that handles incoming SPI messages from the MPU

@@ -11,8 +11,6 @@ use futures::pin_mut;
 use nrf_softdevice::ble::advertisement_builder::{ExtendedAdvertisementBuilder, ExtendedAdvertisementPayload, Flag, ServiceList};
 use nrf_softdevice::ble::gatt_server::{notify_value, NotifyValueError};
 use nrf_softdevice::ble::peripheral;
-#[cfg(feature = "ble-phy2")]
-use nrf_softdevice::ble::PhySet;
 use nrf_softdevice::ble::{gatt_server, Connection, TxPower};
 use nrf_softdevice::gatt_server;
 use nrf_softdevice::{raw, Softdevice};
@@ -57,7 +55,7 @@ pub fn initialize_sd() -> &'static mut Softdevice {
         }),
         conn_gap: Some(raw::ble_gap_conn_cfg_t {
             conn_count: 1,
-            event_length: 24,
+            event_length: 400,
         }),
         conn_gatt: Some(raw::ble_gatt_conn_cfg_t { att_mtu: ATT_MTU as u16 }),
         gatts_attr_tab_size: Some(raw::ble_gatts_cfg_attr_tab_size_t {
@@ -72,7 +70,7 @@ pub fn initialize_sd() -> &'static mut Softdevice {
             current_len: DEVICE_NAME.len() as u16,
             max_len: DEVICE_NAME.len() as u16,
             write_perm: unsafe { mem::zeroed() },
-            _bitfield_1: raw::ble_gap_cfg_device_name_t::new_bitfield_1(raw::BLE_GATTS_VLOC_STACK as u8),
+            _bitfield_1: raw::ble_gap_cfg_device_name_t::new_bitfield_1(raw::BLE_GATTS_VLOC_USER as u8),
         }),
         conn_gatts: Some(raw::ble_gatts_conn_cfg_t { hvn_tx_queue_size: 3 }),
 
@@ -80,34 +78,6 @@ pub fn initialize_sd() -> &'static mut Softdevice {
     };
 
     Softdevice::enable(&config)
-}
-
-#[cfg(feature = "ble-phy2")]
-pub async fn update_phy(mut conn: Connection) {
-    // delay to avoid request during discovery services, many phones reject in this case
-    Timer::after_secs(2).await;
-    // Request PHY2
-    if conn.phy_update(PhySet::M2, PhySet::M2).is_err() {
-        error!("phy_update error");
-    }
-}
-
-// Set parameter for data event extension on SD113
-pub fn set_data_event_ext() -> u32 {
-    let ret = unsafe {
-        raw::sd_ble_opt_set(
-            raw::BLE_COMMON_OPTS_BLE_COMMON_OPT_CONN_EVT_EXT,
-            &raw::ble_opt_t {
-                common_opt: raw::ble_common_opt_t {
-                    conn_evt_ext: raw::ble_common_opt_conn_evt_ext_t {
-                        _bitfield_1: raw::ble_common_opt_conn_evt_ext_t::new_bitfield_1(1),
-                    },
-                },
-            },
-        )
-    };
-    debug!("set_data_event_ext: {}", ret);
-    ret
 }
 
 async fn run_bluetooth_inner(sd: &'static Softdevice, server: &Server) {
@@ -125,8 +95,6 @@ async fn run_bluetooth_inner(sd: &'static Softdevice, server: &Server) {
     };
 
     loop {
-        set_data_event_ext();
-
         // Set advertising timer in units of 625us (about 50ms with 75 units)
         let config = peripheral::Config {
             interval: 75,
@@ -165,8 +133,8 @@ async fn run_bluetooth_inner(sd: &'static Softdevice, server: &Server) {
             .data_length_update(Some(&raw::ble_gap_data_length_params_t {
                 max_tx_octets: 251,
                 max_rx_octets: 251,
-                max_tx_time_us: 2120,
-                max_rx_time_us: 2120,
+                max_tx_time_us: 0,
+                max_rx_time_us: 0,
             }))
             .is_err()
         {

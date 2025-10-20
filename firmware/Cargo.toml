@@ -9,13 +9,7 @@ version = "3.0.0"
 publish = false
 
 [features]
-debug = ["analytics"]
-
-# Print some statistics while running
-analytics = []
-
-# Ask central for PHY2
-ble-phy2 = []
+debug = []
 
 [dependencies]
 consts = { path = "../consts", features = ["dle"] }

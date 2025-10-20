@@ -29,7 +29,7 @@ use embassy_nrf::{
     peripherals::SPI0,
     spis::{self, Spis},
 };
-use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
+use embassy_sync::blocking_mutex::raw::ThreadModeRawMutex;
 use embassy_sync::channel::Channel;
 use embassy_sync::mutex::Mutex;
 use nrf52805_pac::FICR;
@@ -48,13 +48,13 @@ pub const BT_MAX_NUM_PKT: usize = 4;
 // Signal for BT state
 static BT_STATE: AtomicBool = AtomicBool::new(false);
 static BT_ADV_CHAN: AtomicU8 = AtomicU8::new(0);
-static BT_DATA_RX: Channel<CriticalSectionRawMutex, Message, BT_MAX_NUM_PKT> = Channel::new();
+static BT_DATA_RX: Channel<ThreadModeRawMutex, Message, BT_MAX_NUM_PKT> = Channel::new();
 static TX_PWR_VALUE: AtomicI8 = AtomicI8::new(0i8);
 
-static CONNECTION: RwLock<CriticalSectionRawMutex, Option<Connection>> = RwLock::new(None);
+static CONNECTION: RwLock<ThreadModeRawMutex, Option<Connection>> = RwLock::new(None);
 
 /// nRF -> MPU IRQ output pin
-static IRQ_OUT_PIN: Mutex<CriticalSectionRawMutex, RefCell<Option<Output>>> = Mutex::new(RefCell::new(None));
+static IRQ_OUT_PIN: Mutex<ThreadModeRawMutex, RefCell<Option<Output>>> = Mutex::new(RefCell::new(None));
 
 #[embassy_executor::task]
 async fn softdevice_task(sd: &'static Softdevice) -> ! {
