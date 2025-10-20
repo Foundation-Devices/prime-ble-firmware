@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2024 Foundation Devices, Inc. <hello@foundation.xyz>
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-use crate::{BT_ADDRESS, BT_ADV_CHAN, BT_DATA_RX, BT_DATA_TX, BT_MAX_NUM_PKT, BT_STATE, DEVICE_ID, IRQ_OUT_PIN, RSSI_VALUE, TX_PWR_VALUE};
+use crate::{server::Server, BT_ADV_CHAN, BT_DATA_RX, BT_STATE, CONNECTION, IRQ_OUT_PIN, TX_PWR_VALUE};
 use consts::{UICR_SECRET_SIZE, UICR_SECRET_START};
 use defmt::{debug, error, trace};
 use embassy_nrf::{peripherals::SPI0, spis::Spis};
@@ -11,6 +11,12 @@ use hmac::{Hmac, Mac};
 use host_protocol::{AdvChan, Bluetooth, HostProtocolMessage, PostcardError, SendDataResponse, State, MAX_MSG_SIZE};
 use postcard::{from_bytes, to_slice};
 use sha2::Sha256 as ShaChallenge;
+
+pub struct CommsContext<'a> {
+    pub address: [u8; 6],
+    pub device_id: [u8; 8],
+    pub server: &'a Server,
+}
 
 #[cfg(feature = "analytics")]
 /// Logs performance metrics if 1.5s has passed since the last log
@@ -55,8 +61,7 @@ fn log_infra_packet(
 
 /// Main communication task that handles incoming SPI messages from the MPU
 /// Decodes postcard-encoded messages and routes them to appropriate handlers
-#[embassy_executor::task]
-pub async fn comms_task(mut spi: Spis<'static, SPI0>) {
+pub async fn comms_task(mut spi: Spis<'static, SPI0>, context: CommsContext<'_>) -> ! {
     // Buffer for raw incoming SPI data
     let mut req_buf = [0u8; MAX_MSG_SIZE];
     let mut resp_buf = [0u8; MAX_MSG_SIZE];
@@ -72,7 +77,7 @@ pub async fn comms_task(mut spi: Spis<'static, SPI0>) {
         };
 
         let resp = match from_bytes(&req_buf[..n]) {
-            Ok(req) => host_protocol_handler(req).await,
+            Ok(req) => host_protocol_handler(req, &context).await,
             Err(_) => HostProtocolMessage::PostcardError(PostcardError::Deser),
         };
         trace!("Sending response");
@@ -89,7 +94,7 @@ pub async fn comms_task(mut spi: Spis<'static, SPI0>) {
 }
 
 /// Handles HostProtocol messages received from the MPU
-async fn host_protocol_handler<'a>(req: HostProtocolMessage<'a>) -> HostProtocolMessage<'a> {
+async fn host_protocol_handler<'a>(req: HostProtocolMessage<'a>, context: &CommsContext<'_>) -> HostProtocolMessage<'a> {
     match req {
         HostProtocolMessage::Bluetooth(bluetooth_msg) => {
             trace!("Received HostProtocolMessage::Bluetooth");
@@ -115,8 +120,8 @@ async fn host_protocol_handler<'a>(req: HostProtocolMessage<'a>) -> HostProtocol
                 }
                 Bluetooth::GetSignalStrength => {
                     trace!("GetSignalStrength");
-                    let rssi = RSSI_VALUE.load(core::sync::atomic::Ordering::Relaxed);
-                    HostProtocolMessage::Bluetooth(Bluetooth::SignalStrength(if rssi == i8::MIN { None } else { Some(rssi) }))
+                    let conn_lock = CONNECTION.read().await;
+                    HostProtocolMessage::Bluetooth(Bluetooth::SignalStrength(conn_lock.as_ref().and_then(|c| c.rssi())))
                 }
                 Bluetooth::GetFirmwareVersion => {
                     trace!("GetFirmwareVersion");
@@ -136,21 +141,19 @@ async fn host_protocol_handler<'a>(req: HostProtocolMessage<'a>) -> HostProtocol
                 }),
                 Bluetooth::SendData(data) => HostProtocolMessage::Bluetooth({
                     trace!("SendData Some");
-                    // Only accept data packets within APP_MTU size limit
-                    let mut buffer_tx_bt = BT_DATA_TX.lock().await;
-                    if buffer_tx_bt.len() < BT_MAX_NUM_PKT {
-                        if buffer_tx_bt.push(data).is_err() {
-                            Bluetooth::SendDataResponse(SendDataResponse::BufferFull)
-                        } else {
-                            Bluetooth::SendDataResponse(SendDataResponse::Sent)
+                    let conn_lock = CONNECTION.read().await;
+                    if let Some(connection) = &conn_lock.as_ref() {
+                        match context.server.send_notify(connection, &data) {
+                            Ok(_) => Bluetooth::SendDataResponse(SendDataResponse::Sent),
+                            Err(_) => Bluetooth::SendDataResponse(SendDataResponse::BufferFull),
                         }
                     } else {
-                        trace!("SendData Full");
+                        trace!("Not connected");
                         Bluetooth::SendDataResponse(SendDataResponse::BufferFull)
                     }
                 }),
                 Bluetooth::GetBtAddress => HostProtocolMessage::Bluetooth(Bluetooth::AckBtAddress {
-                    bt_address: *BT_ADDRESS.lock().await,
+                    bt_address: context.address,
                 }),
                 Bluetooth::SetTxPower { power } => {
                     trace!("SetTxPower");
@@ -158,7 +161,7 @@ async fn host_protocol_handler<'a>(req: HostProtocolMessage<'a>) -> HostProtocol
                     HostProtocolMessage::Bluetooth(Bluetooth::AckTxPower)
                 }
                 Bluetooth::GetDeviceId => HostProtocolMessage::Bluetooth(Bluetooth::AckDeviceId {
-                    device_id: *DEVICE_ID.lock().await,
+                    device_id: context.device_id,
                 }),
                 _ => {
                     trace!("Other");

@@ -36,7 +36,7 @@ embassy-nrf = { version = "0.2.0", features = [
     "nrf52805",
     "time-driver-rtc1",
 ] }
-embassy-sync = { version = "0.6.0" }
+embassy-sync = { version = "0.7.0" }
 embassy-time = { version = "0.3.2", features = [
     "defmt",
     "defmt-timestamp-uptime",

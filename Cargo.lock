@@ -247,7 +247,7 @@ dependencies = [
  "defmt-rtt",
  "embassy-executor",
  "embassy-nrf",
- "embassy-sync",
+ "embassy-sync 0.6.2",
  "embassy-time",
  "embedded-storage",
  "heapless 0.8.0",
@@ -770,7 +770,7 @@ checksum = "5794414bc20e0d750f145bc0e82366b19dd078e9e075e8331fb8dd069a1cb6a2"
 dependencies = [
  "defmt",
  "embassy-futures",
- "embassy-sync",
+ "embassy-sync 0.6.2",
  "embassy-time",
  "embedded-hal 0.2.7",
  "embedded-hal 1.0.0",
@@ -840,7 +840,7 @@ dependencies = [
  "document-features",
  "embassy-embedded-hal",
  "embassy-hal-internal",
- "embassy-sync",
+ "embassy-sync 0.6.2",
  "embassy-time-driver",
  "embassy-usb-driver",
  "embedded-hal 0.2.7",
@@ -878,6 +878,20 @@ dependencies = [
  "embedded-io-async",
  "futures-sink",
  "futures-util",
+ "heapless 0.8.0",
+]
+
+[[package]]
+name = "embassy-sync"
+version = "0.7.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "73974a3edbd0bd286759b3d483540f0ebef705919a5f56f4fc7709066f71689b"
+dependencies = [
+ "cfg-if",
+ "critical-section",
+ "embedded-io-async",
+ "futures-core",
+ "futures-sink",
  "heapless 0.8.0",
 ]
 
@@ -1013,7 +1027,7 @@ dependencies = [
  "defmt-rtt",
  "embassy-executor",
  "embassy-nrf",
- "embassy-sync",
+ "embassy-sync 0.7.2",
  "embassy-time",
  "futures",
  "heapless 0.8.0",
@@ -1593,7 +1607,7 @@ dependencies = [
  "critical-section",
  "defmt",
  "embassy-futures",
- "embassy-sync",
+ "embassy-sync 0.6.2",
  "embedded-storage",
  "embedded-storage-async",
  "fixed",
