@@ -228,7 +228,14 @@ fn build_bt_bootloader_debug(verbose: bool) {
 fn build_bt_firmware(verbose: bool) {
     tracing::info!("Building application...");
     let mut cargo_cmd = Command::new(cargo());
-    let mut cmd = cargo_cmd.current_dir(project_root().join("firmware")).args(["build", "--release"]);
+    let mut cmd = cargo_cmd.current_dir(project_root().join("firmware")).args([
+        "build",
+        "--release",
+        "-Z",
+        "build-std=panic_abort",
+        "-Z",
+        "build-std-features=panic_immediate_abort",
+    ]);
     if !verbose {
         cmd = cmd.stdout(Stdio::null()).stderr(Stdio::null()).arg("--quiet");
     }
