@@ -114,7 +114,7 @@ async fn run_bluetooth_inner(sd: &'static Softdevice, server: &Server) {
         };
 
         // Start advertising
-        let mut conn = unwrap!(peripheral::advertise_connectable(sd, adv, &config).await);
+        let mut conn = unwrap!(peripheral::advertise_connectable(sd, adv, &config).await, "Advertise failed");
         info!("advertising done!");
 
         let gap_conn_param = ble_gap_conn_params_t {
@@ -124,8 +124,8 @@ async fn run_bluetooth_inner(sd: &'static Softdevice, server: &Server) {
             slave_latency: 0,
         };
         // Request connection param update
-        if let Err(e) = conn.set_conn_params(gap_conn_param) {
-            error!("set_conn_params error - {:?}", e)
+        if conn.set_conn_params(gap_conn_param).is_err() {
+            error!("set_conn_params error")
         }
 
         // Enable to biggest LL payload size to optimize BLE throughput
@@ -151,8 +151,8 @@ async fn run_bluetooth_inner(sd: &'static Softdevice, server: &Server) {
                 error!("Connection disappeared");
                 continue;
             };
-            let e = gatt_server::run(conn, server, |e| server.handle_event(e)).await;
-            info!("gatt_server run exited: {:?}", e);
+            let _ = gatt_server::run(conn, server, |e| server.handle_event(e)).await;
+            info!("gatt_server run exited");
         }
         *CONNECTION.write().await = None;
     }

@@ -11,6 +11,7 @@ mod server;
 use core::cell::RefCell;
 use core::pin::pin;
 use core::sync::atomic::{AtomicBool, AtomicI8, AtomicU8};
+#[cfg(feature = "debug")]
 use defmt_rtt as _;
 // global logger
 use embassy_nrf as _;
@@ -40,6 +41,22 @@ use server::{initialize_sd, run_bluetooth, Server};
 bind_interrupts!(struct Irqs {
     SPIM0_SPIS0_SPI0 => spis::InterruptHandler<SPI0>;
 });
+
+#[cfg(not(feature = "debug"))]
+mod dummy_logging {
+    #[defmt::global_logger]
+    struct Logger;
+
+    unsafe impl defmt::Logger for Logger {
+        fn acquire() {}
+
+        unsafe fn flush() {}
+
+        unsafe fn release() {}
+
+        unsafe fn write(_bytes: &[u8]) {}
+    }
+}
 
 /// Maximum number of BLE packets that can be buffered.
 /// This limits memory usage while ensuring reliable data transfer.
@@ -96,8 +113,8 @@ async fn main(spawner: Spawner) {
 
     let sd = initialize_sd();
 
-    let server = unwrap!(Server::new(sd));
-    unwrap!(spawner.spawn(softdevice_task(sd)));
+    let server = unwrap!(Server::new(sd), "Creating the softdevice failed");
+    unwrap!(spawner.spawn(softdevice_task(sd)), "Spawning the softdevice failed");
 
     // Get Bt device address
     let mut address = get_address(sd).bytes();
