@@ -60,7 +60,7 @@ mod dummy_logging {
 
 /// Maximum number of BLE packets that can be buffered.
 /// This limits memory usage while ensuring reliable data transfer.
-pub const BT_MAX_NUM_PKT: usize = 4;
+pub const BT_MAX_NUM_PKT: usize = 16;
 
 // Signal for BT state
 static BT_STATE: AtomicBool = AtomicBool::new(false);
