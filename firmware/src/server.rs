@@ -6,6 +6,7 @@ use crate::{BT_ADV_CHAN, BT_STATE, TX_PWR_VALUE};
 use consts::{ATT_MTU, DEVICE_NAME, SERVICES_LIST, SHORT_NAME};
 use core::mem;
 use defmt::{debug, error, info, unwrap};
+use embassy_sync::blocking_mutex::raw::ThreadModeRawMutex;
 use embassy_time::Timer;
 use futures::pin_mut;
 use nrf_softdevice::ble::advertisement_builder::{ExtendedAdvertisementBuilder, ExtendedAdvertisementPayload, Flag, ServiceList};
@@ -175,9 +176,5 @@ pub async fn run_bluetooth(sd: &'static Softdevice, server: &Server) -> ! {
 }
 
 impl Server {
-    fn handle_event(&self, event: ServerEvent) {
-        match event {
-            ServerEvent::Nus(e) => self.nus.handle(e),
-        }
-    }
+    fn handle_event(&self, _event: ServerEvent) {}
 }

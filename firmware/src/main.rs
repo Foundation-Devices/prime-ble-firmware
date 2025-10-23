@@ -6,16 +6,20 @@
 
 mod comms;
 mod nus;
+mod queue;
 mod server;
 
+use consts::APP_MTU;
 use core::cell::RefCell;
 use core::pin::pin;
 use core::sync::atomic::{AtomicBool, AtomicI8, AtomicU8};
 #[cfg(feature = "debug")]
 use defmt_rtt as _;
+use queue::BytesQueue;
 // global logger
 use embassy_nrf as _;
 use embassy_sync::rwlock::RwLock;
+use embassy_sync::zerocopy_channel::Channel;
 use host_protocol::Message;
 // time driver
 use panic_probe as _;
@@ -31,7 +35,6 @@ use embassy_nrf::{
     spis::{self, Spis},
 };
 use embassy_sync::blocking_mutex::raw::ThreadModeRawMutex;
-use embassy_sync::channel::Channel;
 use embassy_sync::mutex::Mutex;
 use nrf52805_pac::FICR;
 use nrf_softdevice::ble::{get_address, Connection};
@@ -60,12 +63,13 @@ mod dummy_logging {
 
 /// Maximum number of BLE packets that can be buffered.
 /// This limits memory usage while ensuring reliable data transfer.
-pub const BT_MAX_NUM_PKT: usize = 16;
+pub const RX_QUEUE_LEN: usize = 16;
 
 // Signal for BT state
 static BT_STATE: AtomicBool = AtomicBool::new(false);
 static BT_ADV_CHAN: AtomicU8 = AtomicU8::new(0);
-static BT_DATA_RX: Channel<ThreadModeRawMutex, Message, BT_MAX_NUM_PKT> = Channel::new();
+static RX_QUEUE: BytesQueue<RX_QUEUE_LEN, APP_MTU> = BytesQueue::new();
+
 static TX_PWR_VALUE: AtomicI8 = AtomicI8::new(0i8);
 
 static CONNECTION: RwLock<ThreadModeRawMutex, Option<Connection>> = RwLock::new(None);

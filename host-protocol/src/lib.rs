@@ -82,14 +82,14 @@ pub enum Bluetooth<'a> {
     SignalStrength(Option<i8>),
 
     /// Send raw data over BLE connection
-    SendData(Message),
+    SendData(&'a [u8]),
     /// Response to data send request
     SendDataResponse(SendDataResponse),
 
     /// Request latest received data (if any)
     GetReceivedData,
     /// Data received over BLE connection
-    ReceivedData(Message),
+    ReceivedData(&'a [u8]),
     /// No data has been received since last `GetReceivedData` request
     NoReceivedData,
 

@@ -1,12 +1,13 @@
 // SPDX-FileCopyrightText: 2024 Foundation Devices, Inc. <hello@foundation.xyz>
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-use crate::{server::Server, BT_ADV_CHAN, BT_DATA_RX, BT_STATE, CONNECTION, IRQ_OUT_PIN, TX_PWR_VALUE};
+use crate::{server::Server, BT_ADV_CHAN, BT_STATE, CONNECTION, IRQ_OUT_PIN, RX_QUEUE, TX_PWR_VALUE};
 use consts::{UICR_SECRET_SIZE, UICR_SECRET_START};
 use defmt::{debug, error, trace};
 use embassy_nrf::{peripherals::SPI0, spis::Spis};
+use embassy_sync::{blocking_mutex::raw::ThreadModeRawMutex, zerocopy_channel::Receiver};
 use hmac::{Hmac, Mac};
-use host_protocol::{AdvChan, Bluetooth, HostProtocolMessage, PostcardError, SendDataResponse, State, MAX_MSG_SIZE};
+use host_protocol::{AdvChan, Bluetooth, HostProtocolMessage, Message, PostcardError, SendDataResponse, State, MAX_MSG_SIZE};
 use postcard::{from_bytes, to_slice};
 use sha2::Sha256 as ShaChallenge;
 
@@ -18,7 +19,7 @@ pub struct CommsContext<'a> {
 
 /// Main communication task that handles incoming SPI messages from the MPU
 /// Decodes postcard-encoded messages and routes them to appropriate handlers
-pub async fn comms_task(mut spi: Spis<'static, SPI0>, context: CommsContext<'_>) -> ! {
+pub async fn comms_task(mut spi: Spis<'static, SPI0>, mut context: CommsContext<'_>) -> ! {
     // Buffer for raw incoming SPI data
     let mut req_buf = [0u8; MAX_MSG_SIZE];
     let mut resp_buf = [0u8; MAX_MSG_SIZE];
@@ -33,7 +34,22 @@ pub async fn comms_task(mut spi: Spis<'static, SPI0>, context: CommsContext<'_>)
             continue;
         };
 
+        let mut was_data = false;
         let resp = match from_bytes(&req_buf[..n]) {
+            Ok(HostProtocolMessage::Bluetooth(Bluetooth::GetReceivedData)) => {
+                HostProtocolMessage::Bluetooth(match RX_QUEUE.receive() {
+                    Some(data) => {
+                        trace!("GetReceivedData Some");
+                        was_data = true;
+                        Bluetooth::ReceivedData(data)
+                    }
+                    None => {
+                        trace!("GetReceivedData None");
+                        IRQ_OUT_PIN.lock().await.borrow_mut().as_mut().map(|pin| pin.set_high());
+                        Bluetooth::NoReceivedData
+                    }
+                })
+            }
             Ok(req) => host_protocol_handler(req, &context).await,
             Err(_) => HostProtocolMessage::PostcardError(PostcardError::Deser),
         };
@@ -47,6 +63,9 @@ pub async fn comms_task(mut spi: Spis<'static, SPI0>, context: CommsContext<'_>)
         // Async and blocking perform exactly the same, but an async write
         // makes the subsequent read unreliable.
         let _ = spi.blocking_write_from_ram(&resp_buf[..resp_len + 2]);
+        if was_data {
+            RX_QUEUE.receive_done();
+        }
     }
 }
 
@@ -85,17 +104,6 @@ async fn host_protocol_handler<'a>(req: HostProtocolMessage<'a>, context: &Comms
                     let version = env!("CARGO_PKG_VERSION");
                     HostProtocolMessage::Bluetooth(Bluetooth::AckFirmwareVersion { version })
                 }
-                Bluetooth::GetReceivedData => HostProtocolMessage::Bluetooth(match BT_DATA_RX.try_receive() {
-                    Ok(data) => {
-                        trace!("GetReceivedData Some");
-                        Bluetooth::ReceivedData(data)
-                    }
-                    Err(_) => {
-                        trace!("GetReceivedData None");
-                        IRQ_OUT_PIN.lock().await.borrow_mut().as_mut().map(|pin| pin.set_high());
-                        Bluetooth::NoReceivedData
-                    }
-                }),
                 Bluetooth::SendData(data) => HostProtocolMessage::Bluetooth({
                     trace!("SendData Some");
                     let conn_lock = CONNECTION.read().await;
