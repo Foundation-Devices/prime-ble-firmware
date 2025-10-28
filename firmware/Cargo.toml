@@ -5,17 +5,11 @@
 authors = ["Foundation Devices, Inc. <hello@foundation.xyz>"]
 edition = "2021"
 name = "firmware"
-version = "2.3.1"
+version = "3.0.1"
 publish = false
 
 [features]
-debug = ["analytics"]
-
-# Print some statistics while running
-analytics = []
-
-# Ask central for PHY2
-ble-phy2 = []
+debug = []
 
 [dependencies]
 consts = { path = "../consts", features = ["dle"] }
@@ -36,7 +30,7 @@ embassy-nrf = { version = "0.2.0", features = [
     "nrf52805",
     "time-driver-rtc1",
 ] }
-embassy-sync = { version = "0.6.0" }
+embassy-sync = { version = "0.7.0" }
 embassy-time = { version = "0.3.2", features = [
     "defmt",
     "defmt-timestamp-uptime",

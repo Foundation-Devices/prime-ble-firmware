@@ -4,7 +4,7 @@
 //! Nordic Uart Service ([NUS]) implementation.
 //! [NUS]: https://developer.nordicsemi.com/nRF_Connect_SDK/doc/latest/nrf/libraries/bluetooth_services/services/nus.html
 
-use crate::BT_DATA_RX;
+use crate::{BT_DATA_RX, IRQ_OUT_PIN};
 use defmt::{debug, error, info};
 use host_protocol::Message;
 use nrf_softdevice::gatt_service;
@@ -28,6 +28,10 @@ impl Nus {
                 debug!("Received: {} bytes 0x{:x}", data.len(), data);
                 if BT_DATA_RX.try_send(data).is_err() {
                     error!("Error BT_DATA_RX");
+                }
+                // Notify MCU that we got something
+                if let Ok(lock) = IRQ_OUT_PIN.try_lock() {
+                    lock.borrow_mut().as_mut().map(|pin| pin.set_low());
                 }
             }
         }
