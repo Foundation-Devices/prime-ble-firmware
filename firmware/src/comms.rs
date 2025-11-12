@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2024 Foundation Devices, Inc. <hello@foundation.xyz>
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-use crate::{server::Server, BT_ADV_CHAN, BT_DATA_RX, BT_STATE, CONNECTION, IRQ_OUT_PIN, TX_PWR_VALUE};
+use crate::{server::Server, is_paired, BT_ADV_CHAN, BT_DATA_RX, BT_STATE, CONNECTION, IRQ_OUT_PIN, TX_PWR_VALUE};
 use consts::{UICR_SECRET_SIZE, UICR_SECRET_START};
 use defmt::{debug, error, trace};
 use embassy_nrf::{peripherals::SPI0, spis::Spis};
@@ -120,6 +120,10 @@ async fn host_protocol_handler<'a>(req: HostProtocolMessage<'a>, context: &Comms
                 Bluetooth::GetDeviceId => HostProtocolMessage::Bluetooth(Bluetooth::AckDeviceId {
                     device_id: context.device_id,
                 }),
+                Bluetooth::GetPairingStatus => {
+                    trace!("GetPairingStatus");
+                    HostProtocolMessage::Bluetooth(Bluetooth::PairingStatus(is_paired()))
+                }
                 _ => {
                     trace!("Other");
                     HostProtocolMessage::InappropriateMessage(get_state())

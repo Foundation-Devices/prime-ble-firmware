@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2024 Foundation Devices, Inc. <hello@foundation.xyz>
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-use crate::{nus::*, CONNECTION};
+use crate::{nus::*, BLE_SECURITY_HANDLER, CONNECTION};
 use crate::{BT_ADV_CHAN, BT_STATE, TX_PWR_VALUE};
 use consts::{ATT_MTU, DEVICE_NAME, SERVICES_LIST, SHORT_NAME};
 use core::mem;
@@ -113,8 +113,11 @@ async fn run_bluetooth_inner(sd: &'static Softdevice, server: &Server) {
             ..Default::default()
         };
 
-        // Start advertising
-        let mut conn = unwrap!(peripheral::advertise_connectable(sd, adv, &config).await, "Advertise failed");
+        // Start advertising with security handler (pairable)
+        let mut conn = unwrap!(
+            peripheral::advertise_pairable(sd, adv, &config, &BLE_SECURITY_HANDLER).await,
+            "Advertise failed"
+        );
         info!("advertising done!");
 
         let gap_conn_param = ble_gap_conn_params_t {

@@ -44,6 +44,7 @@ nrf-softdevice = { git = "https://github.com/Foundation-Devices/nrf-softdevice.g
     "ble-gatt-server",
     "ble-peripheral",
     "ble-rssi",
+    'ble-sec',
     "critical-section-impl",
     "defmt",
     "evt-max-size-512",
