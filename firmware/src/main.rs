@@ -90,11 +90,6 @@ impl SecurityHandler for BleSecurityHandler {
     }
 }
 
-/// Check if the current BLE connection is paired
-pub fn is_paired() -> bool {
-    PAIRED.load(core::sync::atomic::Ordering::Relaxed)
-}
-
 /// Get the current security mode of the connection (if connected)
 pub async fn get_connection_security_mode() -> Option<SecurityMode> {
     let conn_lock = CONNECTION.read().await;

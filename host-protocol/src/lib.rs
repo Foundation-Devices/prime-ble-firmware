@@ -117,6 +117,11 @@ pub enum Bluetooth<'a> {
     GetPairingStatus,
     /// Response with pairing status
     PairingStatus(bool),
+
+    /// Force disconnect BLE connection
+    Disconnect,
+    /// Acknowledge disconnect operation
+    AckDisconnect,
 }
 
 impl Bluetooth<'_> {
@@ -146,6 +151,8 @@ impl Bluetooth<'_> {
             Self::AckDeviceId { .. } => false,
             Self::GetPairingStatus => true,
             Self::PairingStatus(_) => false,
+            Self::Disconnect => true,
+            Self::AckDisconnect => false,
         }
     }
 }
@@ -565,6 +572,8 @@ mod tests {
                 (HostProtocolMessage::Bluetooth(Bluetooth::GetPairingStatus), &[0, 22]),
                 (HostProtocolMessage::Bluetooth(Bluetooth::PairingStatus(true)), &[0, 23, 1]),
                 (HostProtocolMessage::Bluetooth(Bluetooth::PairingStatus(false)), &[0, 23, 0]),
+                (HostProtocolMessage::Bluetooth(Bluetooth::Disconnect), &[0, 24]),
+                (HostProtocolMessage::Bluetooth(Bluetooth::AckDisconnect), &[0, 25]),
             ],
         );
     }

@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2024 Foundation Devices, Inc. <hello@foundation.xyz>
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-use crate::{server::Server, is_paired, BT_ADV_CHAN, BT_DATA_RX, BT_STATE, CONNECTION, IRQ_OUT_PIN, TX_PWR_VALUE};
+use crate::{server::Server, BT_ADV_CHAN, BT_DATA_RX, BT_STATE, CONNECTION, IRQ_OUT_PIN, PAIRED, TX_PWR_VALUE};
 use consts::{UICR_SECRET_SIZE, UICR_SECRET_START};
 use defmt::{debug, error, trace};
 use embassy_nrf::{peripherals::SPI0, spis::Spis};
@@ -122,7 +122,26 @@ async fn host_protocol_handler<'a>(req: HostProtocolMessage<'a>, context: &Comms
                 }),
                 Bluetooth::GetPairingStatus => {
                     trace!("GetPairingStatus");
-                    HostProtocolMessage::Bluetooth(Bluetooth::PairingStatus(is_paired()))
+                    HostProtocolMessage::Bluetooth(Bluetooth::PairingStatus(PAIRED.load(core::sync::atomic::Ordering::Relaxed)))
+                }
+                Bluetooth::Disconnect => {
+                    trace!("Disconnect");
+                    // Get current connection and disconnect if connected
+                    let conn_lock = CONNECTION.read().await;
+                    if let Some(connection) = conn_lock.as_ref() {
+                        if let Some(conn_handle) = connection.handle() {
+                            // Disconnect the connection
+                            unsafe {
+                                let _ = nrf_softdevice::raw::sd_ble_gap_disconnect(
+                                    conn_handle,
+                                    nrf_softdevice::raw::BLE_HCI_REMOTE_USER_TERMINATED_CONNECTION as u8,
+                                );
+                            }
+                        }
+                    }
+                    // Clear paired state regardless of connection status
+                    PAIRED.store(false, core::sync::atomic::Ordering::Relaxed);
+                    HostProtocolMessage::Bluetooth(Bluetooth::AckDisconnect)
                 }
                 _ => {
                     trace!("Other");
