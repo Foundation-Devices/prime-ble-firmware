@@ -5,7 +5,7 @@
 authors = ["Foundation Devices, Inc. <hello@foundation.xyz>"]
 edition = "2021"
 name = "firmware"
-version = "3.0.2"
+version = "3.1.0"
 publish = false
 
 [features]
@@ -44,6 +44,7 @@ nrf-softdevice = { git = "https://github.com/Foundation-Devices/nrf-softdevice.g
     "ble-gatt-server",
     "ble-peripheral",
     "ble-rssi",
+    'ble-sec',
     "critical-section-impl",
     "defmt",
     "evt-max-size-512",
