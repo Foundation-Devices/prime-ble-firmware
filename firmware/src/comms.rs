@@ -72,6 +72,10 @@ async fn host_protocol_handler<'a>(req: HostProtocolMessage<'a>, context: &Comms
                 }
                 Bluetooth::Disable => {
                     trace!("Disabled");
+                    // clean disconnect if connected
+                    if let Some(connection) = CONNECTION.read().await.as_ref() {
+                        let _ = connection.disconnect();
+                    }
                     BT_STATE.store(false, core::sync::atomic::Ordering::Relaxed);
                     HostProtocolMessage::Bluetooth(Bluetooth::AckDisable)
                 }
@@ -127,17 +131,8 @@ async fn host_protocol_handler<'a>(req: HostProtocolMessage<'a>, context: &Comms
                 Bluetooth::Disconnect => {
                     trace!("Disconnect");
                     // Get current connection and disconnect if connected
-                    let conn_lock = CONNECTION.read().await;
-                    if let Some(connection) = conn_lock.as_ref() {
-                        if let Some(conn_handle) = connection.handle() {
-                            // Disconnect the connection
-                            unsafe {
-                                let _ = nrf_softdevice::raw::sd_ble_gap_disconnect(
-                                    conn_handle,
-                                    nrf_softdevice::raw::BLE_HCI_REMOTE_USER_TERMINATED_CONNECTION as u8,
-                                );
-                            }
-                        }
+                    if let Some(connection) = CONNECTION.read().await.as_ref() {
+                        let _ = connection.disconnect();
                     }
                     // Clear paired state regardless of connection status
                     PAIRED.store(false, core::sync::atomic::Ordering::Relaxed);
