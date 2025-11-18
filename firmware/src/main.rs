@@ -34,7 +34,7 @@ use embassy_sync::blocking_mutex::raw::ThreadModeRawMutex;
 use embassy_sync::channel::Channel;
 use embassy_sync::mutex::Mutex;
 use nrf52805_pac::FICR;
-use nrf_softdevice::ble::{get_address, security::SecurityHandler, Connection, SecurityMode};
+use nrf_softdevice::ble::{get_address, Connection};
 use nrf_softdevice::Softdevice;
 use server::{initialize_sd, run_bluetooth, Server};
 
@@ -69,32 +69,9 @@ static BT_DATA_RX: Channel<ThreadModeRawMutex, Message, BT_MAX_NUM_PKT> = Channe
 static TX_PWR_VALUE: AtomicI8 = AtomicI8::new(0i8);
 
 static CONNECTION: RwLock<ThreadModeRawMutex, Option<Connection>> = RwLock::new(None);
-static PAIRED: AtomicBool = AtomicBool::new(false);
 
 /// nRF -> MPU IRQ output pin
 static IRQ_OUT_PIN: Mutex<ThreadModeRawMutex, RefCell<Option<Output>>> = Mutex::new(RefCell::new(None));
-
-struct BleSecurityHandler;
-
-static BLE_SECURITY_HANDLER: BleSecurityHandler = BleSecurityHandler;
-
-impl SecurityHandler for BleSecurityHandler {
-    fn on_security_update(&self, _conn: &Connection, security_mode: SecurityMode) {
-        let is_paired = !matches!(security_mode, SecurityMode::Open | SecurityMode::NoAccess);
-        PAIRED.store(is_paired, core::sync::atomic::Ordering::Relaxed);
-        if is_paired {
-            info!("BLE connection paired: {:?}", security_mode);
-        } else {
-            info!("BLE connection unpaired: {:?}", security_mode);
-        }
-    }
-}
-
-/// Get the current security mode of the connection (if connected)
-pub async fn get_connection_security_mode() -> Option<SecurityMode> {
-    let conn_lock = CONNECTION.read().await;
-    conn_lock.as_ref().map(|conn| conn.security_mode())
-}
 
 #[embassy_executor::task]
 async fn softdevice_task(sd: &'static Softdevice) -> ! {
