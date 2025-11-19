@@ -112,6 +112,11 @@ pub enum Bluetooth<'a> {
     GetDeviceId,
     /// Send device id
     AckDeviceId { device_id: [u8; 8] },
+
+    /// Force disconnect BLE connection
+    Disconnect,
+    /// Acknowledge disconnect operation
+    AckDisconnect,
 }
 
 impl Bluetooth<'_> {
@@ -139,6 +144,8 @@ impl Bluetooth<'_> {
             Self::AckTxPower => false,
             Self::GetDeviceId => true,
             Self::AckDeviceId { .. } => false,
+            Self::Disconnect => true,
+            Self::AckDisconnect => false,
         }
     }
 }
@@ -555,6 +562,8 @@ mod tests {
                     HostProtocolMessage::Bluetooth(Bluetooth::AckDeviceId { device_id: [0xFF; 8] }),
                     &[0, 21, 255, 255, 255, 255, 255, 255, 255, 255],
                 ),
+                (HostProtocolMessage::Bluetooth(Bluetooth::Disconnect), &[0, 22]),
+                (HostProtocolMessage::Bluetooth(Bluetooth::AckDisconnect), &[0, 23]),
             ],
         );
     }

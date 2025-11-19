@@ -72,6 +72,10 @@ async fn host_protocol_handler<'a>(req: HostProtocolMessage<'a>, context: &Comms
                 }
                 Bluetooth::Disable => {
                     trace!("Disabled");
+                    // clean disconnect if connected
+                    if let Some(connection) = CONNECTION.read().await.as_ref() {
+                        let _ = connection.disconnect();
+                    }
                     BT_STATE.store(false, core::sync::atomic::Ordering::Relaxed);
                     HostProtocolMessage::Bluetooth(Bluetooth::AckDisable)
                 }
@@ -120,6 +124,14 @@ async fn host_protocol_handler<'a>(req: HostProtocolMessage<'a>, context: &Comms
                 Bluetooth::GetDeviceId => HostProtocolMessage::Bluetooth(Bluetooth::AckDeviceId {
                     device_id: context.device_id,
                 }),
+                Bluetooth::Disconnect => {
+                    trace!("Disconnect");
+                    // Get current connection and disconnect if connected
+                    if let Some(connection) = CONNECTION.read().await.as_ref() {
+                        let _ = connection.disconnect();
+                    }
+                    HostProtocolMessage::Bluetooth(Bluetooth::AckDisconnect)
+                }
                 _ => {
                     trace!("Other");
                     HostProtocolMessage::InappropriateMessage(get_state())
