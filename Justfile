@@ -8,9 +8,10 @@ build args="":
 # Build production firmware package
 build-minimal args="":
     cargo xtask {{args}} build-minimal-image
-    @echo -n 'Commit '
+    @echo '🚀​ Output Files Identification:'
+    @echo -n '   Commit '
     @git rev-parse HEAD
-    @sha256sum BtPackage/*
+    @sha256sum BtPackage/* | sed 's/^/   /'
 
 # Build debug firmware package with UART console without flash protection
 build-debug args="":
@@ -19,9 +20,10 @@ build-debug args="":
 # Build unsigned firmware package (without signing or packaging)
 build-unsigned args="":
     cargo xtask {{args}} build-unsigned
-    @echo -n 'Commit '
+    @echo '🚀​ Output Files Identification:'
+    @echo -n '   Commit '
     @git rev-parse HEAD
-    @sha256sum BtPackage/*
+    @sha256sum BtPackage/* | sed 's/^/   /'
 
 # Sign firmware with specified cosign2 config
 sign config="cosign2.toml":

@@ -178,6 +178,25 @@ fn build_bt_bootloader(verbose: bool) {
         exit(-1);
     }
 
+    // Create bootloader binary first to show actual size
+    tracing::info!("Creating bootloader binary file");
+    let mut cargo_cmd = Command::new(cargo());
+    let cmd = cargo_cmd
+        .current_dir(project_root().join("bootloader"))
+        .args(["objcopy", "--release"]);
+    let mut cmd = cmd.args(["--", "-j", ".text", "-O", "binary", "../BtPackage/bootloader.bin"]);
+    if !verbose {
+        cmd = cmd.stdout(Stdio::null()).stderr(Stdio::null());
+    }
+    let status = cmd.status().expect("Running Cargo objcopy failed");
+    if !status.success() {
+        tracing::error!("Bootloader binary generation failed");
+        exit(-1);
+    }
+
+    // Print bootloader binary size information
+    print_bootloader_binary_size(&project_root().join("BtPackage/bootloader.bin"), "Bootloader Binary (actual size)");
+
     tracing::info!("Generating bootloader hex file...");
     let mut cargo_cmd = Command::new(cargo());
     let cmd = cargo_cmd
@@ -208,6 +227,28 @@ fn build_bt_bootloader_debug(verbose: bool) {
         tracing::error!("Bootloader build failed");
         exit(-1);
     }
+
+    // Create debug bootloader binary first to show actual size
+    tracing::info!("Creating debug bootloader binary file");
+    let mut cargo_cmd = Command::new(cargo());
+    let cmd = cargo_cmd
+        .current_dir(project_root().join("bootloader"))
+        .args(["objcopy", "--release"]);
+    let mut cmd = cmd.args(["--", "-j", ".text", "-O", "binary", "../BtPackageDebug/bootloaderDebug.bin"]);
+    if !verbose {
+        cmd = cmd.stdout(Stdio::null()).stderr(Stdio::null());
+    }
+    let status = cmd.status().expect("Running Cargo objcopy failed");
+    if !status.success() {
+        tracing::error!("Debug bootloader binary generation failed");
+        exit(-1);
+    }
+
+    // Print debug bootloader binary size information
+    print_bootloader_binary_size(
+        &project_root().join("BtPackageDebug/bootloaderDebug.bin"),
+        "Debug Bootloader Binary (actual size)",
+    );
 
     tracing::info!("Generating bootloader hex file...");
     let mut cargo_cmd = Command::new(cargo());
@@ -245,9 +286,30 @@ fn build_bt_firmware(verbose: bool) {
         exit(-1);
     }
 
+    // Create unpadded binary first to show actual size
+    let mut cargo_cmd = Command::new(cargo());
+    let cmd = cargo_cmd
+        .current_dir(project_root().join("firmware"))
+        .args(["objcopy", "--release"]);
+    let mut cmd = cmd.args(["--", "-O", "binary", "../BtPackage/BT_application_unpadded.bin"]);
+    if !verbose {
+        cmd = cmd.stdout(Stdio::null()).stderr(Stdio::null());
+    }
+    let status = cmd.status().expect("Running Cargo objcopy failed");
+    if !status.success() {
+        tracing::error!("Firmware build failed");
+        exit(-1);
+    }
+
     // Created a full populated flash image to avoid the signed fw is different from the slice to check.
     // We will always get the full slice of flash where app is flashed ( BASE_APP_ADDR up to BASE_BOOTLOADER_ADDR )
     tracing::info!("Creating BT application bin file");
+    // Print actual binary size information
+    print_binary_size(
+        &project_root().join("BtPackage/BT_application_unpadded.bin"),
+        "Firmware Binary (actual size)",
+    );
+
     let mut cargo_cmd = Command::new(cargo());
     let base_bootloader_addr = BASE_BOOTLOADER_ADDR.to_string();
     let cmd = cargo_cmd
@@ -256,7 +318,7 @@ fn build_bt_firmware(verbose: bool) {
     let mut cmd = cmd.args([
         "--",
         "--pad-to",
-        base_bootloader_addr.as_str(),
+        base_bootloader_addr.as_str(), // no need to reserve space for trailer because we don't use cosign2's extended signatures
         "-O",
         "binary",
         "../BtPackage/BT_application.bin",
@@ -554,6 +616,48 @@ fn patch_sd() {
         patches_7_3_0(0xB4),
         project_root().join("misc/s113_nrf52_7.3.0_softdevice_patched.hex"),
     );
+}
+
+fn print_binary_size(binary_path: &Path, description: &str) {
+    if let Ok(metadata) = fs::metadata(binary_path) {
+        let size_bytes = metadata.len();
+        let size_kb = size_bytes as f64 / 1024.0;
+
+        // Calculate flash usage percentage
+        // Available flash space for application: from BASE_APP_ADDR to BASE_BOOTLOADER_ADDR, minus signature header
+        let app_flash_size = (BASE_BOOTLOADER_ADDR - BASE_APP_ADDR - SIGNATURE_HEADER_SIZE) as u64;
+        let usage_percentage = (size_bytes as f64 / app_flash_size as f64) * 100.0;
+
+        println!("📊 {} Size:", description);
+        println!("   Bytes: {} bytes", size_bytes);
+        println!("   KiB: {:.2} KiB", size_kb);
+        println!("   Flash Usage: {:.1}% of {} bytes available", usage_percentage, app_flash_size);
+    } else {
+        tracing::warn!("Could not read binary metadata for: {}", binary_path.display());
+    }
+}
+
+fn print_bootloader_binary_size(binary_path: &Path, description: &str) {
+    if let Ok(metadata) = fs::metadata(binary_path) {
+        let size_bytes = metadata.len();
+        let size_kb = size_bytes as f64 / 1024.0;
+
+        // Calculate flash usage percentage for bootloader
+        // Bootloader flash space: from BASE_BOOTLOADER_ADDR to end of flash (192K)
+        let total_flash_size = 192 * 1024; // 192K in bytes
+        let bootloader_flash_size = total_flash_size - BASE_BOOTLOADER_ADDR as u64;
+        let usage_percentage = (size_bytes as f64 / bootloader_flash_size as f64) * 100.0;
+
+        println!("📊 {} Size:", description);
+        println!("   Bytes: {} bytes", size_bytes);
+        println!("   KiB: {:.2} KiB", size_kb);
+        println!(
+            "   Flash Usage: {:.1}% of {} bytes available",
+            usage_percentage, bootloader_flash_size
+        );
+    } else {
+        tracing::warn!("Could not read binary metadata for: {}", binary_path.display());
+    }
 }
 
 fn main() {
