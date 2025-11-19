@@ -113,7 +113,7 @@ async fn run_bluetooth_inner(sd: &'static Softdevice, server: &Server) {
             ..Default::default()
         };
 
-        // Start advertising with security handler (pairable)
+        // Start advertising
         let mut conn = unwrap!(peripheral::advertise_connectable(sd, adv, &config).await, "Advertise failed");
         info!("advertising done!");
 
