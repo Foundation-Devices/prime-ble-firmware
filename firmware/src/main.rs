@@ -10,9 +10,10 @@ mod server;
 
 use core::cell::RefCell;
 use core::pin::pin;
-use core::sync::atomic::{AtomicBool, AtomicI8, AtomicU8};
+use core::sync::atomic::{AtomicI8, AtomicU8};
 #[cfg(feature = "debug")]
 use defmt_rtt as _;
+use embassy_sync::signal::Signal;
 // global logger
 use embassy_nrf as _;
 use embassy_sync::rwlock::RwLock;
@@ -63,7 +64,7 @@ mod dummy_logging {
 pub const BT_MAX_NUM_PKT: usize = 16;
 
 // Signal for BT state
-static BT_STATE: AtomicBool = AtomicBool::new(false);
+static BT_ENABLE: Signal<ThreadModeRawMutex, bool> = Signal::new();
 static BT_ADV_CHAN: AtomicU8 = AtomicU8::new(0);
 static BT_DATA_RX: Channel<ThreadModeRawMutex, Message, BT_MAX_NUM_PKT> = Channel::new();
 static TX_PWR_VALUE: AtomicI8 = AtomicI8::new(0i8);

@@ -37,14 +37,6 @@ impl Server {
     }
 }
 
-async fn stop_bluetooth() {
-    while BT_STATE.load(core::sync::atomic::Ordering::Relaxed) {
-        // Do nothing
-        Timer::after_millis(200).await;
-    }
-    info!("BT off");
-}
-
 pub fn initialize_sd() -> &'static mut Softdevice {
     let config = nrf_softdevice::Config {
         clock: Some(raw::nrf_clock_lf_cfg_t {
@@ -160,17 +152,14 @@ async fn run_bluetooth_inner(sd: &'static Softdevice, server: &Server) {
 
 pub async fn run_bluetooth(sd: &'static Softdevice, server: &Server) -> ! {
     loop {
-        if BT_STATE.load(core::sync::atomic::Ordering::Relaxed) {
-            let run_bluetooth_fut = run_bluetooth_inner(sd, &server);
-            let stop_bluetooth_fut = stop_bluetooth();
-            pin_mut!(run_bluetooth_fut);
-            pin_mut!(stop_bluetooth_fut);
+        // Wait for start signal
+        while !BT_ENABLE.wait().await {}
+        let run_bluetooth_fut = run_bluetooth_inner(sd, &server);
+        let check_stopped_fut = async { while BT_ENABLE.wait().await {} };
 
-            info!("Starting BLE advertisement");
-            // source of this idea https://github.com/embassy-rs/nrf-softdevice/blob/master/examples/src/bin/ble_peripheral_onoff.rs
-            futures::future::select(run_bluetooth_fut, stop_bluetooth_fut).await;
-        }
-        Timer::after_millis(200).await;
+        info!("Starting BLE advertisement");
+        // source of this idea https://github.com/embassy-rs/nrf-softdevice/blob/master/examples/src/bin/ble_peripheral_onoff.rs
+        futures::future::select(pin!(run_bluetooth_fut), pin!(check_stopped_fut)).await;
     }
 }
 
