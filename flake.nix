@@ -122,6 +122,7 @@
             lib.optionals stdenv.isLinux [
               clang
               llvmPackages.libclang
+              llvmPackages.llvm
             ];
 
           linuxAttrs = lib.optionalAttrs pkgs.stdenv.isLinux {
