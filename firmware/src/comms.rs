@@ -104,7 +104,7 @@ async fn host_protocol_handler<'a>(req: HostProtocolMessage<'a>, context: &Comms
                     }
                     Err(_) => {
                         trace!("GetReceivedData None");
-                        IRQ_OUT_PIN.lock().await.borrow_mut().as_mut().map(|pin| pin.set_high());
+                        IRQ_OUT_PIN.lock().await.as_mut().map(|pin| pin.set_high());
                         Bluetooth::NoReceivedData
                     }
                 }),

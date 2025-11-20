@@ -8,7 +8,7 @@ mod comms;
 mod nus;
 mod server;
 
-use core::cell::RefCell;
+use consts::{DEFAULT_DEVICE_NAME, MAX_DEVICE_NAME_LEN};
 use core::pin::pin;
 use core::sync::atomic::{AtomicI8, AtomicU8};
 #[cfg(feature = "debug")]
@@ -72,7 +72,7 @@ static TX_PWR_VALUE: AtomicI8 = AtomicI8::new(0i8);
 static CONNECTION: RwLock<ThreadModeRawMutex, Option<Connection>> = RwLock::new(None);
 
 /// nRF -> MPU IRQ output pin
-static IRQ_OUT_PIN: Mutex<ThreadModeRawMutex, RefCell<Option<Output>>> = Mutex::new(RefCell::new(None));
+static IRQ_OUT_PIN: Mutex<ThreadModeRawMutex, Option<Output>> = Mutex::new(None);
 
 #[embassy_executor::task]
 async fn softdevice_task(sd: &'static Softdevice) -> ! {
@@ -101,12 +101,12 @@ async fn main(spawner: Spawner) {
     };
 
     // Configure the OUT IRQ pin
+    IRQ_OUT_PIN
+        .lock()
+        .await
+        .replace(Output::new(p.P0_20, Level::High, OutputDrive::Standard));
+
     {
-        IRQ_OUT_PIN
-            .lock()
-            .await
-            .borrow_mut()
-            .replace(Output::new(p.P0_20, Level::High, OutputDrive::Standard));
     }
 
     // set priority to avoid collisions with softdevice
