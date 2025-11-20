@@ -4,8 +4,9 @@
 use core::pin::pin;
 
 use crate::{nus::*, BT_ADV_CHAN, BT_ADV_CHANGED, BT_ENABLE, CONNECTION, DEVICE_NAME, TX_PWR_VALUE};
-use consts::{ATT_MTU, MAX_DEVICE_NAME_LEN, SERVICES_LIST, SHORT_NAME};
+use consts::{ATT_MTU, SERVICES_LIST, SHORT_NAME};
 use defmt::{debug, error, info, unwrap};
+use host_protocol::MAX_DEVICE_NAME_LEN;
 use nrf_softdevice::ble::advertisement_builder::{
     AdvertisementBuilder, Flag, LegacyAdvertisementBuilder, LegacyAdvertisementPayload, ServiceList,
 };
@@ -93,9 +94,9 @@ async fn run_bluetooth_inner(sd: &'static Softdevice, server: &Server) -> ! {
         const MAX_ADVERTISEMENT_LEN: usize = MAX_DEVICE_NAME_LEN + 2;
         let scan_data = {
             let device_name = DEVICE_NAME.lock().await;
-            unsafe { raw::sd_ble_gap_device_name_set(&DEVICE_NAME_SEC_MODE, device_name.0.as_ptr(), device_name.1 as u16) };
+            unsafe { raw::sd_ble_gap_device_name_set(&DEVICE_NAME_SEC_MODE, device_name.as_ptr(), device_name.len() as u16) };
             AdvertisementBuilder::<MAX_ADVERTISEMENT_LEN>::new()
-                .full_name(str::from_utf8(&device_name.0[..device_name.1]).unwrap_or(SHORT_NAME))
+                .full_name(&device_name)
                 .build()
         };
 

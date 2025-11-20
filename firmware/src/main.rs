@@ -8,7 +8,7 @@ mod comms;
 mod nus;
 mod server;
 
-use consts::{DEFAULT_DEVICE_NAME, MAX_DEVICE_NAME_LEN};
+use consts::DEFAULT_DEVICE_NAME;
 use core::pin::pin;
 use core::sync::atomic::{AtomicI8, AtomicU8};
 #[cfg(feature = "debug")]
@@ -17,7 +17,7 @@ use embassy_sync::signal::Signal;
 // global logger
 use embassy_nrf as _;
 use embassy_sync::rwlock::RwLock;
-use host_protocol::Message;
+use host_protocol::{DeviceName, Message};
 // time driver
 use panic_probe as _;
 
@@ -68,7 +68,7 @@ static BT_ENABLE: Signal<ThreadModeRawMutex, bool> = Signal::new();
 static BT_ADV_CHAN: AtomicU8 = AtomicU8::new(0);
 static BT_DATA_RX: Channel<ThreadModeRawMutex, Message, BT_MAX_NUM_PKT> = Channel::new();
 static TX_PWR_VALUE: AtomicI8 = AtomicI8::new(0i8);
-static DEVICE_NAME: Mutex<ThreadModeRawMutex, ([u8; MAX_DEVICE_NAME_LEN], usize)> = Mutex::new(([0; MAX_DEVICE_NAME_LEN], 0));
+static DEVICE_NAME: Mutex<ThreadModeRawMutex, DeviceName> = Mutex::new(DeviceName::new());
 // Signal to show that advertisement needs to be restarted
 static BT_ADV_CHANGED: Signal<ThreadModeRawMutex, ()> = Signal::new();
 
@@ -112,8 +112,7 @@ async fn main(spawner: Spawner) {
     // Setup device name
     {
         let mut locked_name = DEVICE_NAME.lock().await;
-        locked_name.0[..DEFAULT_DEVICE_NAME.len()].copy_from_slice(DEFAULT_DEVICE_NAME);
-        locked_name.1 = DEFAULT_DEVICE_NAME.len()
+        *locked_name = DEFAULT_DEVICE_NAME.try_into().unwrap_or_default();
     }
 
     // set priority to avoid collisions with softdevice

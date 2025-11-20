@@ -9,12 +9,15 @@
 
 use bitflags::bitflags;
 use consts::APP_MTU;
-use heapless::Vec;
+use heapless::{String, Vec};
 use serde::{Deserialize, Serialize};
 
 /// Maximum supported message size to be serialized or deserialized by `postcard`.
 /// Messages larger than this will be rejected.
 pub const MAX_MSG_SIZE: usize = 270;
+
+/// The maximum lenght of the full device name
+pub const MAX_DEVICE_NAME_LEN: usize = 31;
 
 bitflags! {
     #[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq)]
@@ -26,6 +29,7 @@ bitflags! {
 }
 
 pub type Message = Vec<u8, APP_MTU>;
+pub type DeviceName = String<MAX_DEVICE_NAME_LEN>;
 
 #[derive(Serialize, Deserialize, Clone, Copy, Debug, Eq, PartialEq)]
 pub enum TxPower {
@@ -118,8 +122,8 @@ pub enum Bluetooth<'a> {
     /// Acknowledge disconnect operation
     AckDisconnect,
 
-    /// Set GAP device name. If bigger than the allowed length, it will be truncated.
-    SetDeviceName { name: &'a str },
+    /// Set GAP device name.
+    SetDeviceName { name: DeviceName },
     /// Acknowledge the set device name
     AckSetDeviceName,
 }
@@ -573,7 +577,7 @@ mod tests {
                 (HostProtocolMessage::Bluetooth(Bluetooth::AckDisconnect), &[0, 23]),
                 (
                     HostProtocolMessage::Bluetooth(Bluetooth::SetDeviceName {
-                        name: "Passport Prime (12AB)",
+                        name: "Passport Prime (12AB)".try_into().unwrap(),
                     }),
                     &[
                         0, 24, 21, 80, 97, 115, 115, 112, 111, 114, 116, 32, 80, 114, 105, 109, 101, 32, 40, 49, 50, 65, 66, 41,
