@@ -117,6 +117,11 @@ pub enum Bluetooth<'a> {
     Disconnect,
     /// Acknowledge disconnect operation
     AckDisconnect,
+
+    /// Set GAP device name. If bigger than the allowed length, it will be truncated.
+    SetDeviceName { name: &'a str },
+    /// Acknowledge the set device name
+    AckSetDeviceName,
 }
 
 impl Bluetooth<'_> {
@@ -146,6 +151,8 @@ impl Bluetooth<'_> {
             Self::AckDeviceId { .. } => false,
             Self::Disconnect => true,
             Self::AckDisconnect => false,
+            Self::SetDeviceName { .. } => true,
+            Self::AckSetDeviceName => false,
         }
     }
 }
@@ -564,6 +571,15 @@ mod tests {
                 ),
                 (HostProtocolMessage::Bluetooth(Bluetooth::Disconnect), &[0, 22]),
                 (HostProtocolMessage::Bluetooth(Bluetooth::AckDisconnect), &[0, 23]),
+                (
+                    HostProtocolMessage::Bluetooth(Bluetooth::SetDeviceName {
+                        name: "Passport Prime (12AB)",
+                    }),
+                    &[
+                        0, 24, 21, 80, 97, 115, 115, 112, 111, 114, 116, 32, 80, 114, 105, 109, 101, 32, 40, 49, 50, 65, 66, 41,
+                    ],
+                ),
+                (HostProtocolMessage::Bluetooth(Bluetooth::AckSetDeviceName), &[0, 25]),
             ],
         );
     }

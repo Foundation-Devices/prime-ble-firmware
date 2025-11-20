@@ -1,14 +1,14 @@
 // SPDX-FileCopyrightText: 2024 Foundation Devices, Inc. <hello@foundation.xyz>
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-use crate::{nus::*, CONNECTION};
-use crate::{BT_ADV_CHAN, BT_STATE, TX_PWR_VALUE};
-use consts::{ATT_MTU, DEVICE_NAME, SERVICES_LIST, SHORT_NAME};
-use core::mem;
+use core::pin::pin;
+
+use crate::{nus::*, BT_ADV_CHAN, BT_ADV_CHANGED, BT_ENABLE, CONNECTION, DEVICE_NAME, TX_PWR_VALUE};
+use consts::{ATT_MTU, MAX_DEVICE_NAME_LEN, SERVICES_LIST, SHORT_NAME};
 use defmt::{debug, error, info, unwrap};
-use embassy_time::Timer;
-use futures::pin_mut;
-use nrf_softdevice::ble::advertisement_builder::{ExtendedAdvertisementBuilder, ExtendedAdvertisementPayload, Flag, ServiceList};
+use nrf_softdevice::ble::advertisement_builder::{
+    AdvertisementBuilder, Flag, LegacyAdvertisementBuilder, LegacyAdvertisementPayload, ServiceList,
+};
 use nrf_softdevice::ble::gatt_server::{notify_value, NotifyValueError};
 use nrf_softdevice::ble::peripheral;
 use nrf_softdevice::ble::{gatt_server, Connection, TxPower};
@@ -26,6 +26,11 @@ macro_rules! ci_ms {
     }};
 }
 
+static DEVICE_NAME_SEC_MODE: raw::ble_gap_conn_sec_mode_t = raw::ble_gap_conn_sec_mode_t {
+    // Security Mode 0 Level 0: No write access
+    _bitfield_1: raw::__BindgenBitfieldUnit::new([0x00]),
+};
+
 #[gatt_server]
 pub struct Server {
     nus: Nus,
@@ -37,7 +42,9 @@ impl Server {
     }
 }
 
-pub fn initialize_sd() -> &'static mut Softdevice {
+#[allow(static_mut_refs)]
+pub async fn initialize_sd() -> &'static mut Softdevice {
+    static mut DEVICE_NAME_STORAGE: [u8; MAX_DEVICE_NAME_LEN] = [0; MAX_DEVICE_NAME_LEN];
     let config = nrf_softdevice::Config {
         clock: Some(raw::nrf_clock_lf_cfg_t {
             source: raw::NRF_CLOCK_LF_SRC_XTAL as u8,
@@ -57,12 +64,14 @@ pub fn initialize_sd() -> &'static mut Softdevice {
             adv_set_count: 1,
             periph_role_count: 1,
         }),
-        gap_device_name: Some(raw::ble_gap_cfg_device_name_t {
-            p_value: DEVICE_NAME.as_ptr() as _,
-            current_len: DEVICE_NAME.len() as u16,
-            max_len: DEVICE_NAME.len() as u16,
-            write_perm: unsafe { mem::zeroed() },
-            _bitfield_1: raw::ble_gap_cfg_device_name_t::new_bitfield_1(raw::BLE_GATTS_VLOC_USER as u8),
+        gap_device_name: Some(unsafe {
+            raw::ble_gap_cfg_device_name_t {
+                p_value: DEVICE_NAME_STORAGE.as_ptr() as _,
+                current_len: 0,
+                max_len: MAX_DEVICE_NAME_LEN as u16,
+                write_perm: DEVICE_NAME_SEC_MODE,
+                _bitfield_1: raw::ble_gap_cfg_device_name_t::new_bitfield_1(raw::BLE_GATTS_VLOC_USER as u8),
+            }
         }),
         conn_gatts: Some(raw::ble_gatts_conn_cfg_t { hvn_tx_queue_size: 3 }),
 
@@ -72,21 +81,28 @@ pub fn initialize_sd() -> &'static mut Softdevice {
     Softdevice::enable(&config)
 }
 
-async fn run_bluetooth_inner(sd: &'static Softdevice, server: &Server) {
-    static ADV_DATA: ExtendedAdvertisementPayload = ExtendedAdvertisementBuilder::new()
+async fn run_bluetooth_inner(sd: &'static Softdevice, server: &Server) -> ! {
+    static ADV_DATA: LegacyAdvertisementPayload = LegacyAdvertisementBuilder::new()
         .flags(&[Flag::GeneralDiscovery, Flag::LE_Only])
         .services_128(ServiceList::Complete, &SERVICES_LIST)
         .short_name(SHORT_NAME)
         .build();
 
-    static SCAN_DATA: ExtendedAdvertisementPayload = ExtendedAdvertisementBuilder::new().full_name(DEVICE_NAME).build();
-
-    let adv = peripheral::ConnectableAdvertisement::ScannableUndirected {
-        adv_data: &ADV_DATA,
-        scan_data: &SCAN_DATA,
-    };
-
     loop {
+        BT_ADV_CHANGED.reset();
+        const MAX_ADVERTISEMENT_LEN: usize = MAX_DEVICE_NAME_LEN + 2;
+        let scan_data = {
+            let device_name = DEVICE_NAME.lock().await;
+            unsafe { raw::sd_ble_gap_device_name_set(&DEVICE_NAME_SEC_MODE, device_name.0.as_ptr(), device_name.1 as u16) };
+            AdvertisementBuilder::<MAX_ADVERTISEMENT_LEN>::new()
+                .full_name(str::from_utf8(&device_name.0[..device_name.1]).unwrap_or(SHORT_NAME))
+                .build()
+        };
+
+        let adv = peripheral::ConnectableAdvertisement::ScannableUndirected {
+            adv_data: &ADV_DATA,
+            scan_data: &scan_data,
+        };
         // Set advertising timer in units of 625us (about 50ms with 75 units)
         let config = peripheral::Config {
             interval: 75,
@@ -105,8 +121,17 @@ async fn run_bluetooth_inner(sd: &'static Softdevice, server: &Server) {
             ..Default::default()
         };
 
+        let advertise_fut = peripheral::advertise_connectable(sd, adv, &config);
+        let adv_changed_fut = BT_ADV_CHANGED.wait();
         // Start advertising
-        let mut conn = unwrap!(peripheral::advertise_connectable(sd, adv, &config).await, "Advertise failed");
+        let mut conn = match futures::future::select(pin!(advertise_fut), adv_changed_fut).await {
+            futures::future::Either::Left((conn, _)) => unwrap!(conn, "Advertise failed"),
+            futures::future::Either::Right(((), _)) => {
+                info!("Advertisement data changed, restarting");
+                continue;
+            }
+        };
+
         info!("advertising done!");
 
         let gap_conn_param = ble_gap_conn_params_t {

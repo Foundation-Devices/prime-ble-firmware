@@ -21,7 +21,10 @@ pub const ATT_MTU: usize = APP_MTU + 3;
 /// Full device name advertised over BLE.
 /// This is the complete name that will appear when scanning for the device.
 /// Used in scan response data since it's longer than the short name.
-pub const DEVICE_NAME: &str = "Passport Prime";
+pub const DEFAULT_DEVICE_NAME: &[u8] = b"Passport Prime";
+
+/// The maximum lenght of the full device name
+pub const MAX_DEVICE_NAME_LEN: usize = 31;
 
 /// Short device name used in limited advertising data.
 /// A shorter version of the device name used in the initial advertising packet

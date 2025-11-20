@@ -68,6 +68,9 @@ static BT_ENABLE: Signal<ThreadModeRawMutex, bool> = Signal::new();
 static BT_ADV_CHAN: AtomicU8 = AtomicU8::new(0);
 static BT_DATA_RX: Channel<ThreadModeRawMutex, Message, BT_MAX_NUM_PKT> = Channel::new();
 static TX_PWR_VALUE: AtomicI8 = AtomicI8::new(0i8);
+static DEVICE_NAME: Mutex<ThreadModeRawMutex, ([u8; MAX_DEVICE_NAME_LEN], usize)> = Mutex::new(([0; MAX_DEVICE_NAME_LEN], 0));
+// Signal to show that advertisement needs to be restarted
+static BT_ADV_CHANGED: Signal<ThreadModeRawMutex, ()> = Signal::new();
 
 static CONNECTION: RwLock<ThreadModeRawMutex, Option<Connection>> = RwLock::new(None);
 
@@ -106,13 +109,17 @@ async fn main(spawner: Spawner) {
         .await
         .replace(Output::new(p.P0_20, Level::High, OutputDrive::Standard));
 
+    // Setup device name
     {
+        let mut locked_name = DEVICE_NAME.lock().await;
+        locked_name.0[..DEFAULT_DEVICE_NAME.len()].copy_from_slice(DEFAULT_DEVICE_NAME);
+        locked_name.1 = DEFAULT_DEVICE_NAME.len()
     }
 
     // set priority to avoid collisions with softdevice
     interrupt::SPIM0_SPIS0_SPI0.set_priority(interrupt::Priority::P3);
 
-    let sd = initialize_sd();
+    let sd = initialize_sd().await;
 
     let server = unwrap!(Server::new(sd), "Creating the softdevice failed");
     unwrap!(spawner.spawn(softdevice_task(sd)), "Spawning the softdevice failed");

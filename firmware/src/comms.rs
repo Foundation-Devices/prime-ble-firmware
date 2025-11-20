@@ -4,7 +4,7 @@
 use core::sync::atomic::AtomicBool;
 
 use crate::{server::Server, BT_ADV_CHAN, BT_ADV_CHANGED, BT_DATA_RX, BT_ENABLE, CONNECTION, DEVICE_NAME, IRQ_OUT_PIN, TX_PWR_VALUE};
-use consts::{UICR_SECRET_SIZE, UICR_SECRET_START};
+use consts::{MAX_DEVICE_NAME_LEN, UICR_SECRET_SIZE, UICR_SECRET_START};
 use defmt::{debug, error, trace};
 use embassy_nrf::{peripherals::SPI0, spis::Spis};
 use hmac::{Hmac, Mac};
@@ -68,6 +68,7 @@ async fn host_protocol_handler<'a>(req: HostProtocolMessage<'a>, context: &Comms
                         HostProtocolMessage::Bluetooth(Bluetooth::NackDisableChannels)
                     } else {
                         BT_ADV_CHAN.store(chan.bits(), core::sync::atomic::Ordering::Relaxed);
+                        BT_ADV_CHANGED.signal(());
                         HostProtocolMessage::Bluetooth(Bluetooth::AckDisableChannels)
                     }
                 }
@@ -127,6 +128,7 @@ async fn host_protocol_handler<'a>(req: HostProtocolMessage<'a>, context: &Comms
                 Bluetooth::SetTxPower { power } => {
                     trace!("SetTxPower");
                     TX_PWR_VALUE.store(i8::from(power), core::sync::atomic::Ordering::Relaxed);
+                    BT_ADV_CHANGED.signal(());
                     HostProtocolMessage::Bluetooth(Bluetooth::AckTxPower)
                 }
                 Bluetooth::GetDeviceId => HostProtocolMessage::Bluetooth(Bluetooth::AckDeviceId {
@@ -139,6 +141,15 @@ async fn host_protocol_handler<'a>(req: HostProtocolMessage<'a>, context: &Comms
                         let _ = connection.disconnect();
                     }
                     HostProtocolMessage::Bluetooth(Bluetooth::AckDisconnect)
+                }
+                Bluetooth::SetDeviceName { name } => {
+                    trace!("SetDeviceName");
+                    let mut device_name = DEVICE_NAME.lock().await;
+                    let len = name.len().min(MAX_DEVICE_NAME_LEN);
+                    device_name.0[..len].copy_from_slice(&name.as_bytes()[..len]);
+                    device_name.1 = len;
+                    BT_ADV_CHANGED.signal(());
+                    HostProtocolMessage::Bluetooth(Bluetooth::AckSetDeviceName)
                 }
                 _ => {
                     trace!("Other");
