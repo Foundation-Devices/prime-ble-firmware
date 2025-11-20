@@ -1,7 +1,9 @@
 // SPDX-FileCopyrightText: 2024 Foundation Devices, Inc. <hello@foundation.xyz>
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-use crate::{server::Server, BT_ADV_CHAN, BT_DATA_RX, BT_STATE, CONNECTION, IRQ_OUT_PIN, TX_PWR_VALUE};
+use core::sync::atomic::AtomicBool;
+
+use crate::{server::Server, BT_ADV_CHAN, BT_ADV_CHANGED, BT_DATA_RX, BT_ENABLE, CONNECTION, DEVICE_NAME, IRQ_OUT_PIN, TX_PWR_VALUE};
 use consts::{UICR_SECRET_SIZE, UICR_SECRET_START};
 use defmt::{debug, error, trace};
 use embassy_nrf::{peripherals::SPI0, spis::Spis};
@@ -9,6 +11,10 @@ use hmac::{Hmac, Mac};
 use host_protocol::{AdvChan, Bluetooth, HostProtocolMessage, PostcardError, SendDataResponse, State, MAX_MSG_SIZE};
 use postcard::{from_bytes, to_slice};
 use sha2::Sha256 as ShaChallenge;
+
+// This is redundant with BT_ENABLE, only used to report
+// the current state over the host-protocol.
+static BT_STATE_COPY: AtomicBool = AtomicBool::new(false);
 
 pub struct CommsContext<'a> {
     pub address: [u8; 6],
@@ -62,12 +68,14 @@ async fn host_protocol_handler<'a>(req: HostProtocolMessage<'a>, context: &Comms
                         HostProtocolMessage::Bluetooth(Bluetooth::NackDisableChannels)
                     } else {
                         BT_ADV_CHAN.store(chan.bits(), core::sync::atomic::Ordering::Relaxed);
+                        BT_ADV_CHANGED.signal(());
                         HostProtocolMessage::Bluetooth(Bluetooth::AckDisableChannels)
                     }
                 }
                 Bluetooth::Enable => {
                     trace!("Enabled");
-                    BT_STATE.store(true, core::sync::atomic::Ordering::Relaxed);
+                    BT_ENABLE.signal(true);
+                    BT_STATE_COPY.store(true, core::sync::atomic::Ordering::Relaxed);
                     HostProtocolMessage::Bluetooth(Bluetooth::AckEnable)
                 }
                 Bluetooth::Disable => {
@@ -76,7 +84,8 @@ async fn host_protocol_handler<'a>(req: HostProtocolMessage<'a>, context: &Comms
                     if let Some(connection) = CONNECTION.read().await.as_ref() {
                         let _ = connection.disconnect();
                     }
-                    BT_STATE.store(false, core::sync::atomic::Ordering::Relaxed);
+                    BT_ENABLE.signal(false);
+                    BT_STATE_COPY.store(false, core::sync::atomic::Ordering::Relaxed);
                     HostProtocolMessage::Bluetooth(Bluetooth::AckDisable)
                 }
                 Bluetooth::GetSignalStrength => {
@@ -96,7 +105,7 @@ async fn host_protocol_handler<'a>(req: HostProtocolMessage<'a>, context: &Comms
                     }
                     Err(_) => {
                         trace!("GetReceivedData None");
-                        IRQ_OUT_PIN.lock().await.borrow_mut().as_mut().map(|pin| pin.set_high());
+                        IRQ_OUT_PIN.lock().await.as_mut().map(|pin| pin.set_high());
                         Bluetooth::NoReceivedData
                     }
                 }),
@@ -119,6 +128,7 @@ async fn host_protocol_handler<'a>(req: HostProtocolMessage<'a>, context: &Comms
                 Bluetooth::SetTxPower { power } => {
                     trace!("SetTxPower");
                     TX_PWR_VALUE.store(i8::from(power), core::sync::atomic::Ordering::Relaxed);
+                    BT_ADV_CHANGED.signal(());
                     HostProtocolMessage::Bluetooth(Bluetooth::AckTxPower)
                 }
                 Bluetooth::GetDeviceId => HostProtocolMessage::Bluetooth(Bluetooth::AckDeviceId {
@@ -131,6 +141,12 @@ async fn host_protocol_handler<'a>(req: HostProtocolMessage<'a>, context: &Comms
                         let _ = connection.disconnect();
                     }
                     HostProtocolMessage::Bluetooth(Bluetooth::AckDisconnect)
+                }
+                Bluetooth::SetDeviceName { name } => {
+                    trace!("SetDeviceName");
+                    *DEVICE_NAME.lock().await = name;
+                    BT_ADV_CHANGED.signal(());
+                    HostProtocolMessage::Bluetooth(Bluetooth::AckSetDeviceName)
                 }
                 _ => {
                     trace!("Other");
@@ -158,7 +174,7 @@ async fn host_protocol_handler<'a>(req: HostProtocolMessage<'a>, context: &Comms
 }
 
 fn get_state() -> State {
-    match BT_STATE.load(core::sync::atomic::Ordering::Relaxed) {
+    match BT_STATE_COPY.load(core::sync::atomic::Ordering::Relaxed) {
         true => State::Enabled,
         false => State::Disabled,
     }

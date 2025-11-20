@@ -30,8 +30,8 @@ impl Nus {
                     error!("Error BT_DATA_RX");
                 }
                 // Notify MCU that we got something
-                if let Ok(lock) = IRQ_OUT_PIN.try_lock() {
-                    lock.borrow_mut().as_mut().map(|pin| pin.set_low());
+                if let Ok(mut lock) = IRQ_OUT_PIN.try_lock() {
+                    lock.as_mut().map(|pin| pin.set_low());
                 }
             }
         }

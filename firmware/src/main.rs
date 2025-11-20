@@ -8,15 +8,16 @@ mod comms;
 mod nus;
 mod server;
 
-use core::cell::RefCell;
+use consts::DEFAULT_DEVICE_NAME;
 use core::pin::pin;
-use core::sync::atomic::{AtomicBool, AtomicI8, AtomicU8};
+use core::sync::atomic::{AtomicI8, AtomicU8};
 #[cfg(feature = "debug")]
 use defmt_rtt as _;
+use embassy_sync::signal::Signal;
 // global logger
 use embassy_nrf as _;
 use embassy_sync::rwlock::RwLock;
-use host_protocol::Message;
+use host_protocol::{DeviceName, Message};
 // time driver
 use panic_probe as _;
 
@@ -63,15 +64,18 @@ mod dummy_logging {
 pub const BT_MAX_NUM_PKT: usize = 16;
 
 // Signal for BT state
-static BT_STATE: AtomicBool = AtomicBool::new(false);
+static BT_ENABLE: Signal<ThreadModeRawMutex, bool> = Signal::new();
 static BT_ADV_CHAN: AtomicU8 = AtomicU8::new(0);
 static BT_DATA_RX: Channel<ThreadModeRawMutex, Message, BT_MAX_NUM_PKT> = Channel::new();
 static TX_PWR_VALUE: AtomicI8 = AtomicI8::new(0i8);
+static DEVICE_NAME: Mutex<ThreadModeRawMutex, DeviceName> = Mutex::new(DeviceName::new());
+// Signal to show that advertisement needs to be restarted
+static BT_ADV_CHANGED: Signal<ThreadModeRawMutex, ()> = Signal::new();
 
 static CONNECTION: RwLock<ThreadModeRawMutex, Option<Connection>> = RwLock::new(None);
 
 /// nRF -> MPU IRQ output pin
-static IRQ_OUT_PIN: Mutex<ThreadModeRawMutex, RefCell<Option<Output>>> = Mutex::new(RefCell::new(None));
+static IRQ_OUT_PIN: Mutex<ThreadModeRawMutex, Option<Output>> = Mutex::new(None);
 
 #[embassy_executor::task]
 async fn softdevice_task(sd: &'static Softdevice) -> ! {
@@ -100,18 +104,21 @@ async fn main(spawner: Spawner) {
     };
 
     // Configure the OUT IRQ pin
+    IRQ_OUT_PIN
+        .lock()
+        .await
+        .replace(Output::new(p.P0_20, Level::High, OutputDrive::Standard));
+
+    // Setup device name
     {
-        IRQ_OUT_PIN
-            .lock()
-            .await
-            .borrow_mut()
-            .replace(Output::new(p.P0_20, Level::High, OutputDrive::Standard));
+        let mut locked_name = DEVICE_NAME.lock().await;
+        *locked_name = DEFAULT_DEVICE_NAME.try_into().unwrap_or_default();
     }
 
     // set priority to avoid collisions with softdevice
     interrupt::SPIM0_SPIS0_SPI0.set_priority(interrupt::Priority::P3);
 
-    let sd = initialize_sd();
+    let sd = initialize_sd().await;
 
     let server = unwrap!(Server::new(sd), "Creating the softdevice failed");
     unwrap!(spawner.spawn(softdevice_task(sd)), "Spawning the softdevice failed");
