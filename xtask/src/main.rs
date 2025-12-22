@@ -398,7 +398,15 @@ fn sign_bt_firmware(config_path: &str, developer: bool) {
     if developer {
         args.push("--developer");
     }
-    args.extend(["--header-size", header_size.as_str(), "--binary-version", &version, "-o"]);
+    args.extend([
+        "--header-size",
+        header_size.as_str(),
+        "--target",
+        "nrf52-ble",
+        "--binary-version",
+        &version,
+        "-o",
+    ]);
     if signed_once || developer {
         args.push("./BtPackage/BT_application_signed.bin");
     } else {
