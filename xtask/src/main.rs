@@ -4,7 +4,7 @@
 use cargo_metadata::MetadataCommand;
 use clap::{Parser, Subcommand};
 use consts::{BASE_APP_ADDR, BASE_BOOTLOADER_ADDR, SIGNATURE_HEADER_SIZE};
-use std::io::{Read, Write};
+use std::io::{self, Read, Write};
 use std::path::{Path, PathBuf};
 use std::process::{exit, Command, Stdio};
 use std::{env, fs};
@@ -668,6 +668,79 @@ fn print_bootloader_binary_size(binary_path: &Path, description: &str) {
     }
 }
 
+fn check_toolchain_path() {
+    tracing::info!("Checking toolchain path for reproducible build");
+
+    // Get current architecture
+    let current_arch = env::consts::ARCH;
+
+    // Check if we're on amd64
+    if current_arch != "x86_64" {
+        tracing::warn!(
+            "Current architecture is {}: not the official reproducible build target",
+            current_arch
+        );
+        println!("⚠️  WARNING: This build is not the official reproducible build!");
+        println!("   Current architecture: {}", current_arch);
+        println!("   Expected architecture: x86_64");
+        println!("   Builds on other architectures are not reproducible even with nix");
+
+        print!("Do you want to continue? (y/N): ");
+        io::stdout().flush().unwrap();
+
+        let mut input = String::new();
+        io::stdin().read_line(&mut input).unwrap();
+
+        let input = input.trim().to_lowercase();
+        if input != "y" && input != "yes" {
+            tracing::info!("Build cancelled by user");
+            exit(0);
+        }
+    } else {
+        tracing::info!("Architecture check passed: {}", current_arch);
+    }
+
+    // Get the current rustc path
+    let current_rustc = match Command::new("which").arg("rustc").output() {
+        Ok(output) => {
+            if output.status.success() {
+                String::from_utf8_lossy(&output.stdout).trim().to_string()
+            } else {
+                tracing::error!("Could not find rustc path");
+                exit(-1);
+            }
+        }
+        Err(e) => {
+            tracing::error!("Failed to run which command: {}", e);
+            exit(-1);
+        }
+    };
+
+    // Check if we're in a nix environment by looking for nix store paths
+    let is_nix_toolchain = current_rustc.contains("/nix/store/");
+
+    if !is_nix_toolchain {
+        tracing::warn!("Current toolchain is not from nix store: {}", current_rustc);
+        println!("⚠️  WARNING: This build is not the official reproducible build!");
+        println!("   Current toolchain: {}", current_rustc);
+        println!("   Expected toolchain should be from nix store for reproducible builds");
+
+        print!("Do you want to continue? (y/N): ");
+        io::stdout().flush().unwrap();
+
+        let mut input = String::new();
+        io::stdin().read_line(&mut input).unwrap();
+
+        let input = input.trim().to_lowercase();
+        if input != "y" && input != "yes" {
+            tracing::info!("Build cancelled by user");
+            exit(0);
+        }
+    } else {
+        tracing::info!("Toolchain path check passed: {}", current_rustc);
+    }
+}
+
 fn main() {
     // Adding some info tracing just for logging activity
     env::set_var("RUST_LOG", "info");
@@ -694,6 +767,7 @@ fn main() {
             build_bt_minimal_package();
         }
         Commands::BuildUnsigned => {
+            check_toolchain_path();
             build_tools_check(args.verbose);
             build_bt_bootloader(args.verbose);
             build_bt_firmware(args.verbose);
