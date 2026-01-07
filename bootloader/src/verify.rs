@@ -147,7 +147,7 @@ fn verify_image(image: &[u8], trust: TrustLevel) -> (VerificationResult, [u8; 32
     random_delay();
     // Parse and verify firmware signatures with multiple integrity checks
     let Ok(Some(header)) = Header::parse(image, &KNOWN_SIGNERS, &Sha256, &ecc, SIGNATURE_HEADER_SIZE as usize) else {
-        return (VerificationResult::Valid, [0; 32]);
+        return (VerificationResult::Invalid, [0; 32]);
     };
     if header.trust() == Trust::FullyTrusted || trust == TrustLevel::Developer {
         (VerificationResult::Valid, *header.binary_hash())
