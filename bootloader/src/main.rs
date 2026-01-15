@@ -211,15 +211,6 @@ async fn main(_spawner: Spawner) {
 
     let p = embassy_nrf::init(Default::default());
 
-    // Send a wake-up sequence to the MPU (SFT-5196 workaround)
-    let tx = unsafe { p.P0_16.clone_unchecked() };
-    let mut config_uart = uarte::Config::default();
-    config_uart.parity = uarte::Parity::EXCLUDED;
-    config_uart.baudrate = uarte::Baudrate::BAUD2400;
-
-    let mut uart = uarte::UarteTx::new(p.UARTE0, Irqs, tx, config_uart);
-    uart.write(&[0xAA]).await.unwrap();
-
     let mut spi = {
         // Configure SPI
         let mut config_spi = spis::Config::default();
