@@ -81,9 +81,9 @@ pub enum Bluetooth<'a> {
     AckDisable,
 
     /// Request current signal strength
-    GetSignalStrength,
+    GetStatus,
     /// Response with signal strength value
-    SignalStrength(Option<i8>),
+    Status(BluetoothStatus),
 
     /// Send raw data over BLE connection
     SendData(Message),
@@ -144,8 +144,8 @@ impl Bluetooth<'_> {
             Self::AckEnable => false,
             Self::Disable => true,
             Self::AckDisable => false,
-            Self::GetSignalStrength => true,
-            Self::SignalStrength(_) => false,
+            Self::GetStatus => true,
+            Self::Status(_) => false,
             Self::SendData(_) => true,
             Self::SendDataResponse(_) => false,
             Self::GetReceivedData => true,
@@ -290,6 +290,20 @@ pub enum SendDataResponse {
 
     /// Data was not sent due to buffer being full
     BufferFull,
+}
+
+/// Bluetooth stack status variables
+#[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq)]
+pub struct BluetoothStatus {
+    pub connection: ConnectionStatus,
+    pub queue_overflow: bool,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq)]
+pub enum ConnectionStatus {
+    Disabled,
+    WaitingForConnection,
+    Connected { rssi: i8 },
 }
 
 /// Top-level message types for host-target communication

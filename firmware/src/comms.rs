@@ -3,12 +3,15 @@
 
 use core::sync::atomic::AtomicBool;
 
-use crate::{server::Server, BT_ADV_CHAN, BT_ADV_CHANGED, BT_DATA_RX, BT_ENABLE, CONNECTION, DEVICE_NAME, IRQ_OUT_PIN, TX_PWR_VALUE};
+use crate::{
+    server::Server, BT_ADV_CHAN, BT_ADV_CHANGED, BT_DATA_RX, BT_DATA_RX_OVERFLOW, BT_ENABLE, CONNECTION, DEVICE_NAME, IRQ_OUT_PIN,
+    TX_PWR_VALUE,
+};
 use consts::{UICR_SECRET_SIZE, UICR_SECRET_START};
 use defmt::{debug, error, trace};
 use embassy_nrf::{peripherals::SPI0, spis::Spis};
 use hmac::{Hmac, Mac};
-use host_protocol::{AdvChan, Bluetooth, HostProtocolMessage, PostcardError, SendDataResponse, State, MAX_MSG_SIZE};
+use host_protocol::{AdvChan, Bluetooth, BluetoothStatus, HostProtocolMessage, PostcardError, SendDataResponse, State, MAX_MSG_SIZE};
 use postcard::{from_bytes, to_slice};
 use sha2::Sha256 as ShaChallenge;
 
@@ -88,10 +91,29 @@ async fn host_protocol_handler<'a>(req: HostProtocolMessage<'a>, context: &Comms
                     BT_STATE_COPY.store(false, core::sync::atomic::Ordering::Relaxed);
                     HostProtocolMessage::Bluetooth(Bluetooth::AckDisable)
                 }
-                Bluetooth::GetSignalStrength => {
-                    trace!("GetSignalStrength");
+                Bluetooth::GetStatus => {
+                    trace!("GetStatus");
                     let conn_lock = CONNECTION.read().await;
-                    HostProtocolMessage::Bluetooth(Bluetooth::SignalStrength(conn_lock.as_ref().and_then(|c| c.rssi())))
+                    let queue_overflow = BT_DATA_RX_OVERFLOW.swap(false, core::sync::atomic::Ordering::Relaxed);
+                    let result = if let Some(conn) = &*conn_lock {
+                        BluetoothStatus {
+                            connection: host_protocol::ConnectionStatus::Connected {
+                                rssi: conn.rssi().unwrap_or(i8::MIN),
+                            },
+                            queue_overflow,
+                        }
+                    } else if BT_STATE_COPY.load(core::sync::atomic::Ordering::Relaxed) {
+                        BluetoothStatus {
+                            connection: host_protocol::ConnectionStatus::WaitingForConnection,
+                            queue_overflow,
+                        }
+                    } else {
+                        BluetoothStatus {
+                            connection: host_protocol::ConnectionStatus::Disabled,
+                            queue_overflow,
+                        }
+                    };
+                    HostProtocolMessage::Bluetooth(Bluetooth::Status(result))
                 }
                 Bluetooth::GetFirmwareVersion => {
                     trace!("GetFirmwareVersion");
