@@ -148,6 +148,7 @@ async fn host_protocol_handler<'a>(req: HostProtocolMessage<'a>, context: &Comms
                     BT_ADV_CHANGED.signal(());
                     HostProtocolMessage::Bluetooth(Bluetooth::AckSetDeviceName)
                 }
+                Bluetooth::Echo(msg) => HostProtocolMessage::Bluetooth(Bluetooth::EchoResponse(msg)),
                 _ => {
                     trace!("Other");
                     HostProtocolMessage::InappropriateMessage(get_state())

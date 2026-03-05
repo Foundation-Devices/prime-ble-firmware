@@ -126,6 +126,12 @@ pub enum Bluetooth<'a> {
     SetDeviceName { name: DeviceName },
     /// Acknowledge the set device name
     AckSetDeviceName,
+
+    /// Echo back a message over SPI (from host)
+    Echo(Message),
+
+    /// Echo back a message over SPI (from BLE)
+    EchoResponse(Message),
 }
 
 impl Bluetooth<'_> {
@@ -157,6 +163,8 @@ impl Bluetooth<'_> {
             Self::AckDisconnect => false,
             Self::SetDeviceName { .. } => true,
             Self::AckSetDeviceName => false,
+            Self::Echo(_) => true,
+            Self::EchoResponse(_) => false,
         }
     }
 }
