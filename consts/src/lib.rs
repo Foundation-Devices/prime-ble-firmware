@@ -26,7 +26,7 @@ pub const DEFAULT_DEVICE_NAME: &str = "Passport Prime";
 /// Short device name used in limited advertising data.
 /// A shorter version of the device name used in the initial advertising packet
 /// to stay within the 31-byte advertising data size limit.
-pub const SHORT_NAME: &str = "Prime";
+pub const SHORT_NAME: &str = "Passport";
 
 /// UUID for the Nordic UART Service (NUS).
 pub const NUS_UUID: u128 = 0x6E400001_B5A3_F393_E0A9_E50E24DCCA9E;
