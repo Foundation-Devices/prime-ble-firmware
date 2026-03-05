@@ -81,9 +81,9 @@ pub enum Bluetooth<'a> {
     AckDisable,
 
     /// Request current signal strength
-    GetSignalStrength,
+    GetStatus,
     /// Response with signal strength value
-    SignalStrength(Option<i8>),
+    Status(BluetoothStatus),
 
     /// Send raw data over BLE connection
     SendData(Message),
@@ -126,6 +126,12 @@ pub enum Bluetooth<'a> {
     SetDeviceName { name: DeviceName },
     /// Acknowledge the set device name
     AckSetDeviceName,
+
+    /// Echo back a message over SPI (from host)
+    Echo(Message),
+
+    /// Echo back a message over SPI (from BLE)
+    EchoResponse(Message),
 }
 
 impl Bluetooth<'_> {
@@ -138,8 +144,8 @@ impl Bluetooth<'_> {
             Self::AckEnable => false,
             Self::Disable => true,
             Self::AckDisable => false,
-            Self::GetSignalStrength => true,
-            Self::SignalStrength(_) => false,
+            Self::GetStatus => true,
+            Self::Status(_) => false,
             Self::SendData(_) => true,
             Self::SendDataResponse(_) => false,
             Self::GetReceivedData => true,
@@ -157,6 +163,8 @@ impl Bluetooth<'_> {
             Self::AckDisconnect => false,
             Self::SetDeviceName { .. } => true,
             Self::AckSetDeviceName => false,
+            Self::Echo(_) => true,
+            Self::EchoResponse(_) => false,
         }
     }
 }
@@ -282,6 +290,20 @@ pub enum SendDataResponse {
 
     /// Data was not sent due to buffer being full
     BufferFull,
+}
+
+/// Bluetooth stack status variables
+#[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq)]
+pub struct BluetoothStatus {
+    pub connection: ConnectionStatus,
+    pub queue_overflow: bool,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq)]
+pub enum ConnectionStatus {
+    Disabled,
+    WaitingForConnection,
+    Connected { rssi: i8 },
 }
 
 /// Top-level message types for host-target communication
@@ -508,10 +530,13 @@ mod tests {
                 (HostProtocolMessage::Bluetooth(Bluetooth::AckEnable), &[0, 4]),
                 (HostProtocolMessage::Bluetooth(Bluetooth::Disable), &[0, 5]),
                 (HostProtocolMessage::Bluetooth(Bluetooth::AckDisable), &[0, 6]),
-                (HostProtocolMessage::Bluetooth(Bluetooth::GetSignalStrength), &[0, 7]),
+                (HostProtocolMessage::Bluetooth(Bluetooth::GetStatus), &[0, 7]),
                 (
-                    HostProtocolMessage::Bluetooth(Bluetooth::SignalStrength(Some(i8::MAX))),
-                    &[0, 8, 1, 127],
+                    HostProtocolMessage::Bluetooth(Bluetooth::Status(BluetoothStatus {
+                        connection: ConnectionStatus::Connected { rssi: i8::MAX },
+                        queue_overflow: false,
+                    })),
+                    &[0, 8, 2, 127, 0],
                 ),
                 (
                     HostProtocolMessage::Bluetooth(Bluetooth::SendData(heapless::Vec::from_iter([0xFF; APP_MTU].into_iter()))),
