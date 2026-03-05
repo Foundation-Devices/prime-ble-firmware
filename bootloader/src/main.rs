@@ -38,7 +38,6 @@ use embassy_nrf::{
 use embassy_nrf::{
     peripherals::SPI0,
     spis::{self, Spis},
-    Peripheral,
 };
 use embassy_nrf::{
     peripherals::UARTE0,
