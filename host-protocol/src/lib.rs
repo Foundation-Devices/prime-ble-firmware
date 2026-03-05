@@ -530,10 +530,13 @@ mod tests {
                 (HostProtocolMessage::Bluetooth(Bluetooth::AckEnable), &[0, 4]),
                 (HostProtocolMessage::Bluetooth(Bluetooth::Disable), &[0, 5]),
                 (HostProtocolMessage::Bluetooth(Bluetooth::AckDisable), &[0, 6]),
-                (HostProtocolMessage::Bluetooth(Bluetooth::GetSignalStrength), &[0, 7]),
+                (HostProtocolMessage::Bluetooth(Bluetooth::GetStatus), &[0, 7]),
                 (
-                    HostProtocolMessage::Bluetooth(Bluetooth::SignalStrength(Some(i8::MAX))),
-                    &[0, 8, 1, 127],
+                    HostProtocolMessage::Bluetooth(Bluetooth::Status(BluetoothStatus {
+                        connection: ConnectionStatus::Connected { rssi: i8::MAX },
+                        queue_overflow: false,
+                    })),
+                    &[0, 8, 2, 127, 0],
                 ),
                 (
                     HostProtocolMessage::Bluetooth(Bluetooth::SendData(heapless::Vec::from_iter([0xFF; APP_MTU].into_iter()))),

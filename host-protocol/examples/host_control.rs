@@ -29,7 +29,7 @@ impl From<Command> for HostProtocolMessage<'_> {
             Command::Reset => HostProtocolMessage::Reset,
             Command::Enable => HostProtocolMessage::Bluetooth(Bluetooth::Enable),
             Command::Disable => HostProtocolMessage::Bluetooth(Bluetooth::Disable),
-            Command::Rssi => HostProtocolMessage::Bluetooth(Bluetooth::GetSignalStrength),
+            Command::Rssi => HostProtocolMessage::Bluetooth(Bluetooth::GetStatus),
             Command::Address => HostProtocolMessage::Bluetooth(Bluetooth::GetBtAddress),
             Command::FwVersion => HostProtocolMessage::Bluetooth(Bluetooth::GetFirmwareVersion),
             Command::SendData => HostProtocolMessage::Bluetooth(Bluetooth::SendData(heapless::Vec::from_iter([0x30; 200].into_iter()))),
@@ -92,8 +92,8 @@ async fn main() -> Result<(), Box<dyn Error>> {
             HostProtocolMessage::Bluetooth(Bluetooth::AckFirmwareVersion { version }) => {
                 println!("Firmware version: {version}");
             }
-            HostProtocolMessage::Bluetooth(Bluetooth::SignalStrength(rssi)) => {
-                println!("RSSI: {:?}", rssi);
+            HostProtocolMessage::Bluetooth(Bluetooth::Status(status)) => {
+                println!("Status: {:?}", status);
             }
             HostProtocolMessage::Bluetooth(Bluetooth::AckBtAddress { bt_address }) => {
                 println!("BT address: {:02x?}", bt_address);
