@@ -1,0 +1,13 @@
+{
+    "name": "Host Protocol",
+    "apiVersion": "1.0.0",
+    "author": "Foundation Devices",
+    "version": "1.0.0",
+    "description": "Decodes postcard-encoded host-protocol messages between MPU and BLE MCU (nRF52805)",
+    "extensions": {
+        "Host Protocol": {
+            "type": "HighLevelAnalyzer",
+            "entryPoint": "HighLevelAnalyzer.HostProtocolAnalyzer"
+        }
+    }
+}

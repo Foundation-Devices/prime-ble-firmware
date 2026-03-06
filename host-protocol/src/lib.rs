@@ -539,6 +539,27 @@ mod tests {
                     &[0, 8, 2, 127, 0],
                 ),
                 (
+                    HostProtocolMessage::Bluetooth(Bluetooth::Status(BluetoothStatus {
+                        connection: ConnectionStatus::Connected { rssi: -40 },
+                        queue_overflow: true,
+                    })),
+                    &[0, 8, 2, 216, 1],
+                ),
+                (
+                    HostProtocolMessage::Bluetooth(Bluetooth::Status(BluetoothStatus {
+                        connection: ConnectionStatus::Disabled,
+                        queue_overflow: false,
+                    })),
+                    &[0, 8, 0, 0],
+                ),
+                (
+                    HostProtocolMessage::Bluetooth(Bluetooth::Status(BluetoothStatus {
+                        connection: ConnectionStatus::WaitingForConnection,
+                        queue_overflow: false,
+                    })),
+                    &[0, 8, 1, 0],
+                ),
+                (
                     HostProtocolMessage::Bluetooth(Bluetooth::SendData(heapless::Vec::from_iter([0xFF; APP_MTU].into_iter()))),
                     &[
                         0, 9, 244, 1, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
