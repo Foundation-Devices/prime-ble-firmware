@@ -190,7 +190,6 @@ pub unsafe fn write_secret(secret: [u32; 8], seal: u32) -> bool {
     // Write each word of the secret
     for (i, secret) in secret.iter().enumerate() {
         uicr.customer[i].write(|w| unsafe { w.bits(*secret) });
-        info!("secret {} : {:02X}", i, secret);
     }
 
     while nvmc.ready.read().ready().is_busy() {}
