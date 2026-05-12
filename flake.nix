@@ -6,7 +6,7 @@
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
-    keyos.url = "git+ssh://git@github.com/Foundation-Devices/KeyOS";
+    keyos.url = "github:Foundation-Devices/KeyOS/9056b4805315cad3a8dd58f7c7d06a08e27a1a31";
     fenix = {
       url = "github:nix-community/fenix";
       inputs.nixpkgs.follows = "nixpkgs";
