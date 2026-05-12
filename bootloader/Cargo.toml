@@ -15,7 +15,7 @@ debug = []
 consts_global = { path = "../consts", package = "consts" }
 cortex-m = { workspace = true }
 cortex-m-rt = { workspace = true }
-cosign2 = { version = "0.4.1", git = "https://github.com/Foundation-Devices/keyOS", default-features = false }
+cosign2 = { version = "1.1.0", git = "https://github.com/Foundation-Devices/KeyOS", rev = "9056b4805315cad3a8dd58f7c7d06a08e27a1a31", default-features = false }
 crc = { workspace = true }
 critical-section = "1.1.2"
 defmt = { workspace = true }
@@ -41,7 +41,7 @@ embedded-storage = "0.3.1"
 heapless = { workspace = true }
 hmac = { workspace = true }
 host-protocol = { path = "../host-protocol" }
-micro-ecc-sys = { git = "https://github.com/Foundation-Devices/keyOS.git", default-features = false }
+micro-ecc-sys = { git = "https://github.com/Foundation-Devices/KeyOS", rev = "9056b4805315cad3a8dd58f7c7d06a08e27a1a31", default-features = false }
 nrf-softdevice = { git = "https://github.com/Foundation-Devices/nrf-softdevice.git", rev = "566c1c2d7b269fa8f9addbc4473811b6b2b0f693", features = [
     "ble-peripheral",
     "critical-section-impl",

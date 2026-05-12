@@ -5,37 +5,64 @@ name: Rust
 
 on:
   push:
-    branches: [ "master" ]
+    branches: ["master"]
   pull_request:
-    branches: [ "master" ]
+    branches: ["master"]
+
+permissions:
+  contents: read
 
 env:
   CARGO_TERM_COLOR: always
 
 jobs:
   build:
-
+    if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
 
     steps:
-    - uses: actions/checkout@v3
-    - uses: webfactory/ssh-agent@v0.7.0
-      with:
-        ssh-private-key: |
-          ${{ secrets.SSH_KEY_DEPLOY_KEYOS }}
-    - name: Install Ubuntu dependencies
-      run: |
-        sudo apt update
-        sudo apt install -y llvm libclang-dev gcc-arm-none-eabi
-    - name: Install ARM target
-      run: rustup target add thumbv7em-none-eabi
-    - name: Install Cargo binutils
-      run: cargo +stable install cargo-binutils
-    - name: Install LLVM tools
-      run: rustup component add llvm-tools
-    - name: Build Debug image (unsigned)
-      run: cargo xtask --verbose build-fw-debug-image
-    - name: Build host-protocol
-      run: cargo build --release --package host-protocol
-    - name: Test host-protocol compatibility
-      run: cargo test --release --package host-protocol --lib
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+      - name: Build host-protocol
+        run: cargo build --release --package host-protocol
+      - name: Test host-protocol compatibility
+        run: cargo test --release --package host-protocol --lib
+
+  trusted-firmware:
+    name: Trusted firmware build
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+      - name: Install Ubuntu dependencies
+        run: |
+          sudo apt update
+          sudo apt install -y llvm libclang-dev gcc-arm-none-eabi
+      - name: Install ARM target
+        run: rustup target add thumbv7em-none-eabi
+      - name: Install Cargo binutils
+        run: cargo +stable install cargo-binutils
+      - name: Install LLVM tools
+        run: rustup component add llvm-tools
+      - name: Fetch Cargo dependencies
+        run: |
+          cargo fetch --locked
+          cargo fetch --locked --target thumbv7em-none-eabi
+      - name: Build Debug image (unsigned)
+        env:
+          CARGO_NET_OFFLINE: "true"
+        run: cargo xtask --verbose build-fw-debug-image
+      - name: Build host-protocol
+        env:
+          CARGO_NET_OFFLINE: "true"
+        run: cargo build --release --package host-protocol
+      - name: Test host-protocol compatibility
+        env:
+          CARGO_NET_OFFLINE: "true"
+        run: cargo test --release --package host-protocol --lib

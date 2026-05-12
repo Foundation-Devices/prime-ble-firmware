@@ -509,8 +509,8 @@ dependencies = [
 
 [[package]]
 name = "cosign2"
-version = "0.4.1"
-source = "git+https://github.com/Foundation-Devices/keyOS#0caf300ebe18c6c62be1285339cdefe479711b04"
+version = "1.1.0"
+source = "git+https://github.com/Foundation-Devices/KeyOS?rev=9056b4805315cad3a8dd58f7c7d06a08e27a1a31#9056b4805315cad3a8dd58f7c7d06a08e27a1a31"
 dependencies = [
  "chrono",
 ]
@@ -1500,7 +1500,7 @@ dependencies = [
 [[package]]
 name = "micro-ecc-sys"
 version = "0.3.2"
-source = "git+https://github.com/Foundation-Devices/keyOS#0caf300ebe18c6c62be1285339cdefe479711b04"
+source = "git+https://github.com/Foundation-Devices/KeyOS?rev=9056b4805315cad3a8dd58f7c7d06a08e27a1a31#9056b4805315cad3a8dd58f7c7d06a08e27a1a31"
 dependencies = [
  "bindgen",
  "cc",
