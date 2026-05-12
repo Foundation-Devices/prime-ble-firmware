@@ -21,7 +21,7 @@ use embassy_nrf::{self as _};
 use host_protocol::{State, TrustLevel};
 use panic_probe as _;
 
-use consts::{FLASH_PAGE, SEALED_SECRET, SEALED_WIPED, SEAL_IDX};
+use consts::{FLASH_PAGE, FW_CHUNK_SIZE, SEALED_SECRET, SEALED_WIPED, SEAL_IDX};
 use consts_global::{BASE_APP_ADDR, BASE_BOOTLOADER_ADDR, SIGNATURE_HEADER_SIZE, UICR_SECRET_SIZE, UICR_SECRET_START};
 use core::cell::RefCell;
 use cosign2::VerificationResult;
@@ -54,7 +54,6 @@ use jump_app::jump_to_app;
 #[allow(unused_imports)]
 use nrf_softdevice::Softdevice;
 use postcard::{from_bytes, to_slice};
-use serde::{Deserialize, Serialize};
 use sha2::Sha256 as ShaChallenge;
 use verify::{get_fw_image_slice, read_version_and_build_date, verify_fw_image, write_secret};
 
@@ -68,21 +67,41 @@ bind_interrupts!(struct Irqs {
     UARTE0_UART0 => uarte::InterruptHandler<UARTE0>;
 });
 
-/// Tracks the state of firmware updates
-#[derive(Debug, Serialize, Deserialize, Default)]
-pub struct BootState {
-    /// Current offset into flash memory
-    pub offset: u32,
-    /// Current flash sector being written
-    pub actual_sector: u32,
-    /// Index of the last successfully written packet
-    pub actual_pkt_idx: u32,
-}
-impl BootState {
-    fn reset(&mut self) {
-        self.offset = 0;
-        self.actual_sector = 0;
-        self.actual_pkt_idx = 0;
+/// Writes one firmware update chunk at the idx-keyed flash position.
+///
+/// Position is derived as `BASE_APP_ADDR + idx * FW_CHUNK_SIZE`, so retries from
+/// the host may arrive out-of-order and still land at the correct address.
+/// Non-final blocks must be exactly `FW_CHUNK_SIZE` bytes; a shorter block ends
+/// the image and clears `write_allowed` until the next EraseFirmware.
+fn write_firmware_block(idx: usize, data: &[u8], write_allowed: &mut bool, flash: &mut Nvmc<'_>) -> Bootloader<'static> {
+    if !*write_allowed {
+        return Bootloader::FirmwareOutOfBounds { block_idx: idx };
+    }
+    if data.is_empty() || data.len() > FW_CHUNK_SIZE {
+        return Bootloader::FirmwareOutOfBounds { block_idx: idx };
+    }
+    let is_final = data.len() < FW_CHUNK_SIZE;
+    let Some(cursor) = (idx as u32)
+        .checked_mul(FW_CHUNK_SIZE as u32)
+        .and_then(|off| off.checked_add(BASE_APP_ADDR))
+    else {
+        return Bootloader::FirmwareOutOfBounds { block_idx: idx };
+    };
+    let Some(end) = cursor.checked_add(data.len() as u32) else {
+        return Bootloader::FirmwareOutOfBounds { block_idx: idx };
+    };
+    if end > BASE_BOOTLOADER_ADDR {
+        return Bootloader::FirmwareOutOfBounds { block_idx: idx };
+    }
+    match flash.write(cursor, data) {
+        Ok(()) => {
+            if is_final {
+                *write_allowed = false;
+            }
+            let crc = Crc::<u32>::new(&CRC_32_ISCSI).checksum(data);
+            Bootloader::AckWithIdxCrc { block_idx: idx, crc }
+        }
+        Err(_) => Bootloader::NackWithIdx { block_idx: idx },
     }
 }
 
@@ -232,7 +251,9 @@ async fn main(_spawner: Spawner) {
     // Check if secrets are sealed
     let mut seal = unsafe { &*nrf52805_pac::UICR::ptr() }.customer[SEAL_IDX].read().customer().bits();
 
-    let mut boot_status: BootState = Default::default();
+    // True between a successful EraseFirmware and either a short final block
+    // (end of image) or BootFirmware. Writes are rejected when false.
+    let mut write_allowed = false;
 
     let mut raw_buf = [0u8; 512];
     let mut firmware_version: heapless::String<20>;
@@ -256,9 +277,10 @@ async fn main(_spawner: Spawner) {
                             trace!("Erase firmware");
                             let start = BASE_APP_ADDR / FLASH_PAGE * FLASH_PAGE;
                             debug!("start: 0x{:08X}", start);
+                            write_allowed = false;
                             if start == BASE_APP_ADDR {
                                 if flash.erase(BASE_APP_ADDR, BASE_BOOTLOADER_ADDR).is_ok() {
-                                    boot_status.reset();
+                                    write_allowed = true;
                                     Some(HostProtocolMessage::Bootloader(Bootloader::AckEraseFirmware))
                                 } else {
                                     error!("erase error");
@@ -269,19 +291,17 @@ async fn main(_spawner: Spawner) {
                                 if flash.read(start, &mut saved).is_err() {
                                     error!("read error");
                                     Some(HostProtocolMessage::Bootloader(Bootloader::NackEraseFirmwareRead))
-                                } else {
-                                    if flash.erase(start, BASE_BOOTLOADER_ADDR).is_ok() {
-                                        boot_status.reset();
-                                        if flash.write(start, &saved).is_err() {
-                                            error!("write error");
-                                            Some(HostProtocolMessage::Bootloader(Bootloader::NackEraseFirmwareWrite))
-                                        } else {
-                                            Some(HostProtocolMessage::Bootloader(Bootloader::AckEraseFirmware))
-                                        }
+                                } else if flash.erase(start, BASE_BOOTLOADER_ADDR).is_ok() {
+                                    if flash.write(start, &saved).is_err() {
+                                        error!("write error");
+                                        Some(HostProtocolMessage::Bootloader(Bootloader::NackEraseFirmwareWrite))
                                     } else {
-                                        error!("erase error");
-                                        Some(HostProtocolMessage::Bootloader(Bootloader::NackEraseFirmware))
+                                        write_allowed = true;
+                                        Some(HostProtocolMessage::Bootloader(Bootloader::AckEraseFirmware))
                                     }
+                                } else {
+                                    error!("erase error");
+                                    Some(HostProtocolMessage::Bootloader(Bootloader::NackEraseFirmware))
                                 }
                             }
                         }
@@ -289,39 +309,12 @@ async fn main(_spawner: Spawner) {
                         Bootloader::WriteFirmwareBlock {
                             block_idx: idx,
                             block_data: data,
-                        } => {
-                            // Calculate target flash address
-                            let cursor = BASE_APP_ADDR + boot_status.offset;
-                            Some(
-                                // Validate write is within application area
-                                HostProtocolMessage::Bootloader(if (BASE_APP_ADDR..=BASE_BOOTLOADER_ADDR).contains(&cursor) {
-                                    match flash.write(cursor, data) {
-                                        Ok(()) => {
-                                            boot_status.offset += data.len() as u32;
-                                            // Update status and sector tracking
-                                            boot_status.actual_sector = BASE_APP_ADDR + (boot_status.offset / FLASH_PAGE) * FLASH_PAGE;
-                                            debug!("Updating flash page starting at addr: {:02X}", boot_status.actual_sector);
-                                            debug!("offset : {:02X}", boot_status.actual_sector + boot_status.offset % FLASH_PAGE);
-
-                                            // Calculate CRC of written data
-                                            let crc = Crc::<u32>::new(&CRC_32_ISCSI);
-                                            let crc_pkt = crc.checksum(data);
-
-                                            boot_status.actual_pkt_idx = idx as u32;
-
-                                            // Send success acknowledgement with CRC
-                                            Bootloader::AckWithIdxCrc {
-                                                block_idx: idx,
-                                                crc: crc_pkt,
-                                            }
-                                        }
-                                        Err(_) => Bootloader::NackWithIdx { block_idx: idx },
-                                    }
-                                } else {
-                                    Bootloader::FirmwareOutOfBounds { block_idx: idx }
-                                }),
-                            )
-                        }
+                        } => Some(HostProtocolMessage::Bootloader(write_firmware_block(
+                            idx,
+                            data,
+                            &mut write_allowed,
+                            &mut flash,
+                        ))),
                         // Get firmware version from header
                         Bootloader::FirmwareVersion => {
                             let image = get_fw_image_slice(BASE_APP_ADDR, SIGNATURE_HEADER_SIZE);
@@ -361,6 +354,8 @@ async fn main(_spawner: Spawner) {
                         }
                         // Handle request to boot into firmware
                         Bootloader::BootFirmware { trust } => {
+                            // Lock out further writes; a re-entry into the update path must re-erase.
+                            write_allowed = false;
                             match verify_fw_image(trust) {
                                 Some((VerificationResult::Valid, VerificationResult::Valid, hash)) => {
                                     info!("fw is valid");

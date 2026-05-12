@@ -44,3 +44,8 @@ pub const APP_SIZE: u32 = BASE_BOOTLOADER_ADDR - BASE_APP_ADDR;
 /// Flash memory is organized into pages that can be erased and written independently.
 /// The page size is important for flash operations as they must be aligned to page boundaries.
 pub const FLASH_PAGE: u32 = 4096;
+
+/// Fixed size of a firmware update chunk. Non-final blocks must be exactly this
+/// size; a shorter block signals end of image and locks further writes until
+/// the next EraseFirmware.
+pub const FW_CHUNK_SIZE: usize = 256;
