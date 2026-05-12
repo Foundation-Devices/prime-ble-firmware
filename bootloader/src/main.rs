@@ -67,14 +67,25 @@ bind_interrupts!(struct Irqs {
     UARTE0_UART0 => uarte::InterruptHandler<UARTE0>;
 });
 
+/// State of an in-progress firmware update.
+///
+/// `Some(n)` means an update session is open (post-erase, pre-finalization) and
+/// the next expected packet index is `n`. `None` means no session is open and
+/// writes are rejected until the next EraseFirmware. The session ends after a
+/// short final block (end of image) or a BootFirmware.
+type UpdateSession = Option<u32>;
+
 /// Writes one firmware update chunk at the idx-keyed flash position.
 ///
-/// Position is derived as `BASE_APP_ADDR + idx * FW_CHUNK_SIZE`, so retries from
-/// the host may arrive out-of-order and still land at the correct address.
+/// Position is derived as `BASE_APP_ADDR + idx * FW_CHUNK_SIZE`. The host must
+/// send idx in order and re-send the same idx on retry until acked.
 /// Non-final blocks must be exactly `FW_CHUNK_SIZE` bytes; a shorter block ends
-/// the image and clears `write_allowed` until the next EraseFirmware.
-fn write_firmware_block(idx: usize, data: &[u8], write_allowed: &mut bool, flash: &mut Nvmc<'_>) -> Bootloader<'static> {
-    if !*write_allowed {
+/// the image and closes the session until the next EraseFirmware.
+fn write_firmware_block(idx: usize, data: &[u8], session: &mut UpdateSession, flash: &mut Nvmc<'_>) -> Bootloader<'static> {
+    let Some(expected) = *session else {
+        return Bootloader::FirmwareOutOfBounds { block_idx: idx };
+    };
+    if idx as u32 != expected {
         return Bootloader::FirmwareOutOfBounds { block_idx: idx };
     }
     if data.is_empty() || data.len() > FW_CHUNK_SIZE {
@@ -95,9 +106,7 @@ fn write_firmware_block(idx: usize, data: &[u8], write_allowed: &mut bool, flash
     }
     match flash.write(cursor, data) {
         Ok(()) => {
-            if is_final {
-                *write_allowed = false;
-            }
+            *session = if is_final { None } else { Some(expected.saturating_add(1)) };
             let crc = Crc::<u32>::new(&CRC_32_ISCSI).checksum(data);
             Bootloader::AckWithIdxCrc { block_idx: idx, crc }
         }
@@ -251,9 +260,7 @@ async fn main(_spawner: Spawner) {
     // Check if secrets are sealed
     let mut seal = unsafe { &*nrf52805_pac::UICR::ptr() }.customer[SEAL_IDX].read().customer().bits();
 
-    // True between a successful EraseFirmware and either a short final block
-    // (end of image) or BootFirmware. Writes are rejected when false.
-    let mut write_allowed = false;
+    let mut update_session: UpdateSession = None;
 
     let mut raw_buf = [0u8; 512];
     let mut firmware_version: heapless::String<20>;
@@ -277,10 +284,10 @@ async fn main(_spawner: Spawner) {
                             trace!("Erase firmware");
                             let start = BASE_APP_ADDR / FLASH_PAGE * FLASH_PAGE;
                             debug!("start: 0x{:08X}", start);
-                            write_allowed = false;
+                            update_session = None;
                             if start == BASE_APP_ADDR {
                                 if flash.erase(BASE_APP_ADDR, BASE_BOOTLOADER_ADDR).is_ok() {
-                                    write_allowed = true;
+                                    update_session = Some(0);
                                     Some(HostProtocolMessage::Bootloader(Bootloader::AckEraseFirmware))
                                 } else {
                                     error!("erase error");
@@ -296,7 +303,7 @@ async fn main(_spawner: Spawner) {
                                         error!("write error");
                                         Some(HostProtocolMessage::Bootloader(Bootloader::NackEraseFirmwareWrite))
                                     } else {
-                                        write_allowed = true;
+                                        update_session = Some(0);
                                         Some(HostProtocolMessage::Bootloader(Bootloader::AckEraseFirmware))
                                     }
                                 } else {
@@ -312,7 +319,7 @@ async fn main(_spawner: Spawner) {
                         } => Some(HostProtocolMessage::Bootloader(write_firmware_block(
                             idx,
                             data,
-                            &mut write_allowed,
+                            &mut update_session,
                             &mut flash,
                         ))),
                         // Get firmware version from header
@@ -354,8 +361,8 @@ async fn main(_spawner: Spawner) {
                         }
                         // Handle request to boot into firmware
                         Bootloader::BootFirmware { trust } => {
-                            // Lock out further writes; a re-entry into the update path must re-erase.
-                            write_allowed = false;
+                            // Close the update session; a re-entry into the update path must re-erase.
+                            update_session = None;
                             match verify_fw_image(trust) {
                                 Some((VerificationResult::Valid, VerificationResult::Valid, hash)) => {
                                     info!("fw is valid");
