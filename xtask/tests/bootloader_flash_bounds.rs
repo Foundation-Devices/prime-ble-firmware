@@ -5,3 +5,6 @@ extern crate consts as consts_global;
 
 #[path = "../../bootloader/src/flash_bounds.rs"]
 mod flash_bounds;
+
+#[path = "../../bootloader/src/update_state.rs"]
+mod update_state;

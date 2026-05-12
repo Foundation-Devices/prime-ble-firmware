@@ -15,6 +15,7 @@
 mod consts;
 mod flash_bounds;
 mod jump_app;
+mod update_state;
 mod verify;
 
 use defmt_rtt as _;
@@ -56,8 +57,8 @@ use jump_app::jump_to_app;
 #[allow(unused_imports)]
 use nrf_softdevice::Softdevice;
 use postcard::{from_bytes, to_slice};
-use serde::{Deserialize, Serialize};
 use sha2::Sha256 as ShaChallenge;
+use update_state::FirmwareUpdateState;
 use verify::{get_fw_image_slice, read_version_and_build_date, verify_fw_image, write_secret};
 
 // Global mutex for hardware RNG access
@@ -71,20 +72,45 @@ bind_interrupts!(struct Irqs {
 });
 
 /// Tracks the state of firmware updates
-#[derive(Debug, Serialize, Deserialize, Default)]
+#[derive(Debug, Default)]
 pub struct BootState {
     /// Current offset into flash memory
     pub offset: u32,
     /// Current flash sector being written
     pub actual_sector: u32,
     /// Index of the last successfully written packet
-    pub actual_pkt_idx: u32,
+    pub actual_pkt_idx: usize,
+    /// Active firmware update session and expected packet index
+    pub update: FirmwareUpdateState,
 }
 impl BootState {
     fn reset(&mut self) {
         self.offset = 0;
         self.actual_sector = 0;
         self.actual_pkt_idx = 0;
+        self.update.reset();
+    }
+
+    fn start_update(&mut self) {
+        self.offset = 0;
+        self.actual_sector = 0;
+        self.actual_pkt_idx = 0;
+        self.update.start();
+    }
+
+    fn checked_next_offset(&self, write_len: usize) -> Option<u32> {
+        let write_len = u32::try_from(write_len).ok()?;
+        self.offset.checked_add(write_len)
+    }
+
+    fn record_written_block(&mut self, block_idx: usize, next_offset: u32) -> bool {
+        if !self.update.record_accepted() {
+            return false;
+        }
+        self.offset = next_offset;
+        self.actual_pkt_idx = block_idx;
+        self.actual_sector = BASE_APP_ADDR + (self.offset / FLASH_PAGE) * FLASH_PAGE;
+        true
     }
 }
 
@@ -256,11 +282,12 @@ async fn main(_spawner: Spawner) {
                         // Handle firmware erase command
                         Bootloader::EraseFirmware => {
                             trace!("Erase firmware");
+                            boot_status.reset();
                             let start = BASE_APP_ADDR / FLASH_PAGE * FLASH_PAGE;
                             debug!("start: 0x{:08X}", start);
                             if start == BASE_APP_ADDR {
                                 if flash.erase(BASE_APP_ADDR, BASE_BOOTLOADER_ADDR).is_ok() {
-                                    boot_status.reset();
+                                    boot_status.start_update();
                                     Some(HostProtocolMessage::Bootloader(Bootloader::AckEraseFirmware))
                                 } else {
                                     error!("erase error");
@@ -273,11 +300,12 @@ async fn main(_spawner: Spawner) {
                                     Some(HostProtocolMessage::Bootloader(Bootloader::NackEraseFirmwareRead))
                                 } else {
                                     if flash.erase(start, BASE_BOOTLOADER_ADDR).is_ok() {
-                                        boot_status.reset();
                                         if flash.write(start, &saved).is_err() {
                                             error!("write error");
+                                            boot_status.reset();
                                             Some(HostProtocolMessage::Bootloader(Bootloader::NackEraseFirmwareWrite))
                                         } else {
+                                            boot_status.start_update();
                                             Some(HostProtocolMessage::Bootloader(Bootloader::AckEraseFirmware))
                                         }
                                     } else {
@@ -293,30 +321,36 @@ async fn main(_spawner: Spawner) {
                             block_data: data,
                         } => {
                             // Calculate target flash address
-                            let response = match BASE_APP_ADDR.checked_add(boot_status.offset) {
-                                Some(cursor) if is_app_flash_write_in_bounds(cursor, data.len()) => match flash.write(cursor, data) {
-                                    Ok(()) => {
-                                        boot_status.offset += data.len() as u32;
-                                        // Update status and sector tracking
-                                        boot_status.actual_sector = BASE_APP_ADDR + (boot_status.offset / FLASH_PAGE) * FLASH_PAGE;
-                                        debug!("Updating flash page starting at addr: {:02X}", boot_status.actual_sector);
-                                        debug!("offset : {:02X}", boot_status.actual_sector + boot_status.offset % FLASH_PAGE);
+                            let response = if !boot_status.update.accepts(idx) {
+                                Bootloader::NackWithIdx {
+                                    block_idx: boot_status.update.expected_block_idx(),
+                                }
+                            } else {
+                                match (
+                                    BASE_APP_ADDR.checked_add(boot_status.offset),
+                                    boot_status.checked_next_offset(data.len()),
+                                ) {
+                                    (Some(cursor), Some(next_offset)) if is_app_flash_write_in_bounds(cursor, data.len()) => {
+                                        match flash.write(cursor, data) {
+                                            Ok(()) if boot_status.record_written_block(idx, next_offset) => {
+                                                debug!("Updating flash page starting at addr: {:02X}", boot_status.actual_sector);
+                                                debug!("offset : {:02X}", boot_status.actual_sector + boot_status.offset % FLASH_PAGE);
 
-                                        // Calculate CRC of written data
-                                        let crc = Crc::<u32>::new(&CRC_32_ISCSI);
-                                        let crc_pkt = crc.checksum(data);
+                                                // Calculate CRC of written data
+                                                let crc = Crc::<u32>::new(&CRC_32_ISCSI);
+                                                let crc_pkt = crc.checksum(data);
 
-                                        boot_status.actual_pkt_idx = idx as u32;
-
-                                        // Send success acknowledgement with CRC
-                                        Bootloader::AckWithIdxCrc {
-                                            block_idx: idx,
-                                            crc: crc_pkt,
+                                                // Send success acknowledgement with CRC
+                                                Bootloader::AckWithIdxCrc {
+                                                    block_idx: idx,
+                                                    crc: crc_pkt,
+                                                }
+                                            }
+                                            Ok(()) | Err(_) => Bootloader::NackWithIdx { block_idx: idx },
                                         }
                                     }
-                                    Err(_) => Bootloader::NackWithIdx { block_idx: idx },
-                                },
-                                _ => Bootloader::FirmwareOutOfBounds { block_idx: idx },
+                                    _ => Bootloader::FirmwareOutOfBounds { block_idx: idx },
+                                }
                             };
                             Some(HostProtocolMessage::Bootloader(response))
                         }
