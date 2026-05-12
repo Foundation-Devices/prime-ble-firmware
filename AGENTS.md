@@ -65,6 +65,8 @@ use host_protocol::Message;
 - Use meaningful variable names
 - Group related functionality in modules
 - Use feature flags for conditional compilation (`#[cfg(feature = "debug")]`)
+- Keep the `consts` crate limited to constants useful to both bootloader and firmware.
+  Module-specific constants and policies belong in the owning crate/module.
 
 ### Embedded Considerations
 - Minimize heap allocations in hot paths

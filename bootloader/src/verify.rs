@@ -171,7 +171,7 @@ pub fn read_version_and_build_date(image: &[u8], check_fw_size: bool) -> Option<
 /// Creates a slice from raw memory at the given base address
 pub fn get_fw_image_slice<'a>(base_address: u32, len: u32) -> &'a [u8] {
     // Validate address range is within allowed bounds
-    if base_address < crate::BASE_APP_ADDR || base_address + len > crate::BASE_APP_ADDR + crate::consts::APP_SIZE {
+    if crate::flash_bounds::checked_app_flash_range_end(base_address, len).is_none() {
         return &[];
     }
     let slice = unsafe { core::slice::from_raw_parts(base_address as *const u8, len as usize) };

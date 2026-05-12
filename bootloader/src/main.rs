@@ -13,6 +13,7 @@
 #![no_std]
 #![no_main]
 mod consts;
+mod flash_bounds;
 mod jump_app;
 mod verify;
 
@@ -46,6 +47,7 @@ use embassy_nrf::{
 use embassy_sync::blocking_mutex::CriticalSectionMutex;
 use embassy_sync::blocking_mutex::Mutex;
 use embedded_storage::nor_flash::{NorFlash, ReadNorFlash};
+use flash_bounds::is_app_flash_write_in_bounds;
 use hmac::{Hmac, Mac};
 use host_protocol::MAX_MSG_SIZE;
 use host_protocol::{Bootloader, SecretSaveResponse};
@@ -291,36 +293,32 @@ async fn main(_spawner: Spawner) {
                             block_data: data,
                         } => {
                             // Calculate target flash address
-                            let cursor = BASE_APP_ADDR + boot_status.offset;
-                            Some(
-                                // Validate write is within application area
-                                HostProtocolMessage::Bootloader(if (BASE_APP_ADDR..=BASE_BOOTLOADER_ADDR).contains(&cursor) {
-                                    match flash.write(cursor, data) {
-                                        Ok(()) => {
-                                            boot_status.offset += data.len() as u32;
-                                            // Update status and sector tracking
-                                            boot_status.actual_sector = BASE_APP_ADDR + (boot_status.offset / FLASH_PAGE) * FLASH_PAGE;
-                                            debug!("Updating flash page starting at addr: {:02X}", boot_status.actual_sector);
-                                            debug!("offset : {:02X}", boot_status.actual_sector + boot_status.offset % FLASH_PAGE);
+                            let response = match BASE_APP_ADDR.checked_add(boot_status.offset) {
+                                Some(cursor) if is_app_flash_write_in_bounds(cursor, data.len()) => match flash.write(cursor, data) {
+                                    Ok(()) => {
+                                        boot_status.offset += data.len() as u32;
+                                        // Update status and sector tracking
+                                        boot_status.actual_sector = BASE_APP_ADDR + (boot_status.offset / FLASH_PAGE) * FLASH_PAGE;
+                                        debug!("Updating flash page starting at addr: {:02X}", boot_status.actual_sector);
+                                        debug!("offset : {:02X}", boot_status.actual_sector + boot_status.offset % FLASH_PAGE);
 
-                                            // Calculate CRC of written data
-                                            let crc = Crc::<u32>::new(&CRC_32_ISCSI);
-                                            let crc_pkt = crc.checksum(data);
+                                        // Calculate CRC of written data
+                                        let crc = Crc::<u32>::new(&CRC_32_ISCSI);
+                                        let crc_pkt = crc.checksum(data);
 
-                                            boot_status.actual_pkt_idx = idx as u32;
+                                        boot_status.actual_pkt_idx = idx as u32;
 
-                                            // Send success acknowledgement with CRC
-                                            Bootloader::AckWithIdxCrc {
-                                                block_idx: idx,
-                                                crc: crc_pkt,
-                                            }
+                                        // Send success acknowledgement with CRC
+                                        Bootloader::AckWithIdxCrc {
+                                            block_idx: idx,
+                                            crc: crc_pkt,
                                         }
-                                        Err(_) => Bootloader::NackWithIdx { block_idx: idx },
                                     }
-                                } else {
-                                    Bootloader::FirmwareOutOfBounds { block_idx: idx }
-                                }),
-                            )
+                                    Err(_) => Bootloader::NackWithIdx { block_idx: idx },
+                                },
+                                _ => Bootloader::FirmwareOutOfBounds { block_idx: idx },
+                            };
+                            Some(HostProtocolMessage::Bootloader(response))
                         }
                         // Get firmware version from header
                         Bootloader::FirmwareVersion => {
