@@ -46,6 +46,15 @@ pub const UICR_SECRET_START: u32 = 0x10001080;
 /// This size matches the output length of HMAC-SHA256 used for authentication.
 pub const UICR_SECRET_SIZE: u32 = 0x20;
 
+/// Index of the UICR customer register used to seal the challenge-response secret.
+pub const UICR_SEAL_INDEX: usize = 8;
+
+/// Magic value indicating that the challenge-response secret has been provisioned.
+pub const UICR_SEALED_SECRET: u32 = 0x5A5A5A5A;
+
+/// Magic value indicating that the challenge-response secret was wiped by developer firmware.
+pub const UICR_SEALED_WIPED: u32 = 0x42424242;
+
 /// Start address of the bootloader application code in flash memory
 /// This address marks where the bootloader code begins in flash.
 pub const BASE_BOOTLOADER_ADDR: u32 = 0x27000;

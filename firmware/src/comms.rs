@@ -7,7 +7,7 @@ use crate::{
     server::Server, BT_ADV_CHAN, BT_ADV_CHANGED, BT_DATA_RX, BT_DATA_RX_OVERFLOW, BT_ENABLE, CONNECTION, DEVICE_NAME, IRQ_OUT_PIN,
     TX_PWR_VALUE,
 };
-use consts::{UICR_SECRET_SIZE, UICR_SECRET_START};
+use consts::{UICR_SEALED_SECRET, UICR_SEAL_INDEX, UICR_SECRET_SIZE, UICR_SECRET_START};
 use defmt::{debug, error, trace};
 use embassy_nrf::{peripherals::SPI0, spis::Spis};
 use hmac::{Hmac, Mac};
@@ -206,15 +206,24 @@ fn get_state() -> State {
 /// Handles HMAC challenge-response authentication
 fn hmac_challenge_response(nonce: u64) -> HostProtocolMessage<'static> {
     type HmacSha256 = Hmac<ShaChallenge>;
+    let seal = unsafe { &*nrf52805_pac::UICR::ptr() }.customer[UICR_SEAL_INDEX]
+        .read()
+        .customer()
+        .bits();
+
+    if seal != UICR_SEALED_SECRET {
+        return HostProtocolMessage::InappropriateMessage(get_state());
+    }
+
     // Get device secret from UICR memory
     let secret_as_slice = unsafe { core::slice::from_raw_parts(UICR_SECRET_START as *const u8, UICR_SECRET_SIZE as usize) };
 
     // Calculate HMAC response
     if let Ok(mut mac) = HmacSha256::new_from_slice(secret_as_slice) {
         mac.update(&nonce.to_be_bytes());
-        let result = mac.finalize().into_bytes();
-        debug!("{=[u8;32]:#X}", result.into());
-        HostProtocolMessage::ChallengeResult { result: result.into() }
+        let result: [u8; 32] = mac.finalize().into_bytes().into();
+        debug!("{=[u8;32]:#X}", result);
+        HostProtocolMessage::ChallengeResult { result }
     } else {
         HostProtocolMessage::ChallengeResult { result: [0xFF; 32] }
     }

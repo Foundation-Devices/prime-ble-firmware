@@ -19,6 +19,10 @@
 - Format: `cargo fmt`
 - Check formatting: `cargo fmt --check`
 
+## Git Guidelines
+
+- Commit messages for issue work must start with the Linear issue ID followed by a colon, e.g. `SFT-6996: Reject unsealed challenge secrets`.
+
 ## Code Style Guidelines
 
 ### Formatting

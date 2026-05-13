@@ -4,6 +4,7 @@
 use crate::{BASE_APP_ADDR, BASE_BOOTLOADER_ADDR};
 #[cfg(not(feature = "debug"))]
 use consts_global::SIGNATURE_HEADER_SIZE;
+pub use consts_global::{UICR_SEALED_SECRET as SEALED_SECRET, UICR_SEALED_WIPED as SEALED_WIPED, UICR_SEAL_INDEX as SEAL_IDX};
 
 #[used]
 /// Start address of the bootloader in flash memory, stored in UICR
@@ -43,20 +44,3 @@ pub const APP_SIZE: u32 = BASE_BOOTLOADER_ADDR - BASE_APP_ADDR;
 /// Flash memory is organized into pages that can be erased and written independently.
 /// The page size is important for flash operations as they must be aligned to page boundaries.
 pub const FLASH_PAGE: u32 = 4096;
-
-/// Index of the UICR register used to store the SEALED_SECRET value (0x5A5A5A5A)
-/// This register is checked to determine if a secret has been properly sealed in UICR memory.
-/// The value of 8 corresponds to UICR register 40 (32 + 8), which follows the 8 registers
-/// used for storing the actual secret value.
-pub const SEAL_IDX: usize = 8;
-
-/// Magic value used to verify sealing of the challenge-response secret in UICR memory.
-/// When a secret is written to UICR, this value is written to SEAL_IDX to indicate
-/// that the secret has been properly sealed and cannot be overwritten. The value
-/// 0x5A5A5A5A is chosen as a recognizable pattern that is unlikely to occur randomly.
-pub const SEALED_SECRET: u32 = 0x5A5A5A5A;
-
-/// Magic value used to signify that a development firmware was booted at least once,
-/// so the secret in UICR has been wiped. Since bits in the UICR can only be set to
-/// 0 from 1 without erasing, this seal has strictly more 0 bits than SEALED_SECRET
-pub const SEALED_WIPED: u32 = 0x42424242;
