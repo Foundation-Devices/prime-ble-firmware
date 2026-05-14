@@ -343,6 +343,8 @@ async fn main(_spawner: Spawner) {
                         Bootloader::ChallengeSet { secret } => {
                             let result = if seal == SEALED_SECRET || seal == SEALED_WIPED {
                                 SecretSaveResponse::NotAllowed
+                            } else if secret.iter().all(|word| *word == 0) || secret.iter().all(|word| *word == u32::MAX) {
+                                SecretSaveResponse::Error
                             } else {
                                 unsafe {
                                     match write_secret(secret, SEALED_SECRET) {
@@ -397,15 +399,19 @@ async fn main(_spawner: Spawner) {
                     }
                     // Handle challenge-response authentication
                     HostProtocolMessage::ChallengeRequest { nonce } => {
-                        type HmacSha256 = Hmac<ShaChallenge>;
-                        let secret_as_slice =
-                            unsafe { core::slice::from_raw_parts(UICR_SECRET_START as *const u8, UICR_SECRET_SIZE as usize) };
-                        // debug!("slice {:02X}", secret_as_slice);
-                        Some(if let Ok(mut mac) = HmacSha256::new_from_slice(secret_as_slice) {
-                            mac.update(&nonce.to_be_bytes());
-                            let result = mac.finalize().into_bytes();
-                            // debug!("{=[u8;32]:#X}", result.into());
-                            HostProtocolMessage::ChallengeResult { result: result.into() }
+                        Some(if seal == SEALED_SECRET {
+                            type HmacSha256 = Hmac<ShaChallenge>;
+                            let secret_as_slice =
+                                unsafe { core::slice::from_raw_parts(UICR_SECRET_START as *const u8, UICR_SECRET_SIZE as usize) };
+                            // debug!("slice {:02X}", secret_as_slice);
+                            if let Ok(mut mac) = HmacSha256::new_from_slice(secret_as_slice) {
+                                mac.update(&nonce.to_be_bytes());
+                                let result = mac.finalize().into_bytes();
+                                // debug!("{=[u8;32]:#X}", result.into());
+                                HostProtocolMessage::ChallengeResult { result: result.into() }
+                            } else {
+                                HostProtocolMessage::ChallengeResult { result: [0xFF; 32] }
+                            }
                         } else {
                             HostProtocolMessage::ChallengeResult { result: [0xFF; 32] }
                         })

@@ -19,6 +19,12 @@
 - Format: `cargo fmt`
 - Check formatting: `cargo fmt --check`
 
+## Git Guidelines
+
+- Commit messages for issue work must include the Linear issue ID. Preferred formats are `SFT-6996: Reject unsealed challenge secrets`
+  or `<component>: reject unsealed challenge secrets (SFT-6996)`, where `<component>` is `bootloader`, `firmware`,
+  `host-protocol`, `consts`, or a combination such as `bootloader/firmware`.
+
 ## Code Style Guidelines
 
 ### Formatting
