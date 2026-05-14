@@ -413,7 +413,7 @@ async fn main(_spawner: Spawner) {
                                 HostProtocolMessage::ChallengeResult { result: [0xFF; 32] }
                             }
                         } else {
-                            HostProtocolMessage::InappropriateMessage(State::FirmwareUpgrade)
+                            HostProtocolMessage::ChallengeResult { result: [0xFF; 32] }
                         })
                     }
                     // Report bootloader state

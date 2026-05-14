@@ -212,7 +212,7 @@ fn hmac_challenge_response(nonce: u64) -> HostProtocolMessage<'static> {
         .bits();
 
     if seal != UICR_SEALED_SECRET {
-        return HostProtocolMessage::InappropriateMessage(get_state());
+        return HostProtocolMessage::ChallengeResult { result: [0xFF; 32] };
     }
 
     // Get device secret from UICR memory
