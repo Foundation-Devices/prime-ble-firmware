@@ -12,5 +12,5 @@ clap = { workspace = true }
 consts = { path = "../consts" }
 futures = { version = "0.3.31" }
 pretty_env_logger = { version = "0.5.0" }
-tokio = { version = "1.40.1", features = ["macros", "rt", "rt-multi-thread"] }
+tokio = { version = "1.44.2", features = ["macros", "rt", "rt-multi-thread"] }
 uuid = { version = "1.11.0" }
