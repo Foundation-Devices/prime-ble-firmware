@@ -43,8 +43,14 @@ jobs:
       # The same environment as official builds (see REPRODUCIBILITY.md), so the checksums are comparable.
       - name: Set up the Nix build shell
         run: nix develop .#build --command true
+      # xtask builds the production firmware with -Z build-std, which also needs the dependencies of the
+      # standard library: fetch them from the firmware directory, with the same flags.
       - name: Fetch Cargo dependencies
-        run: nix develop .#build --command sh -c 'cargo fetch --locked && cargo fetch --locked --target thumbv7em-none-eabi'
+        run: |
+          nix develop .#build --command cargo fetch --locked
+          nix develop .#build --command cargo fetch --locked --target thumbv7em-none-eabi
+          nix develop .#build --command sh -c \
+            'cd firmware && cargo fetch --locked -Z build-std=panic_abort -Z build-std-features=panic_immediate_abort'
       # Each production xtask command deletes BtPackage, so copy its outputs before the next one.
       - name: Build unsigned production images
         env:
