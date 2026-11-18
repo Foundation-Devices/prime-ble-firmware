@@ -6,7 +6,8 @@
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
-    keyos.url = "github:Foundation-Devices/KeyOS/9056b4805315cad3a8dd58f7c7d06a08e27a1a31";
+    # v3.0.0
+    cosign2.url = "github:Foundation-Devices/cosign2/45c233c1a0c08f06c5cafc36b754ba6323c5ed86";
     fenix = {
       url = "github:nix-community/fenix";
       inputs.nixpkgs.follows = "nixpkgs";
@@ -17,7 +18,7 @@
     {
       self,
       nixpkgs,
-      keyos,
+      cosign2,
       fenix,
     }:
     let
@@ -61,7 +62,7 @@
             inherit system;
           };
 
-          keyosPkgs = keyos.packages.${system};
+          cosign2Pkgs = cosign2.packages.${system};
 
           customPackages = self.packages.${system};
 
@@ -89,9 +90,9 @@
               git
               just
             ]
-            ++ (with keyosPkgs; [
-              cosign2
-            ])
+            ++ [
+              cosign2Pkgs.cosign2
+            ]
             ++ (with customPackages; [
               rust-ble-firmware
             ]);

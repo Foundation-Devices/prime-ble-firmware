@@ -3,7 +3,7 @@
 
 use cargo_metadata::MetadataCommand;
 use clap::{Parser, Subcommand};
-use consts::{BASE_APP_ADDR, BASE_BOOTLOADER_ADDR, SIGNATURE_HEADER_SIZE};
+use consts::{BASE_APP_ADDR, BASE_BOOTLOADER_ADDR, COSIGN2_MAGIC, SIGNATURE_HEADER_SIZE};
 use std::io::{self, Read, Write};
 use std::path::{Path, PathBuf};
 use std::process::{exit, Command, Stdio};
@@ -372,9 +372,7 @@ fn sign_bt_firmware(config_path: &str, developer: bool) {
     // Verify that cosign2 exists
     if Command::new("cosign2").stdout(Stdio::null()).stderr(Stdio::null()).spawn().is_err() {
         tracing::error!("unable to find cosign2 tool, please install it:");
-        println!("   git clone https://github.com/Foundation-Devices/keyOS tmpkeyos");
-        println!("   cargo install --path tmpkeyos/imports/cosign2/cosign2-bin --bin cosign2");
-        println!("   rm -rf tmpkeyos");
+        println!("   cargo install --locked --git https://github.com/Foundation-Devices/cosign2.git --tag v3.0.0 cosign2-bin");
         exit(-1);
     }
 
@@ -388,6 +386,7 @@ fn sign_bt_firmware(config_path: &str, developer: bool) {
         .expect("Target crate not found in workspace");
 
     let header_size = SIGNATURE_HEADER_SIZE.to_string();
+    let magic = std::str::from_utf8(&COSIGN2_MAGIC).expect("cosign2 magic is ASCII");
     let signed_once = std::fs::metadata("./BtPackage/BT_application_signed_once.bin").is_ok();
     let mut args = vec!["sign", "-c", config_path, "-i"];
     if signed_once {
@@ -401,8 +400,8 @@ fn sign_bt_firmware(config_path: &str, developer: bool) {
     args.extend([
         "--header-size",
         header_size.as_str(),
-        "--target",
-        "nrf52-ble",
+        "--magic",
+        magic,
         "--binary-version",
         &version,
         "-o",

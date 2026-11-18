@@ -5,9 +5,10 @@
 use crate::RNG_HW;
 use crate::SEAL_IDX;
 use crate::SIGNATURE_HEADER_SIZE;
+use consts_global::COSIGN2_MAGIC;
 use core::str::FromStr;
 use cortex_m::prelude::_embedded_hal_blocking_delay_DelayMs;
-use cosign2::{Header, Trust, VerificationResult};
+use cosign2::{Header, Magic, Trust, VerificationResult};
 use defmt::info;
 use embassy_time::Delay;
 use heapless::String;
@@ -41,6 +42,9 @@ const KNOWN_SIGNERS: [[u8; 33]; 4] = [
         0x8e, 0xa1, 0x1f, 0xa7, 0x9b, 0x46, 0x39, 0xbe, 0xf4, 0x50, 0x94,
     ],
 ];
+
+/// Only headers starting with this magic are accepted, so images signed for other devices are rejected.
+const ACCEPTED_MAGICS: [Magic; 1] = [Magic(COSIGN2_MAGIC)];
 
 /// Wrapper struct for ECC signature verification operations
 struct EccVerifier {}
@@ -146,7 +150,14 @@ fn verify_image(image: &[u8], trust: TrustLevel) -> (VerificationResult, [u8; 32
     // Random delay to thwart glitching the condition
     random_delay();
     // Parse and verify firmware signatures with multiple integrity checks
-    let Ok(Some(header)) = Header::parse(image, &KNOWN_SIGNERS, &Sha256, &ecc, SIGNATURE_HEADER_SIZE as usize) else {
+    let Ok(Some(header)) = Header::parse(
+        image,
+        &ACCEPTED_MAGICS,
+        &KNOWN_SIGNERS,
+        &Sha256,
+        &ecc,
+        SIGNATURE_HEADER_SIZE as usize,
+    ) else {
         return (VerificationResult::Invalid, [0; 32]);
     };
     if header.trust() == Trust::FullyTrusted || trust == TrustLevel::Developer {
@@ -158,7 +169,7 @@ fn verify_image(image: &[u8], trust: TrustLevel) -> (VerificationResult, [u8; 32
 
 /// Extracts version and build date information from the firmware header
 pub fn read_version_and_build_date(image: &[u8], check_fw_size: bool) -> Option<(String<20>, String<14>)> {
-    if let Ok(Some(header)) = Header::parse_unverified(image, SIGNATURE_HEADER_SIZE as usize, check_fw_size) {
+    if let Ok(Some(header)) = Header::parse_unverified(image, &ACCEPTED_MAGICS, SIGNATURE_HEADER_SIZE as usize, check_fw_size) {
         match (String::from_str(&header.version()), String::from_str(&header.date())) {
             (Ok(version), Ok(build_date)) => Some((version, build_date)),
             _ => None,

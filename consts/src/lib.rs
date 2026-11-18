@@ -66,3 +66,7 @@ pub const BASE_APP_ADDR: u32 = 0x1B400;
 
 /// 256B are needed for cosign2 signature
 pub const SIGNATURE_HEADER_SIZE: u32 = 0x100;
+
+/// Magic at the start of the cosign2 header of BLE firmware images.
+/// The bootloader only accepts headers starting with it, and xtask signs with it.
+pub const COSIGN2_MAGIC: [u8; 4] = *b"blef";

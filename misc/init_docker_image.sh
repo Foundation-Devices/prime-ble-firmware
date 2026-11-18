@@ -38,18 +38,10 @@ rustup show
 
 cargo install cargo-binutils
 
-# Install cosign2 from the same KeyOS commit used by Cargo and Nix.
-KEYOS_REV="9056b4805315cad3a8dd58f7c7d06a08e27a1a31"
-git clone --no-checkout --filter=blob:none https://github.com/Foundation-Devices/KeyOS.git
-(
-    cd KeyOS
-    git sparse-checkout set imports/cosign2
-    git checkout "${KEYOS_REV}"
-    test "$(git rev-parse HEAD)" = "${KEYOS_REV}"
-    export CARGO_NET_GIT_FETCH_WITH_CLI=true
-    cargo install --path imports/cosign2/cosign2-bin --bin cosign2
-)
-rm -rf KeyOS
+# Install cosign2 v3.0.0 from the same commit used by Cargo and Nix.
+COSIGN2_REV="45c233c1a0c08f06c5cafc36b754ba6323c5ed86"
+CARGO_NET_GIT_FETCH_WITH_CLI=true cargo install --locked \
+    --git https://github.com/Foundation-Devices/cosign2.git --rev "${COSIGN2_REV}" cosign2-bin
 
 # Give r/w access and execute on directories to everyone so that we can run builds
 # with different UIDs while using root's cargo cache

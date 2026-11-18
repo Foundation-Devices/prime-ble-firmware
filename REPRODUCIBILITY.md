@@ -98,7 +98,7 @@ Before building, verify that the checked-in lockfiles resolve from a clean Cargo
 CARGO_HOME="$(mktemp -d)" cargo fetch --locked --target thumbv7em-none-eabi
 ```
 
-This confirms that all pinned Cargo dependencies, including the KeyOS `cosign2` and `micro-ecc-sys` sources, are publicly fetchable
+This confirms that all pinned Cargo dependencies, including the `cosign2` and KeyOS `micro-ecc-sys` sources, are publicly fetchable
 from the exact revisions recorded in `Cargo.lock`.
 
 ## **Building Prime BLE Firmware**
