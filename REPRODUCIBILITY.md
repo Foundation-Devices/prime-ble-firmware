@@ -152,6 +152,8 @@ f6e5d4c3b2a1...  BtPackage/BT_application.bin
 
 Compare these hashes with the ones published in the GitHub release notes for the tag you checked out. If the hashes match, congratulations! You've successfully verified that the firmware you built exactly matches the source code published on GitHub.
 
+CI builds every commit on `master` with the same Nix environment. The summary of its `Rust` workflow run shows the SHA256 hashes of the unsigned images, and its `prime-ble-unsigned-<commit>` artifact contains them with a `SHA256SUMS` file, so you can also compare your build with the CI build of the same commit.
+
 If your hashes do not match for any reason, stop immediately and contact us at [hello@foundation.xyz](mailto:hello@foundation.xyz)! We'll help you investigate the cause of this discrepancy and get to the bottom of the issue.
 
 ## Reproducibility Guarantee

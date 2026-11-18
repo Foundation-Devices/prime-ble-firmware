@@ -86,13 +86,31 @@ Follow the [probe-rs installation guide](https://probe.rs/docs/getting-started/i
    ```bash
    just build-debug
    ```
-   This creates a `BtPackage` folder containing:
+   This creates a `BtPackageDebug` folder containing:
    - `BTApp_Full_Image_debug.hex` - Debug image with console UART and no flash protection
 
    **Flash SoftDevice and run Bluetooth test app with UART MPU** 
    ```bash
    just bluetooth-app
    ```
+
+## Getting images from CI
+
+Every pull request and every push to `master` builds the images in the Nix build shell and uploads them as artifacts of the
+`Rust` workflow run (Actions tab, then the run, then *Artifacts*). Each artifact has a `SHA256SUMS` file, and the
+checksums are also shown in the run summary.
+
+- `prime-ble-unsigned-<commit>`: the outputs of `just build-unsigned` (`bootloader.hex`, `bootloader.bin`,
+  `BT_application.bin`, `BT_application_unpadded.bin`) and `BT_Minimal_Image.hex` from `just build-minimal` (SoftDevice and
+  production bootloader, without an application). The application is not signed: compare it with your own build or with a
+  release, but install signed releases on devices.
+- `prime-ble-debug-<commit>`: the outputs of `just build-debug`, including `BTApp_Full_Image_debug.hex`. For development boards
+  only: the debug bootloader has no flash protection and boots unsigned firmware.
+
+Flash an image with probe-rs, for example:
+```bash
+probe-rs download BTApp_Full_Image_debug.hex --chip nrf52805_xxAA --binary-format hex --allow-erase-all
+```
 
 ## Building with Docker
 

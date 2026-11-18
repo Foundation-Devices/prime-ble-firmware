@@ -17,7 +17,6 @@ env:
 
 jobs:
   build:
-    if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
 
     steps:
@@ -30,9 +29,8 @@ jobs:
       - name: Test host-protocol compatibility
         run: cargo test --release --package host-protocol --lib
 
-  trusted-firmware:
-    name: Trusted firmware build
-    if: github.event_name == 'push'
+  firmware:
+    name: Firmware images
     runs-on: ubuntu-latest
 
     steps:
@@ -40,29 +38,56 @@ jobs:
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           persist-credentials: false
-      - name: Install Ubuntu dependencies
-        run: |
-          sudo apt update
-          sudo apt install -y llvm libclang-dev gcc-arm-none-eabi
-      - name: Install ARM target
-        run: rustup target add thumbv7em-none-eabi
-      - name: Install Cargo binutils
-        run: cargo +stable install cargo-binutils
-      - name: Install LLVM tools
-        run: rustup component add llvm-tools
+      - name: Install Nix
+        uses: cachix/install-nix-action@75c75c31ebece974e48ebc36b4ad125bd97bd97b # v31.11.3
+      # The same environment as official builds (see REPRODUCIBILITY.md), so the checksums are comparable.
+      - name: Set up the Nix build shell
+        run: nix develop .#build --command true
       - name: Fetch Cargo dependencies
+        run: nix develop .#build --command sh -c 'cargo fetch --locked && cargo fetch --locked --target thumbv7em-none-eabi'
+      # Each production xtask command deletes BtPackage, so copy its outputs before the next one.
+      - name: Build unsigned production images
+        env:
+          CARGO_NET_OFFLINE: "true"
         run: |
-          cargo fetch --locked
-          cargo fetch --locked --target thumbv7em-none-eabi
-      - name: Build Debug image (unsigned)
+          mkdir -p out/unsigned
+          nix develop .#build --command cargo xtask --verbose build-unsigned
+          cp BtPackage/* out/unsigned/
+          nix develop .#build --command cargo xtask --verbose build-minimal-image
+          # The bootloader is rebuilt from scratch: it must come out identical.
+          cmp BtPackage/bootloader.bin out/unsigned/bootloader.bin
+          cp BtPackage/BT_Minimal_Image.hex out/unsigned/
+      - name: Build debug images
         env:
           CARGO_NET_OFFLINE: "true"
-        run: cargo xtask --verbose build-fw-debug-image
-      - name: Build host-protocol
-        env:
-          CARGO_NET_OFFLINE: "true"
-        run: cargo build --release --package host-protocol
-      - name: Test host-protocol compatibility
-        env:
-          CARGO_NET_OFFLINE: "true"
-        run: cargo test --release --package host-protocol --lib
+        run: |
+          mkdir -p out/debug
+          nix develop .#build --command cargo xtask --verbose build-fw-debug-image
+          cp BtPackageDebug/* out/debug/
+      - name: Compute checksums
+        run: |
+          for dir in out/unsigned out/debug; do
+            (cd "$dir" && sha256sum -- * > SHA256SUMS)
+          done
+          {
+            echo "### Unsigned production images"
+            echo '```'
+            cat out/unsigned/SHA256SUMS
+            echo '```'
+            echo "### Debug images (development boards only: no flash protection, accepts unsigned firmware)"
+            echo '```'
+            cat out/debug/SHA256SUMS
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Upload unsigned production images
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: prime-ble-unsigned-${{ github.sha }}
+          path: out/unsigned/
+          if-no-files-found: error
+      - name: Upload debug images
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: prime-ble-debug-${{ github.sha }}
+          path: out/debug/
+          if-no-files-found: error
