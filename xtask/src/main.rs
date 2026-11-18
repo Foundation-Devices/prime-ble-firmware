@@ -218,7 +218,7 @@ fn build_bt_bootloader_debug(verbose: bool) {
     let mut cargo_cmd = Command::new(cargo());
     let mut cmd = cargo_cmd
         .current_dir(project_root().join("bootloader"))
-        .args(["build", "--release"]);
+        .args(["build", "--release", "--features", "debug"]);
     if !verbose {
         cmd = cmd.stdout(Stdio::null()).stderr(Stdio::null()).arg("--quiet");
     }
@@ -233,7 +233,7 @@ fn build_bt_bootloader_debug(verbose: bool) {
     let mut cargo_cmd = Command::new(cargo());
     let cmd = cargo_cmd
         .current_dir(project_root().join("bootloader"))
-        .args(["objcopy", "--release"]);
+        .args(["objcopy", "--release", "--features", "debug"]);
     let mut cmd = cmd.args(["--", "-j", ".text", "-O", "binary", "../BtPackageDebug/bootloaderDebug.bin"]);
     if !verbose {
         cmd = cmd.stdout(Stdio::null()).stderr(Stdio::null());
@@ -254,7 +254,7 @@ fn build_bt_bootloader_debug(verbose: bool) {
     let mut cargo_cmd = Command::new(cargo());
     let cmd = cargo_cmd
         .current_dir(project_root().join("bootloader"))
-        .args(["objcopy", "--release"]);
+        .args(["objcopy", "--release", "--features", "debug"]);
     let mut cmd = cmd.args(["--", "-O", "ihex", "../BtPackageDebug/bootloaderDebug.hex"]);
     if !verbose {
         cmd = cmd.stdout(Stdio::null()).stderr(Stdio::null());
@@ -336,7 +336,9 @@ fn build_bt_firmware(verbose: bool) {
 fn build_bt_debug_firmware(verbose: bool) {
     tracing::info!("Building debug application...");
     let mut cargo_cmd = Command::new(cargo());
-    let mut cmd = cargo_cmd.current_dir(project_root().join("firmware")).args(["build", "--release"]);
+    let mut cmd = cargo_cmd
+        .current_dir(project_root().join("firmware"))
+        .args(["build", "--release", "--features", "debug"]);
     if !verbose {
         cmd = cmd.stdout(Stdio::null()).stderr(Stdio::null()).arg("--quiet");
     }
@@ -349,7 +351,7 @@ fn build_bt_debug_firmware(verbose: bool) {
     let mut cargo_cmd = Command::new(cargo());
     let cmd = cargo_cmd
         .current_dir(project_root().join("firmware"))
-        .args(["objcopy", "--release"]);
+        .args(["objcopy", "--release", "--features", "debug"]);
     let mut cmd = cmd.args(["--", "-O", "ihex", "../BtPackageDebug/BtappDebug.hex"]);
     if !verbose {
         cmd = cmd.stdout(Stdio::null()).stderr(Stdio::null());
